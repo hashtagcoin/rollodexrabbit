@@ -1,56 +1,35 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   TextInput,
   Dimensions,
-  Animated,
-  PanResponder,
   FlatList,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { Search, MapPin, Star, Filter, Grid2x2 as Grid, List, Heart, X, FileSliders as Sliders, BrainCircuit, House, HandHelping as Helping, Car, Laptop } from 'lucide-react-native';
+import { 
+  Search, 
+  Grid2x2 as Grid, 
+  List, 
+  Heart, 
+  FileSliders as Sliders,
+  MapPin,
+  Star,
+  House,
+  Car,
+  Laptop,
+  X,
+  FilePlus as Helping,
+  Filter
+} from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
-
-type Service = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  format: string;
-  price: number;
-  provider: {
-    business_name: string;
-    verified: boolean;
-  };
-};
-
-type HousingListing = {
-  id: string;
-  title: string;
-  description: string;
-  weekly_rent: number;
-  bedrooms: number;
-  bathrooms: number;
-  suburb: string;
-  state: string;
-  sda_category: string;
-  media_urls: string[];
-  provider: {
-    business_name: string;
-    verified: boolean;
-  };
-};
-
-type ListingItem = Service | HousingListing;
-
-// Define view types
-type ViewMode = 'grid' | 'list' | 'swipe';
+import { SwipeView } from './components/SwipeView';
+import { ListingItem, ViewMode, Service, HousingListing } from './types';
 
 // Define categories with proper icon rendering
 const CATEGORIES = [
@@ -81,13 +60,6 @@ export default function DiscoverScreen() {
   
   // For swipe view
   const [currentIndex, setCurrentIndex] = useState(0);
-  const position = useRef(new Animated.ValueXY()).current;
-  const nextCardScale = useRef(new Animated.Value(0.92)).current;
-  const nextCardOpacity = useRef(new Animated.Value(0.9)).current;
-  const nextCardTranslateY = useRef(new Animated.Value(15)).current;
-  const rotateCard = useRef(new Animated.Value(0)).current;
-  const swipeAnimationDuration = 300; // milliseconds
-  const resetDuration = 250; // milliseconds
   
   // For double tap detection
   const [lastTap, setLastTap] = useState<number>(0);
@@ -297,347 +269,6 @@ export default function DiscoverScreen() {
     }
   };
 
-  // Swipe functionality
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderMove: (_, gesture) => {
-      position.setValue({ x: gesture.dx, y: gesture.dy * 0.2 }); // Limit vertical movement
-      
-      // Update rotation based on horizontal movement
-      const rotationAmount = gesture.dx / 15; // Adjust divisor to control rotation intensity
-      rotateCard.setValue(rotationAmount);
-      
-      // Gradually reveal the next card as the current one moves
-      const swipeProgress = Math.min(Math.abs(gesture.dx) / 150, 1);
-      nextCardOpacity.setValue(0.9 + (swipeProgress * 0.1));
-      nextCardScale.setValue(0.92 + (swipeProgress * 0.08));
-      nextCardTranslateY.setValue(15 - (swipeProgress * 15));
-    },
-    onPanResponderRelease: (_, gesture) => {
-      // Threshold for considering a swipe complete
-      const swipeThreshold = width * 0.3;
-      
-      if (gesture.dx > swipeThreshold) {
-        // Swipe right (like)
-        finishSwipeAnimation('right');
-      } else if (gesture.dx < -swipeThreshold) {
-        // Swipe left (dislike)
-        finishSwipeAnimation('left');
-      } else {
-        // Return to center with spring animation
-        resetCardPosition();
-      }
-    },
-  });
-  
-  const resetCardPosition = () => {
-    // Parallel animations to reset card position with spring effect
-    Animated.parallel([
-      Animated.spring(position, {
-        toValue: { x: 0, y: 0 },
-        friction: 5,
-        tension: 40,
-        useNativeDriver: false,
-      }),
-      Animated.spring(rotateCard, {
-        toValue: 0,
-        friction: 5,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardScale, {
-        toValue: 0.92,
-        duration: resetDuration,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardOpacity, {
-        toValue: 0.9,
-        duration: resetDuration,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardTranslateY, {
-        toValue: 15,
-        duration: resetDuration,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-  
-  // Common function for finishing swipe animations
-  const finishSwipeAnimation = (direction: 'left' | 'right') => {
-    const xPosition = direction === 'left' ? -width * 1.5 : width * 1.5;
-    
-    // Prepare next card animation
-    Animated.parallel([
-      Animated.timing(nextCardScale, {
-        toValue: 1,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardOpacity, {
-        toValue: 1,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardTranslateY, {
-        toValue: 0,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    // Animate current card off screen
-    Animated.timing(position, {
-      toValue: { x: xPosition, y: 0 },
-      duration: swipeAnimationDuration,
-      useNativeDriver: false,
-    }).start(() => {
-      // After animation completes
-      rotateCard.setValue(0);
-      position.setValue({ x: 0, y: 0 });
-      
-      // Update to next card
-      if (currentIndex < listings.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      } else {
-        setCurrentIndex(0); // Loop back to the beginning
-      }
-      
-      // Reset animations for next card
-      nextCardScale.setValue(0.92);
-      nextCardOpacity.setValue(0.9);
-      nextCardTranslateY.setValue(15);
-    });
-    
-    // Execute like/dislike business logic
-    if (direction === 'right') {
-      // Like functionality
-      const likedItem = listings[currentIndex];
-      // Call your existing like function here if needed
-    }
-  };
-  
-  const swipeLeft = () => finishSwipeAnimation('left');
-  const swipeRight = () => finishSwipeAnimation('right');
-
-  const renderSwipeView = () => {
-    if (listings.length === 0) {
-      return (
-        <View style={styles.emptySwipeState}>
-          <Text style={styles.emptyStateTitle}>No Listings Found</Text>
-          <Text style={styles.emptyStateText}>
-            Try adjusting your search or filters
-          </Text>
-        </View>
-      );
-    }
-
-    const item = listings[currentIndex];
-    const nextItem = listings[(currentIndex + 1) % listings.length]; // Get the next item
-
-    return (
-      <View style={styles.swipeContainer}>
-        {/* Next Card (Underneath) */}
-        {listings.length > 1 && (
-          <Animated.View 
-            style={[
-              styles.nextCard,
-              {
-                transform: [
-                  { scale: nextCardScale },
-                  { translateY: nextCardTranslateY }
-                ],
-                opacity: nextCardOpacity,
-                zIndex: 1
-              }
-            ]}
-          >
-            <Image
-              source={{ uri: getItemImage(nextItem) }}
-              style={styles.swipeImage}
-            />
-            <View style={styles.swipeContent}>
-              <Text style={styles.swipeTitle}>{nextItem.title}</Text>
-              {isHousingListing(nextItem) ? (
-                // Housing listing specific content
-                <>
-                  <View style={styles.locationContainer}>
-                    <MapPin size={16} color="#666" />
-                    <Text style={styles.locationText}>
-                      {nextItem.suburb}, {nextItem.state}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.housingFeatures}>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {nextItem.bedrooms} {nextItem.bedrooms === 1 ? 'Bed' : 'Beds'}
-                      </Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {nextItem.bathrooms} {nextItem.bathrooms === 1 ? 'Bath' : 'Baths'}
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              ) : (
-                // Service specific content
-                renderServiceProvider(nextItem)
-              )}
-              
-              <Text style={styles.swipeDescription} numberOfLines={3}>
-                {nextItem.description}
-              </Text>
-              
-              <View style={styles.swipeMeta}>
-                <View style={styles.serviceRating}>
-                  <Star size={16} color="#FFB800" fill="#FFB800" />
-                  <Text style={styles.ratingText}>4.9</Text>
-                </View>
-                <Text style={styles.swipePrice}>
-                  ${getItemPrice(nextItem)}
-                  {isHousingListing(nextItem) ? '/week' : ''}
-                </Text>
-              </View>
-            </View>
-          </Animated.View>
-        )}
-        
-        {/* Current Card (Top) */}
-        <Animated.View
-          style={[
-            styles.swipeCard,
-            {
-              transform: [
-                { translateX: position.x },
-                { translateY: position.y },
-                { rotate: rotateCard.interpolate({
-                  inputRange: [-1, 0, 1],
-                  outputRange: ['-5deg', '0deg', '5deg']
-                }) }
-              ],
-              zIndex: 2
-            },
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => handleCardTap(item)}
-            style={styles.cardTouchable}
-          >
-            <Image
-              source={{ uri: getItemImage(item) }}
-              style={styles.swipeImage}
-            />
-            <View style={styles.swipeContent}>
-              <Text style={styles.swipeTitle}>{item.title}</Text>
-              
-              {isHousingListing(item) ? (
-                // Housing listing specific content
-                <>
-                  <View style={styles.locationContainer}>
-                    <MapPin size={16} color="#666" />
-                    <Text style={styles.locationText}>
-                      {item.suburb}, {item.state}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.housingFeatures}>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {item.bedrooms} {item.bedrooms === 1 ? 'Bed' : 'Beds'}
-                      </Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {item.bathrooms} {item.bathrooms === 1 ? 'Bath' : 'Baths'}
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              ) : (
-                // Service specific content
-                renderServiceProvider(item)
-              )}
-              
-              <Text style={styles.swipeDescription} numberOfLines={3}>
-                {item.description}
-              </Text>
-              
-              <View style={styles.swipeMeta}>
-                <View style={styles.serviceRating}>
-                  <Star size={16} color="#FFB800" fill="#FFB800" />
-                  <Text style={styles.ratingText}>4.9</Text>
-                </View>
-                <Text style={styles.swipePrice}>
-                  ${getItemPrice(item)}
-                  {isHousingListing(item) ? '/week' : ''}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Like/Dislike indicators */}
-          <Animated.View 
-            style={[
-              styles.swipeIndicator,
-              styles.likeIndicator,
-              {
-                opacity: position.x.interpolate({
-                  inputRange: [0, 50, 100],
-                  outputRange: [0, 0.5, 1],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ]}
-          >
-            <Heart size={80} color="#4cd964" fill="#4cd964" />
-          </Animated.View>
-          
-          <Animated.View 
-            style={[
-              styles.swipeIndicator,
-              styles.dislikeIndicator,
-              {
-                opacity: position.x.interpolate({
-                  inputRange: [-100, -50, 0],
-                  outputRange: [1, 0.5, 0],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ]}
-          >
-            <X size={80} color="#ff3b30" />
-          </Animated.View>
-
-          <View style={styles.swipeActions}>
-            <TouchableOpacity 
-              style={styles.swipeActionLeft}
-              onPress={swipeLeft}
-            >
-              <X size={40} color="#ff3b30" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.swipeActionRight}
-              onPress={swipeRight}
-            >
-              <Heart size={40} color="#4cd964" fill="#4cd964" />
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-        
-        {/* Counter and progress indicator */}
-        <View style={styles.swipeProgress}>
-          <Text style={styles.swipeCounter}>
-            {currentIndex + 1} of {listings.length}
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
   const renderGridView = () => {
     if (listings.length === 0) {
       return (
@@ -810,23 +441,23 @@ export default function DiscoverScreen() {
     if (loading) {
       return <Text style={styles.loadingText}>Loading listings...</Text>;
     }
-    
-    if (listings.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>No Listings Found</Text>
-          <Text style={styles.emptyStateText}>
-            Try adjusting your search or filters
-          </Text>
-        </View>
-      );
-    }
 
     switch (viewMode) {
       case 'list':
         return renderListView();
       case 'swipe':
-        return renderSwipeView();
+        return (
+          <SwipeView
+            listings={listings}
+            currentIndex={currentIndex}
+            setCurrentIndex={setCurrentIndex}
+            onCardTap={handleCardTap}
+            getItemImage={getItemImage}
+            getItemPrice={getItemPrice}
+            isHousingListing={isHousingListing}
+            renderServiceProvider={renderServiceProvider}
+          />
+        );
       case 'grid':
       default:
         return renderGridView();
@@ -926,7 +557,6 @@ export default function DiscoverScreen() {
         </View>
       )}
       
-      {/* Remove ScrollView wrapper around content to prevent VirtualizedList nesting */}
       {renderContentView()}
     </View>
   );
@@ -1156,155 +786,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  // Swipe view styles
+  // Missing styles from the original file that were referenced
+  emptySwipeState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    flex: 1,
+  },
   swipeContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 100,
-    position: 'relative',
-  },
-  swipeCard: {
-    width: width - 40,
-    height: 550,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    overflow: 'hidden',
-    zIndex: 2,
-  },
-  swipeImage: {
-    width: '100%',
-    height: 280,
-  },
-  nextCard: {
-    position: 'absolute',
-    top: 20,
-    width: width - 80,
-    height: 530,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    overflow: 'hidden',
-    zIndex: 1,
-    transform: [{scale: 0.92}],
-  },
-  swipeContent: {
-    padding: 16,
-    flex: 1,
-  },
-  swipeTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  swipeProvider: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  swipeDescription: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 12,
-    lineHeight: 20,
-    flex: 1,
-  },
-  swipeMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 'auto',
-  },
-  swipePrice: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  swipeActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 16,
-  },
-  swipeActionLeft: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  swipeActionRight: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  emptySwipeState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    padding: 24,
-  },
-  swipeProgress: {
-    position: 'absolute',
-    bottom: 70,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    zIndex: 10,
-  },
-  swipeCounter: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  cardTouchable: {
-    flex: 1, 
-    width: '100%',
-  },
-  swipeIndicator: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  likeIndicator: {
-    opacity: 0,
-    transform: [{translateX: -100}],
-  },
-  dislikeIndicator: {
-    opacity: 0,
-    transform: [{translateX: 100}],
   },
 });

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
+import { handleApiError, showErrorAlert } from '../../../lib/errorUtils';
 import {
   ArrowLeft,
   Bed,
@@ -24,6 +25,7 @@ import {
   CircleAlert as AlertCircle,
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const { width } = Dimensions.get('window');
 
@@ -54,266 +56,7 @@ type HousingListing = {
   };
 };
 
-export default function HousingDetail() {
-  const { id, returnIndex, returnViewMode } = useLocalSearchParams();
-  const { source } = useLocalSearchParams<{ source: string }>();
-  const navigation = useNavigation();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [listing, setListing] = useState<HousingListing | null>(null);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
-  // Custom back handler to determine where to navigate back to
-  const handleBackPress = () => {
-    if (source === 'discover') {
-      // Navigate back to discover screen with both returnIndex and returnViewMode
-      router.push({
-        pathname: "/(tabs)/discover",
-        params: { 
-          returnIndex,
-          returnViewMode
-        }
-      });
-    } else {
-      // Default: Navigate back to housing screen with both returnIndex and returnViewMode
-      router.push({
-        pathname: "/(tabs)/housing",
-        params: { 
-          returnIndex,
-          returnViewMode
-        }
-      });
-    }
-  };
-
-  useEffect(() => {
-    loadListing();
-  }, [id]);
-
-  async function loadListing() {
-    try {
-      setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('housing_listings')
-        .select(`
-          *,
-          provider:provider_id(business_name)
-        `)
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-      setListing(data);
-    } catch (e: unknown) {
-      console.error('Error loading listing:', e);
-      setError(e instanceof Error ? e.message : 'Failed to load housing listing');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
-        <Text style={styles.loadingText}>Loading listing...</Text>
-      </View>
-    );
-  }
-
-  if (error || !listing) {
-    return (
-      <View style={styles.container}>
-        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
-        <View style={styles.error}>
-          <AlertCircle size={24} color="#ff3b30" />
-          <Text style={styles.errorText}>
-            {error || 'Listing not found'}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  const handleApply = () => {
-    router.push({
-      pathname: '/housing/apply',
-      params: { listingId: id }
-    });
-  };
-
-  return (
-    <View style={styles.container}>
-      <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
-      <ScrollView>
-        <View style={styles.imageContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => {
-              const offset = e.nativeEvent.contentOffset.x;
-              setCurrentImageIndex(Math.round(offset / width));
-            }}
-            scrollEventThrottle={16}
-          >
-            {listing.media_urls.map((url, index) => (
-              <Image
-                key={index}
-                source={{ uri: url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop' }}
-                style={styles.image}
-              />
-            ))}
-          </ScrollView>
-          <View style={styles.imageIndicators}>
-            {listing.media_urls.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.imageIndicator,
-                  currentImageIndex === index && styles.imageIndicatorActive,
-                ]}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>{listing.title}</Text>
-              <Text style={styles.location}>
-                {listing.suburb}, {listing.state}
-              </Text>
-            </View>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>${listing.weekly_rent}</Text>
-              <Text style={styles.priceLabel}>per week</Text>
-            </View>
-          </View>
-
-          <View style={styles.sdaBadge}>
-            <Wheelchair size={20} color="#fff" />
-            <Text style={styles.sdaBadgeText}>
-              {listing.sda_category.split('_').map(
-                word => word.charAt(0).toUpperCase() + word.slice(1)
-              ).join(' ')}
-            </Text>
-          </View>
-
-          <View style={styles.features}>
-            <View style={styles.feature}>
-              <Bed size={24} color="#666" />
-              <Text style={styles.featureText}>
-                {listing.bedrooms} {listing.bedrooms === 1 ? 'Bed' : 'Beds'}
-              </Text>
-            </View>
-            <View style={styles.feature}>
-              <Bath size={24} color="#666" />
-              <Text style={styles.featureText}>
-                {listing.bathrooms} {listing.bathrooms === 1 ? 'Bath' : 'Baths'}
-              </Text>
-            </View>
-            {listing.parking_spaces > 0 && (
-              <View style={styles.feature}>
-                <Car size={24} color="#666" />
-                <Text style={styles.featureText}>
-                  {listing.parking_spaces} {listing.parking_spaces === 1 ? 'Park' : 'Parks'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Location</Text>
-            <View style={styles.locationDetail}>
-              <MapPin size={20} color="#666" />
-              <Text style={styles.locationText}>{listing.address}</Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Availability</Text>
-            <View style={styles.availabilityDetail}>
-              <Calendar size={20} color="#666" />
-              <Text style={styles.availabilityText}>
-                Available from {new Date(listing.available_from).toLocaleDateString()}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{listing.description}</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Accessibility Features</Text>
-            <View style={styles.tags}>
-              {listing.accessibility_features.map((feature, index) => (
-                <View key={index} style={styles.tag}>
-                  <DoorOpen size={16} color="#007AFF" />
-                  <Text style={styles.tagText}>{feature}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Property Features</Text>
-            <View style={styles.tags}>
-              {listing.features.map((feature, index) => (
-                <View key={index} style={styles.tag}>
-                  <DoorOpen size={16} color="#007AFF" />
-                  <Text style={styles.tagText}>{feature}</Text>
-                </View>
-              ))}
-              {listing.pets_allowed && (
-                <View style={styles.tag}>
-                  <Dog size={16} color="#007AFF" />
-                  <Text style={styles.tagText}>Pet Friendly</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {listing.virtual_tour_url && (
-            <TouchableOpacity style={styles.virtualTourButton}>
-              <Text style={styles.virtualTourText}>View Virtual Tour</Text>
-              <ChevronRight size={20} color="#007AFF" />
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.providerCard}>
-            <Text style={styles.providerTitle}>Listed by</Text>
-            <Text style={styles.providerName}>{listing.provider.business_name}</Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <View style={styles.footerContent}>
-          <View>
-            <Text style={styles.footerPrice}>${listing.weekly_rent}/week</Text>
-            {listing.bond_amount && (
-              <Text style={styles.footerBond}>
-                Bond: ${listing.bond_amount}
-              </Text>
-            )}
-          </View>
-          <TouchableOpacity
-            style={styles.applyButton}
-            onPress={handleApply}
-          >
-            <Text style={styles.applyButtonText}>Apply Now</Text>
-            <ChevronRight size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-}
-
+// Styles must be defined before the component that uses them
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -550,3 +293,273 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+
+function HousingDetail() {
+  const { id, returnIndex, returnViewMode } = useLocalSearchParams();
+  const { source } = useLocalSearchParams<{ source: string }>();
+  const navigation = useNavigation();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [listing, setListing] = useState<HousingListing | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Custom back handler to determine where to navigate back to
+  const handleBackPress = () => {
+    if (source === 'discover') {
+      // Navigate back to discover screen with both returnIndex and returnViewMode
+      router.push({
+        pathname: "/(tabs)/discover",
+        params: { 
+          returnIndex,
+          returnViewMode
+        }
+      });
+    } else {
+      // Default: Navigate back to housing screen with both returnIndex and returnViewMode
+      router.push({
+        pathname: "/(tabs)/housing",
+        params: { 
+          returnIndex,
+          returnViewMode
+        }
+      });
+    }
+  };
+
+  const handleApply = () => {
+    router.push({
+      pathname: '/housing/apply',
+      params: { listingId: id }
+    });
+  };
+
+  useEffect(() => {
+    loadListing();
+  }, [id]);
+
+  async function loadListing() {
+    try {
+      setLoading(true);
+      const { data, error: fetchError } = await supabase
+        .from('housing_listings')
+        .select(`
+          *,
+          provider:provider_id(business_name)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw handleApiError(fetchError);
+      setListing(data);
+    } catch (e: unknown) {
+      const error = handleApiError(e);
+      showErrorAlert(error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
+        <Text style={styles.loadingText}>Loading listing...</Text>
+      </View>
+    );
+  }
+
+  if (error || !listing) {
+    return (
+      <View style={styles.container}>
+        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
+        <View style={styles.error}>
+          <AlertCircle size={24} color="#ff3b30" />
+          <Text style={styles.errorText}>
+            {error || 'Listing not found'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Main content is rendered when we have a listing and no errors
+  return (
+    <View style={styles.container}>
+      <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
+      <ScrollView>
+        <View style={styles.imageContainer}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={(e) => {
+              const offset = e.nativeEvent.contentOffset.x;
+              setCurrentImageIndex(Math.round(offset / width));
+            }}
+            scrollEventThrottle={16}
+          >
+            {listing.media_urls.map((url, index) => (
+              <Image
+                key={index}
+                source={{ uri: url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop' }}
+                style={styles.image}
+              />
+            ))}
+          </ScrollView>
+          <View style={styles.imageIndicators}>
+            {listing.media_urls.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.imageIndicator,
+                  currentImageIndex === index && styles.imageIndicatorActive,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>{listing.title}</Text>
+              <Text style={styles.location}>
+                {listing.suburb}, {listing.state}
+              </Text>
+            </View>
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>${listing.weekly_rent}</Text>
+              <Text style={styles.priceLabel}>per week</Text>
+            </View>
+          </View>
+
+          <View style={styles.sdaBadge}>
+            <Wheelchair size={20} color="#fff" />
+            <Text style={styles.sdaBadgeText}>
+              {listing.sda_category.split('_').map(
+                word => word.charAt(0).toUpperCase() + word.slice(1)
+              ).join(' ')}
+            </Text>
+          </View>
+
+          <View style={styles.features}>
+            <View style={styles.feature}>
+              <Bed size={24} color="#666" />
+              <Text style={styles.featureText}>
+                {listing.bedrooms} {listing.bedrooms === 1 ? 'Bed' : 'Beds'}
+              </Text>
+            </View>
+            <View style={styles.feature}>
+              <Bath size={24} color="#666" />
+              <Text style={styles.featureText}>
+                {listing.bathrooms} {listing.bathrooms === 1 ? 'Bath' : 'Baths'}
+              </Text>
+            </View>
+            {listing.parking_spaces > 0 && (
+              <View style={styles.feature}>
+                <Car size={24} color="#666" />
+                <Text style={styles.featureText}>
+                  {listing.parking_spaces} {listing.parking_spaces === 1 ? 'Park' : 'Parks'}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Location</Text>
+            <View style={styles.locationDetail}>
+              <MapPin size={20} color="#666" />
+              <Text style={styles.locationText}>{listing.address}</Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Availability</Text>
+            <View style={styles.availabilityDetail}>
+              <Calendar size={20} color="#666" />
+              <Text style={styles.availabilityText}>
+                Available from {new Date(listing.available_from).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.description}>{listing.description}</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Accessibility Features</Text>
+            <View style={styles.tags}>
+              {listing.accessibility_features.map((feature, index) => (
+                <View key={index} style={styles.tag}>
+                  <DoorOpen size={16} color="#007AFF" />
+                  <Text style={styles.tagText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Property Features</Text>
+            <View style={styles.tags}>
+              {listing.features.map((feature, index) => (
+                <View key={index} style={styles.tag}>
+                  <DoorOpen size={16} color="#007AFF" />
+                  <Text style={styles.tagText}>{feature}</Text>
+                </View>
+              ))}
+              {listing.pets_allowed && (
+                <View style={styles.tag}>
+                  <Dog size={16} color="#007AFF" />
+                  <Text style={styles.tagText}>Pet Friendly</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {listing.virtual_tour_url && (
+            <TouchableOpacity style={styles.virtualTourButton}>
+              <Text style={styles.virtualTourText}>View Virtual Tour</Text>
+              <ChevronRight size={20} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.providerCard}>
+            <Text style={styles.providerTitle}>Listed by</Text>
+            <Text style={styles.providerName}>{listing.provider.business_name}</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <View style={styles.footerContent}>
+          <View>
+            <Text style={styles.footerPrice}>${listing.weekly_rent}/week</Text>
+            {listing.bond_amount && (
+              <Text style={styles.footerBond}>
+                Bond: ${listing.bond_amount}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.applyButton}
+            onPress={handleApply}
+          >
+            <Text style={styles.applyButtonText}>Apply Now</Text>
+            <ChevronRight size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export default function HousingDetailWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <HousingDetail />
+    </ErrorBoundary>
+  );
+}
