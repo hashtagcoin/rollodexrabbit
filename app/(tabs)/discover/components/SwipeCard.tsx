@@ -1,31 +1,123 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Dimensions } from 'react-native';
-import { MapPin, Star } from 'lucide-react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Animated, PanResponder } from 'react-native';
+import { MapPin, Star, Users } from 'lucide-react-native';
 import { ListingItem, HousingListing } from '../types';
+import { supabase } from '../../../../lib/supabase';
 
 const { width } = Dimensions.get('window');
+const SWIPE_THRESHOLD = width * 0.25;
 
 interface SwipeCardProps {
   item: ListingItem;
   isNext?: boolean;
   onTap?: () => void;
-  style?: any;
+  onSwipe?: (direction: string) => void;
+  onCardLeftScreen?: (direction: string) => void;
   getItemImage: (item: ListingItem) => string;
   getItemPrice: (item: ListingItem) => number;
-  isHousingListing: (item: ListingItem) => item is HousingListing; // Update this type
+  isHousingListing: (item: ListingItem) => item is HousingListing;
   renderServiceProvider: (item: ListingItem) => JSX.Element;
 }
 
-export const SwipeCard: React.FC<SwipeCardProps> = ({
+const SwipeCard: React.FC<SwipeCardProps> = ({
   item,
   isNext,
   onTap,
-  style,
+  onSwipe,
+  onCardLeftScreen,
   getItemImage,
   getItemPrice,
   isHousingListing,
   renderServiceProvider,
 }) => {
+  const [hasHousingGroup, setHasHousingGroup] = useState(false);
+  
+  // Animation values
+  const position = useRef(new Animated.ValueXY()).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+  
+  // Create pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isNext,
+      onMoveShouldSetPanResponder: () => !isNext,
+      onPanResponderMove: (_, gesture) => {
+        position.setValue({ x: gesture.dx, y: gesture.dy * 0.2 });
+        rotate.setValue(gesture.dx / 15);
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dx > SWIPE_THRESHOLD) {
+          finishSwipe('right');
+        } else if (gesture.dx < -SWIPE_THRESHOLD) {
+          finishSwipe('left');
+        } else {
+          resetPosition();
+        }
+      },
+    })
+  ).current;
+
+  const finishSwipe = (direction: 'left' | 'right') => {
+    const x = direction === 'right' ? width + 100 : -width - 100;
+    
+    Animated.timing(position, {
+      toValue: { x, y: 0 },
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      if (onSwipe) onSwipe(direction);
+      if (onCardLeftScreen) onCardLeftScreen(direction);
+    });
+  };
+
+  const resetPosition = () => {
+    Animated.spring(position, {
+      toValue: { x: 0, y: 0 },
+      friction: 5,
+      tension: 40,
+      useNativeDriver: true
+    }).start();
+  };
+
+  // Get rotation interpolation for the swipe animation
+  const rotateCard = rotate.interpolate({
+    inputRange: [-100, 0, 100],
+    outputRange: ['-10deg', '0deg', '10deg'],
+    extrapolate: 'clamp'
+  });
+
+  useEffect(() => {
+    // Check if this housing listing has associated housing groups
+    if (isHousingListing(item)) {
+      checkForHousingGroups(item.id);
+    } else {
+      setHasHousingGroup(false);
+    }
+    
+    // Reset position when item changes
+    position.setValue({ x: 0, y: 0 });
+    rotate.setValue(0);
+  }, [item]);
+
+  const checkForHousingGroups = async (listingId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('housing_groups')
+        .select('id')
+        .eq('listing_id', listingId)
+        .limit(1);
+      
+      if (!error && data && data.length > 0) {
+        setHasHousingGroup(true);
+      } else {
+        setHasHousingGroup(false);
+      }
+    } catch (error) {
+      console.error('Error checking for housing groups:', error);
+      setHasHousingGroup(false);
+    }
+  };
+
   const CardContent = () => (
     <>
       <Image
@@ -42,6 +134,12 @@ export const SwipeCard: React.FC<SwipeCardProps> = ({
               <Text style={styles.locationText}>
                 {item.suburb}, {item.state}
               </Text>
+              {hasHousingGroup && (
+                <View style={styles.groupMatchBadge}>
+                  <Users size={12} color="#fff" />
+                  <Text style={styles.groupMatchText}>Group Match</Text>
+                </View>
+              )}
             </View>
             
             <View style={styles.housingFeatures}>
@@ -79,12 +177,26 @@ export const SwipeCard: React.FC<SwipeCardProps> = ({
     </>
   );
 
-  return isNext ? (
-    <Animated.View style={[styles.nextCard, style]}>
-      <CardContent />
-    </Animated.View>
-  ) : (
-    <Animated.View style={[styles.swipeCard, style]}>
+  // For the next card, use a standard View without animation
+  if (isNext) {
+    return <CardContent />;
+  }
+
+  // For the current card, use an Animated.View with pan gestures
+  return (
+    <Animated.View
+      style={[
+        styles.swipeCard,
+        {
+          transform: [
+            { translateX: position.x },
+            { translateY: position.y },
+            { rotate: rotateCard }
+          ]
+        }
+      ]}
+      {...panResponder.panHandlers}
+    >
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={onTap}
@@ -98,31 +210,10 @@ export const SwipeCard: React.FC<SwipeCardProps> = ({
 
 const styles = StyleSheet.create({
   swipeCard: {
-    width: width - 40,
-    height: 550,
+    width: '100%',
+    height: '100%',
     backgroundColor: '#fff',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    overflow: 'hidden',
-  },
-  nextCard: {
-    width: width - 80,
-    height: 530,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
     overflow: 'hidden',
   },
   cardTouchable: {
@@ -147,10 +238,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
   locationText: {
     fontSize: 12,
     color: '#666',
+  },
+  groupMatchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#4cd964',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  groupMatchText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '500',
   },
   housingFeatures: {
     flexDirection: 'row',
@@ -195,3 +302,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
 });
+
+// Export the component as both a named export and a default export
+export { SwipeCard };
+export default SwipeCard;

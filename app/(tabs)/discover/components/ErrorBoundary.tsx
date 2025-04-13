@@ -11,7 +11,7 @@ interface State {
   error: Error | null;
 }
 
-export class ErrorBoundary extends React.Component<Props, State> {
+class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -65,3 +65,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 });
+
+// Export the component as both a named export and a default export
+export { ErrorBoundary };
+export default ErrorBoundary;

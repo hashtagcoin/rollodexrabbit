@@ -30,3 +30,8 @@ export type HousingListing = {
 
 export type ListingItem = Service | HousingListing;
 export type ViewMode = 'grid' | 'list' | 'swipe';
+
+// This is a dummy component to satisfy Expo Router's need for a default export
+// TypeScript types can't be used as values, so we need to export a real value
+const DummyComponent = () => null;
+export default DummyComponent;

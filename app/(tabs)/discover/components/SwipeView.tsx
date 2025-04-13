@@ -1,6 +1,5 @@
-import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, Animated, PanResponder } from 'react-native';
-import { Heart, X, House } from 'lucide-react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Dimensions, Animated } from 'react-native';
 import { ListingItem, HousingListing } from '../types';
 import { SwipeCard } from './SwipeCard';
 import { SwipeActions } from './SwipeActions';
@@ -19,7 +18,7 @@ interface SwipeViewProps {
   renderServiceProvider: (item: ListingItem) => JSX.Element;
 }
 
-export const SwipeView: React.FC<SwipeViewProps> = ({
+const SwipeView: React.FC<SwipeViewProps> = ({
   listings,
   currentIndex,
   setCurrentIndex,
@@ -29,114 +28,88 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
   isHousingListing,
   renderServiceProvider,
 }) => {
-  const position = useRef(new Animated.ValueXY()).current;
+  // Add a state to track if the current card is being swiped
+  const [isCardSwiping, setIsCardSwiping] = useState(false);
+  
+  // Animation values for the next card
   const nextCardScale = useRef(new Animated.Value(0.92)).current;
   const nextCardOpacity = useRef(new Animated.Value(0.9)).current;
-  const nextCardTranslateY = useRef(new Animated.Value(15)).current;
-  const rotateCard = useRef(new Animated.Value(0)).current;
+  const nextCardTranslateY = useRef(new Animated.Value(10)).current;
+  const nextCardWidth = useRef(new Animated.Value(width - 80)).current;
+  const nextCardHeight = useRef(new Animated.Value(530)).current;
+  const nextCardElevation = useRef(new Animated.Value(2)).current;
 
-  const swipeAnimationDuration = 300;
-  const resetDuration = 250;
-
-  const resetCardPosition = () => {
+  const animateNextCardToFront = () => {
     Animated.parallel([
-      Animated.spring(position, {
-        toValue: { x: 0, y: 0 },
-        friction: 6,
-        tension: 40,
-        useNativeDriver: false,
-      }),
-      Animated.spring(rotateCard, {
-        toValue: 0,
-        friction: 6,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardScale, {
-        toValue: 0.92,
-        duration: resetDuration,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardOpacity, {
-        toValue: 0.9,
-        duration: resetDuration,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nextCardTranslateY, {
-        toValue: 15,
-        duration: resetDuration,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const finishSwipeAnimation = (direction: 'left' | 'right') => {
-    const xPosition = direction === 'left' ? -width * 1.5 : width * 1.5;
-    
-    Animated.parallel([
-      Animated.timing(position, {
-        toValue: { x: xPosition, y: 0 },
-        duration: swipeAnimationDuration,
-        useNativeDriver: false,
-      }),
-      Animated.timing(rotateCard, {
-        toValue: direction === 'left' ? -15 : 15,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
-      }),
       Animated.timing(nextCardScale, {
         toValue: 1,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
+        duration: 300,
+        useNativeDriver: false, // Can't use native driver for dimension changes
       }),
       Animated.timing(nextCardOpacity, {
         toValue: 1,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
+        duration: 300,
+        useNativeDriver: false,
       }),
       Animated.timing(nextCardTranslateY, {
         toValue: 0,
-        duration: swipeAnimationDuration,
-        useNativeDriver: true,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(nextCardWidth, {
+        toValue: width - 40, // Target width of top card
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(nextCardHeight, {
+        toValue: 550, // Target height of top card
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(nextCardElevation, {
+        toValue: 5, // Target elevation of top card
+        duration: 300,
+        useNativeDriver: false,
       }),
     ]).start(() => {
-      rotateCard.setValue(0);
-      position.setValue({ x: 0, y: 0 });
-      
+      // After animation completes, update the index
       if (currentIndex < listings.length - 1) {
         setCurrentIndex(currentIndex + 1);
       } else {
         setCurrentIndex(0);
       }
       
+      // Reset animation values for the new next card
       nextCardScale.setValue(0.92);
       nextCardOpacity.setValue(0.9);
-      nextCardTranslateY.setValue(15);
+      nextCardTranslateY.setValue(10);
+      nextCardWidth.setValue(width - 80);
+      nextCardHeight.setValue(530);
+      nextCardElevation.setValue(2);
+      
+      // Reset swiping state
+      setIsCardSwiping(false);
     });
   };
 
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderMove: (_, gesture) => {
-      position.setValue({ x: gesture.dx, y: gesture.dy * 0.2 });
-      rotateCard.setValue(gesture.dx / 15);
-    },
-    onPanResponderRelease: (_, gesture) => {
-      const swipeThreshold = width * 0.25;
-      const velocityThreshold = 0.5;
-      
-      if (Math.abs(gesture.vx) > velocityThreshold) {
-        finishSwipeAnimation(gesture.vx > 0 ? 'right' : 'left');
-      } else if (gesture.dx > swipeThreshold) {
-        finishSwipeAnimation('right');
-      } else if (gesture.dx < -swipeThreshold) {
-        finishSwipeAnimation('left');
-      } else {
-        resetCardPosition();
-      }
-    },
-  });
+  const handleSwipe = (direction: string) => {
+    // Set the swiping flag to prevent double-swipes
+    if (isCardSwiping) return;
+    setIsCardSwiping(true);
+
+    // Animate the next card to become the current card
+    animateNextCardToFront();
+  };
+
+  // Set up the initial animation values when component mounts
+  useEffect(() => {
+    nextCardScale.setValue(0.92);
+    nextCardOpacity.setValue(0.9);
+    nextCardTranslateY.setValue(10);
+    nextCardWidth.setValue(width - 80);
+    nextCardHeight.setValue(530);
+    nextCardElevation.setValue(2);
+  }, []);
 
   if (listings.length === 0) {
     return (
@@ -150,94 +123,62 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
   }
 
   const currentItem = listings[currentIndex];
-  const nextItem = listings[(currentIndex + 1) % listings.length];
+  const nextIndex = (currentIndex + 1) % listings.length;
+  const nextItem = listings[nextIndex];
+
+  // Create animated styles for the next card
+  const nextCardAnimatedStyle = {
+    transform: [
+      { scale: nextCardScale },
+      { translateY: nextCardTranslateY }
+    ],
+    opacity: nextCardOpacity,
+    width: nextCardWidth,
+    height: nextCardHeight,
+    elevation: nextCardElevation,
+  };
 
   return (
     <ErrorBoundary>
       <View style={styles.container}>
-        {listings.length > 1 && (
-          <SwipeCard
-            item={nextItem}
-            isNext={true}
-            getItemImage={getItemImage}
-            getItemPrice={getItemPrice}
-            isHousingListing={isHousingListing}
-            renderServiceProvider={renderServiceProvider}
-            style={{
-              transform: [
-                { scale: nextCardScale },
-                { translateY: nextCardTranslateY }
-              ],
-              opacity: nextCardOpacity,
-            }}
-          />
-        )}
+        <View style={styles.cardsContainer}>
+          {/* Bottom/background card (next card) with animation */}
+          {listings.length > 1 && (
+            <View style={styles.nextCardContainer}>
+              <Animated.View style={[styles.nextCardBase, nextCardAnimatedStyle]}>
+                <SwipeCard
+                  item={nextItem}
+                  isNext={true}
+                  getItemImage={getItemImage}
+                  getItemPrice={getItemPrice}
+                  isHousingListing={isHousingListing}
+                  renderServiceProvider={renderServiceProvider}
+                />
+              </Animated.View>
+            </View>
+          )}
 
-        <SwipeCard
-          item={currentItem}
-          onTap={() => onCardTap(currentItem)}
-          getItemImage={getItemImage}
-          getItemPrice={getItemPrice}
-          isHousingListing={isHousingListing}
-          renderServiceProvider={renderServiceProvider}
-          style={{
-            transform: [
-              { translateX: position.x },
-              { translateY: position.y },
-              {
-                rotate: rotateCard.interpolate({
-                  inputRange: [-100, 0, 100],
-                  outputRange: ['-10deg', '0deg', '10deg'],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ],
-          }}
-          {...panResponder.panHandlers}
-        />
-
-        <Animated.View 
-          style={[
-            styles.swipeIndicator,
-            styles.likeIndicator,
-            {
-              opacity: position.x.interpolate({
-                inputRange: [0, 50, 100],
-                outputRange: [0, 0.5, 1],
-                extrapolate: 'clamp',
-              }),
-            },
-          ]}
-        >
-          <Heart size={80} color="#4cd964" fill="#4cd964" />
-        </Animated.View>
-        
-        <Animated.View 
-          style={[
-            styles.swipeIndicator,
-            styles.dislikeIndicator,
-            {
-              opacity: position.x.interpolate({
-                inputRange: [-100, -50, 0],
-                outputRange: [1, 0.5, 0],
-                extrapolate: 'clamp',
-              }),
-            },
-          ]}
-        >
-          <X size={80} color="#ff3b30" />
-        </Animated.View>
+          {/* Top/foreground card (current card) */}
+          <View style={styles.currentCardContainer}>
+            <SwipeCard
+              // Add a key to force re-render when card changes
+              key={`card-${currentIndex}`}
+              item={currentItem}
+              onTap={() => onCardTap(currentItem)}
+              onSwipe={handleSwipe}
+              onCardLeftScreen={handleSwipe}
+              getItemImage={getItemImage}
+              getItemPrice={getItemPrice}
+              isHousingListing={isHousingListing}
+              renderServiceProvider={renderServiceProvider}
+            />
+          </View>
+        </View>
 
         <SwipeActions
-          onSwipeLeft={() => finishSwipeAnimation('left')}
-          onSwipeRight={() => finishSwipeAnimation('right')}
+          onSwipeLeft={() => handleSwipe('left')}
+          onSwipeRight={() => handleSwipe('right')}
         />
-
-        <View style={styles.progress}>
-          <Text style={styles.counter}>
-            {currentIndex + 1} of {listings.length}
-          </Text>
-        </View>
       </View>
     </ErrorBoundary>
   );
@@ -248,18 +189,53 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 100,
   },
-  emptyState: {
+  cardsContainer: {
+    width: width,
+    height: 550,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+  },
+  nextCardContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 0,
+  },
+  nextCardBase: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    overflow: 'hidden',
+  },
+  currentCardContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 8,
   },
   emptyStateText: {
@@ -267,37 +243,8 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  swipeIndicator: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 3,
-  },
-  likeIndicator: {
-    opacity: 0,
-    alignItems: 'center',
-  },
-  dislikeIndicator: {
-    opacity: 0,
-    alignItems: 'center',
-  },
-  progress: {
-    position: 'absolute',
-    bottom: 70,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    zIndex: 10,
-  },
-  counter: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  }
 });
+
+// Export the component as both a named export and a default export
+export { SwipeView };
+export default SwipeView;

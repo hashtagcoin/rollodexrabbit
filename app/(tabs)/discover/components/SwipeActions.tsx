@@ -7,7 +7,7 @@ interface SwipeActionsProps {
   onSwipeRight: () => void;
 }
 
-export const SwipeActions: React.FC<SwipeActionsProps> = ({
+const SwipeActions: React.FC<SwipeActionsProps> = ({
   onSwipeLeft,
   onSwipeRight,
 }) => {
@@ -62,3 +62,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 });
+
+// Export the component as both a named export and a default export
+export { SwipeActions };
+export default SwipeActions;
