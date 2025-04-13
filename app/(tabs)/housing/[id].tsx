@@ -7,6 +7,7 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -23,6 +24,9 @@ import {
   DoorOpen,
   ChevronRight,
   CircleAlert as AlertCircle,
+  Users,
+  Plus,
+  User,
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -53,6 +57,32 @@ type HousingListing = {
   ndis_supported: boolean;
   provider: {
     business_name: string;
+  };
+};
+
+type HousingGroup = {
+  id: string;
+  name: string;
+  listing_id: string;
+  max_members: number;
+  current_members: number;
+  creator_id: string;
+  created_at: string;
+  members: GroupMember[];
+};
+
+type GroupMember = {
+  id: string;
+  user_id: string;
+  group_id: string;
+  join_date: string;
+  status: string;
+  bio: string;
+  support_level: string;
+  user_profile: {
+    first_name: string;
+    last_name: string;
+    avatar_url: string;
   };
 };
 
@@ -292,6 +322,120 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
+  groupSection: {
+    marginBottom: 24,
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  groupTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  createGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  createGroupText: {
+    fontSize: 14,
+    color: '#007AFF',
+  },
+  groupList: {
+    gap: 16,
+  },
+  groupCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+  },
+  groupName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  groupStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  memberCount: {
+    fontSize: 14,
+    color: '#666',
+  },
+  membersList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#e1f0ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  memberAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#007AFF',
+  },
+  memberName: {
+    fontSize: 14,
+    color: '#1a1a1a',
+  },
+  joinGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 10,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+  },
+  joinGroupText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  groupEmptyState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 16,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+  },
+  groupEmptyStateText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#666',
+  },
+  groupMatchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#4cd964',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+    marginTop: 4,
+  },
+  groupMatchText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '500',
+  },
 });
 
 function HousingDetail() {
@@ -302,6 +446,8 @@ function HousingDetail() {
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<HousingListing | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [housingGroups, setHousingGroups] = useState<HousingGroup[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
 
   // Custom back handler to determine where to navigate back to
   const handleBackPress = () => {
@@ -333,9 +479,37 @@ function HousingDetail() {
     });
   };
 
+  const handleCreateGroup = () => {
+    if (listing) {
+      router.push({
+        pathname: '/community/groups/create',
+        params: { 
+          listingId: listing.id,
+          listingTitle: listing.title
+        }
+      });
+    }
+  };
+
+  const handleJoinGroup = (groupId: string) => {
+    router.push({
+      pathname: "/(tabs)/community/groups/[id]",
+      params: { 
+        id: groupId,
+        action: 'join'
+      }
+    });
+  };
+
   useEffect(() => {
     loadListing();
   }, [id]);
+
+  useEffect(() => {
+    if (listing) {
+      loadHousingGroups();
+    }
+  }, [listing]);
 
   async function loadListing() {
     try {
@@ -357,6 +531,35 @@ function HousingDetail() {
       setError(error.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadHousingGroups() {
+    try {
+      setLoadingGroups(true);
+      
+      const { data, error } = await supabase
+        .from('housing_groups')
+        .select(`
+          *,
+          members: housing_group_members (
+            *,
+            user_profile: user_id (
+              first_name,
+              last_name,
+              avatar_url
+            )
+          )
+        `)
+        .eq('listing_id', id);
+
+      if (error) throw handleApiError(error);
+      setHousingGroups(data || []);
+    } catch (e) {
+      console.error('Error loading housing groups:', e);
+      // Don't show this error to the user as it's non-critical
+    } finally {
+      setLoadingGroups(false);
     }
   }
 
@@ -424,9 +627,17 @@ function HousingDetail() {
           <View style={styles.header}>
             <View style={styles.titleContainer}>
               <Text style={styles.title}>{listing.title}</Text>
-              <Text style={styles.location}>
-                {listing.suburb}, {listing.state}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.location}>
+                  {listing.suburb}, {listing.state}
+                </Text>
+                {housingGroups.length > 0 && (
+                  <View style={styles.groupMatchBadge}>
+                    <Users size={12} color="#fff" />
+                    <Text style={styles.groupMatchText}>Group Match</Text>
+                  </View>
+                )}
+              </View>
             </View>
             <View style={styles.priceContainer}>
               <Text style={styles.price}>${listing.weekly_rent}</Text>
@@ -525,6 +736,79 @@ function HousingDetail() {
               <ChevronRight size={20} color="#007AFF" />
             </TouchableOpacity>
           )}
+
+          <View style={styles.groupSection}>
+            <View style={styles.groupHeader}>
+              <Text style={styles.groupTitle}>Group Housing Opportunities</Text>
+              <TouchableOpacity 
+                style={styles.createGroupButton}
+                onPress={handleCreateGroup}
+              >
+                <Plus size={16} color="#007AFF" />
+                <Text style={styles.createGroupText}>Create Group</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {loadingGroups ? (
+              <ActivityIndicator color="#007AFF" />
+            ) : housingGroups.length > 0 ? (
+              <View style={styles.groupList}>
+                {housingGroups.map(group => (
+                  <View key={group.id} style={styles.groupCard}>
+                    <Text style={styles.groupName}>{group.name}</Text>
+                    <View style={styles.groupStats}>
+                      <Users size={16} color="#666" />
+                      <Text style={styles.memberCount}>
+                        {group.current_members} of {group.max_members} members
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.membersList}>
+                      {group.members.slice(0, 3).map(member => (
+                        <View key={member.id} style={styles.memberItem}>
+                          {member.user_profile.avatar_url ? (
+                            <Image 
+                              source={{ uri: member.user_profile.avatar_url }} 
+                              style={styles.memberAvatar} 
+                            />
+                          ) : (
+                            <View style={styles.memberAvatar}>
+                              <User size={16} color="#fff" />
+                            </View>
+                          )}
+                          <Text style={styles.memberName}>
+                            {member.user_profile.first_name}
+                          </Text>
+                        </View>
+                      ))}
+                      {group.members.length > 3 && (
+                        <View style={styles.memberItem}>
+                          <Text style={styles.memberName}>
+                            +{group.members.length - 3} more
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.joinGroupButton}
+                      onPress={() => handleJoinGroup(group.id)}
+                    >
+                      <Text style={styles.joinGroupText}>View Group</Text>
+                      <ChevronRight size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.groupEmptyState}>
+                <Users size={20} color="#666" />
+                <Text style={styles.groupEmptyStateText}>
+                  No housing groups for this property yet. Create a group to find roommates!
+                </Text>
+              </View>
+            )}
+          </View>
 
           <View style={styles.providerCard}>
             <Text style={styles.providerTitle}>Listed by</Text>

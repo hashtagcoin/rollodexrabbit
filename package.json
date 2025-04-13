@@ -19,6 +19,7 @@
     "@react-native-segmented-control/segmented-control": "^2.5.7",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
+    "@react-spring/web": "^9.7.5",
     "@supabase/supabase-js": "^2.39.3",
     "base64-arraybuffer": "^1.0.2",
     "expo": "~52.0.42",
@@ -49,7 +50,8 @@
     "react-native-svg": "15.8.0",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.19.13",
-    "react-native-webview": "13.12.5"
+    "react-native-webview": "13.12.5",
+    "react-tinder-card": "^1.6.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
