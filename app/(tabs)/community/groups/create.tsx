@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
   Lock,
   Users,
+  CalendarDays,
 } from 'lucide-react-native';
 import { MediaError, MediaErrorType } from '../../../../lib/mediaService';
 import { decode } from '../../../../lib/base64Utils';
@@ -40,7 +41,7 @@ export default function CreateGroup() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState<'interest' | 'housing'>('interest');
+  const [type, setType] = useState<'interest' | 'housing' | 'event'>('interest');
   const [rules, setRules] = useState('');
   const [category, setCategory] = useState('Social');
   const [maxMembers, setMaxMembers] = useState('');
@@ -52,6 +53,8 @@ export default function CreateGroup() {
   const [coverUploading, setCoverUploading] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{coverUrl?: string, avatarUrl?: string}>({});
+  const [eventDate, setEventDate] = useState<string | null>(null);
+  const [eventLocation, setEventLocation] = useState('');
 
   const handleImagePick = async (type: 'cover' | 'avatar', source: 'library' | 'camera' = 'library') => {
     try {
@@ -207,6 +210,8 @@ export default function CreateGroup() {
           cover_image_url: coverImage,
           avatar_url: avatarImage,
           tags,
+          event_date: type === 'event' ? eventDate : null,
+          event_location: type === 'event' ? eventLocation : null,
           settings: {
             allowMemberPosts: true,
             requireApproval: !isPublic,
@@ -250,11 +255,11 @@ export default function CreateGroup() {
         <View style={styles.imageSection}>
           {coverUploading ? (
             <View style={styles.imageUpload}>
-              <ActivityIndicator size="large" color="#0066cc" />
+              <ActivityIndicator size="large" color="#007AFF" />
               <Text style={styles.uploadingText}>Uploading cover image...</Text>
             </View>
           ) : coverImage ? (
-            <View>
+            <View style={styles.coverImageContainer}>
               <Image 
                 source={{ uri: coverImage }} 
                 style={styles.coverPreview} 
@@ -266,12 +271,28 @@ export default function CreateGroup() {
               >
                 <Text style={styles.changeImageText}>Change Cover</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.changeImageBtn}
-                onPress={() => handleImagePick('cover', 'camera')}
-              >
-                <Text style={styles.changeImageText}>Take Cover Photo</Text>
-              </TouchableOpacity>
+              
+              {/* Avatar overlay on cover image */}
+              <View style={styles.avatarOverlayContainer}>
+                {avatarUploading ? (
+                  <View style={styles.avatarPlaceholder}>
+                    <ActivityIndicator size="small" color="#007AFF" />
+                  </View>
+                ) : avatarImage ? (
+                  <Image 
+                    source={{ uri: avatarImage }} 
+                    style={styles.avatarPreview} 
+                    onError={(e) => setError('Avatar image loading error')}
+                  />
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.avatarPlaceholder}
+                    onPress={() => handleImagePick('avatar', 'library')}
+                  >
+                    <ImageIcon size={24} color="#666" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ) : (
             <TouchableOpacity 
@@ -283,47 +304,39 @@ export default function CreateGroup() {
             </TouchableOpacity>
           )}
 
-          <View style={styles.avatarContainer}>
-            {avatarUploading ? (
-              <View style={styles.avatarPlaceholder}>
-                <ActivityIndicator size="small" color="#0066cc" />
-              </View>
-            ) : avatarImage ? (
-              <View>
+          {/* Only show the add/change avatar button if no cover image */}
+          {!coverImage && (
+            <View style={styles.avatarContainer}>
+              {avatarUploading ? (
+                <View style={styles.avatarPlaceholder}>
+                  <ActivityIndicator size="small" color="#007AFF" />
+                </View>
+              ) : avatarImage ? (
                 <Image 
                   source={{ uri: avatarImage }} 
                   style={styles.avatarPreview} 
                   onError={(e) => setError('Avatar image loading error')}
                 />
-              </View>
-            ) : (
+              ) : (
+                <TouchableOpacity 
+                  style={styles.avatarPlaceholder}
+                  onPress={() => handleImagePick('avatar', 'library')}
+                >
+                  <ImageIcon size={24} color="#666" />
+                </TouchableOpacity>
+              )}
+              
               <TouchableOpacity 
-                style={styles.avatarPlaceholder}
+                style={styles.avatarUpload}
                 onPress={() => handleImagePick('avatar', 'library')}
+                disabled={avatarUploading}
               >
-                <ImageIcon size={24} color="#666" />
+                <Text style={styles.avatarUploadText}>
+                  {avatarImage ? 'Change Icon' : 'Add Group Icon'}
+                </Text>
               </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity 
-              style={styles.avatarUpload}
-              onPress={() => handleImagePick('avatar', 'library')}
-              disabled={avatarUploading}
-            >
-              <Text style={styles.avatarUploadText}>
-                {avatarImage ? 'Change Icon' : 'Add Group Icon'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.avatarUpload}
-              onPress={() => handleImagePick('avatar', 'camera')}
-              disabled={avatarUploading}
-            >
-              <Text style={styles.avatarUploadText}>
-                {avatarImage ? 'Take Icon Photo' : 'Take Group Icon Photo'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
         </View>
 
         <Text style={styles.label}>Name *</Text>
@@ -382,7 +395,7 @@ export default function CreateGroup() {
             style={[styles.typeButton, type === 'interest' && styles.typeButtonActive]}
             onPress={() => setType('interest')}
           >
-            <Heart size={20} color={type === 'interest' ? '#fff' : '#000'} />
+            <Heart size={20} color={type === 'interest' ? '#fff' : '#666'} />
             <Text style={[styles.typeButtonText, type === 'interest' && styles.typeButtonTextActive]}>
               Interest
             </Text>
@@ -391,12 +404,33 @@ export default function CreateGroup() {
             style={[styles.typeButton, type === 'housing' && styles.typeButtonActive]}
             onPress={() => setType('housing')}
           >
-            <Home size={20} color={type === 'housing' ? '#fff' : '#000'} />
+            <Home size={20} color={type === 'housing' ? '#fff' : '#666'} />
             <Text style={[styles.typeButtonText, type === 'housing' && styles.typeButtonTextActive]}>
               Housing
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeButton, type === 'event' && styles.typeButtonActive]}
+            onPress={() => setType('event')}
+          >
+            <CalendarDays size={20} color={type === 'event' ? '#fff' : '#666'} />
+            <Text style={[styles.typeButtonText, type === 'event' && styles.typeButtonTextActive]}>
+              Event
+            </Text>
+          </TouchableOpacity>
         </View>
+        
+        {type === 'event' && (
+          <>
+            <Text style={styles.label}>Event Location</Text>
+            <TextInput
+              style={styles.input}
+              value={eventLocation}
+              onChangeText={setEventLocation}
+              placeholder="Where will this event take place?"
+            />
+          </>
+        )}
 
         <Text style={styles.label}>Tags</Text>
         <View style={styles.tagContainer}>
@@ -426,15 +460,20 @@ export default function CreateGroup() {
         <View style={styles.settingsContainer}>
           <View style={styles.settingRow}>
             <View style={styles.settingLabelContainer}>
-              <Lock size={20} color="#000" />
+              <Lock size={20} color="#666" />
               <Text style={styles.settingLabel}>Public Group</Text>
             </View>
-            <Switch value={isPublic} onValueChange={setIsPublic} />
+            <Switch
+              value={isPublic}
+              onValueChange={setIsPublic}
+              trackColor={{ false: '#e5e5e5', true: '#007AFF' }}
+              thumbColor={'#fff'}
+            />
           </View>
 
           <View style={styles.settingRow}>
             <View style={styles.settingLabelContainer}>
-              <Users size={20} color="#000" />
+              <Users size={20} color="#666" />
               <Text style={styles.settingLabel}>Member Limit</Text>
             </View>
             <TextInput
@@ -471,6 +510,7 @@ const styles = StyleSheet.create({
   },
   imageSection: {
     marginBottom: 24,
+    position: 'relative',
   },
   imageUpload: {
     height: 200,
@@ -483,12 +523,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#666',
   },
+  uploadingText: {
+    marginTop: 8,
+    color: '#007AFF',
+  },
+  coverImageContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
   coverPreview: {
     height: 200,
     borderRadius: 12,
   },
+  avatarOverlayContainer: {
+    position: 'absolute',
+    bottom: -30,
+    left: 16,
+  },
   avatarContainer: {
     alignItems: 'center',
+    marginTop: 16,
   },
   avatarPlaceholder: {
     width: 80,
@@ -499,35 +553,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 4,
     borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   avatarPreview: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
-  avatarUpload: {
-    position: 'absolute',
-    bottom: -30,
-    left: 16,
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
     borderWidth: 4,
     borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  avatarUpload: {
+    marginTop: 8,
   },
   avatarUploadText: {
     fontSize: 14,
-    color: '#666',
+    color: '#007AFF',
     textAlign: 'center',
+  },
+  changeImageBtn: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  changeImageText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
     marginTop: 16,
+    color: '#333',
   },
   input: {
     borderWidth: 1,
@@ -535,6 +606,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    backgroundColor: '#fafafa',
   },
   textArea: {
     height: 100,
@@ -552,10 +624,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   categoryButtonActive: {
-    backgroundColor: '#000',
+    backgroundColor: '#007AFF',
   },
   categoryButtonText: {
-    color: '#000',
+    color: '#666',
   },
   categoryButtonTextActive: {
     color: '#fff',
@@ -575,12 +647,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   typeButtonActive: {
-    backgroundColor: '#000',
+    backgroundColor: '#007AFF',
   },
   typeButtonText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#000',
+    color: '#666',
   },
   typeButtonTextActive: {
     color: '#fff',
@@ -598,7 +670,7 @@ const styles = StyleSheet.create({
     margin: 4,
   },
   tagText: {
-    color: '#000',
+    color: '#666',
   },
   tagInputContainer: {
     flexDirection: 'row',
@@ -612,9 +684,10 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     marginRight: 8,
+    backgroundColor: '#fafafa',
   },
   tagAddButton: {
-    backgroundColor: '#000',
+    backgroundColor: '#007AFF',
     borderRadius: 8,
     paddingHorizontal: 16,
     justifyContent: 'center',
@@ -639,6 +712,7 @@ const styles = StyleSheet.create({
   settingLabel: {
     marginLeft: 8,
     fontSize: 16,
+    color: '#666',
   },
   memberLimitInput: {
     borderWidth: 1,
@@ -647,6 +721,7 @@ const styles = StyleSheet.create({
     padding: 8,
     width: 80,
     textAlign: 'center',
+    backgroundColor: '#fafafa',
   },
   error: {
     flexDirection: 'row',
@@ -661,7 +736,7 @@ const styles = StyleSheet.create({
     color: '#dc2626',
   },
   createButton: {
-    backgroundColor: '#000',
+    backgroundColor: '#007AFF',
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -669,30 +744,11 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   createButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.7,
   },
   createButtonText: {
     color: '#fff',
+    fontWeight: '600',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  uploadingText: {
-    marginTop: 8,
-    color: '#0066cc',
-    fontSize: 14,
-  },
-  changeImageBtn: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  changeImageText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
   },
 });

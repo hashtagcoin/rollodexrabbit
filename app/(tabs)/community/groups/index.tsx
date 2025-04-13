@@ -10,13 +10,13 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
-import { ArrowLeft, Users, Plus, Chrome as Home, Heart, Filter, Lock } from 'lucide-react-native';
+import { ArrowLeft, Users, Plus, Chrome as Home, Heart, Filter, Lock, CalendarDays } from 'lucide-react-native';
 import AppHeader from '../../../../components/AppHeader';
 
 type Group = {
   id: string;
   name: string;
-  type: 'interest' | 'housing';
+  type: 'interest' | 'housing' | 'event';
   description: string;
   created_at: string;
   avatar_url: string | null;
@@ -26,13 +26,15 @@ type Group = {
     full_name: string;
     avatar_url: string;
   }[] | null;
+  event_date?: string;
+  event_location?: string;
 };
 
 export default function GroupsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [filter, setFilter] = useState<'all' | 'interest' | 'housing'>('all');
+  const [filter, setFilter] = useState<'all' | 'interest' | 'housing' | 'event'>('all');
 
   async function loadGroups() {
     try {
@@ -47,6 +49,8 @@ export default function GroupsScreen() {
           created_at,
           avatar_url,
           is_public,
+          event_date,
+          event_location,
           member_count:group_members!group_id(count),
           owner:user_profiles!owner_id (
             full_name,
@@ -86,58 +90,74 @@ export default function GroupsScreen() {
     <View style={styles.container}>
       <AppHeader title="Community Groups" showBackButton={true} />
       
-      <TouchableOpacity
-        style={styles.createButton}
-        onPress={() => router.push('/community/groups/create')}
-      >
-        <Plus size={24} color="#007AFF" />
-      </TouchableOpacity>
-
-      <View style={styles.filters}>
-        <TouchableOpacity
-          style={[styles.filterChip, filter === 'all' && styles.filterSelected]}
-          onPress={() => setFilter('all')}
-        >
-          <Filter size={16} color={filter === 'all' ? '#fff' : '#666'} />
-          <Text
-            style={[
-              styles.filterText,
-              filter === 'all' && styles.filterTextSelected,
-            ]}
+      <View style={styles.headerActions}>
+        <View style={styles.filters}>
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'all' && styles.filterSelected]}
+            onPress={() => setFilter('all')}
           >
-            All Groups
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.filterText,
+                filter === 'all' && styles.filterTextSelected,
+              ]}
+            >
+              All
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.filterChip, filter === 'interest' && styles.filterSelected]}
-          onPress={() => setFilter('interest')}
-        >
-          <Heart size={16} color={filter === 'interest' ? '#fff' : '#666'} />
-          <Text
-            style={[
-              styles.filterText,
-              filter === 'interest' && styles.filterTextSelected,
-            ]}
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'interest' && styles.filterSelected]}
+            onPress={() => setFilter('interest')}
           >
-            Interest Groups
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.filterText,
+                filter === 'interest' && styles.filterTextSelected,
+              ]}
+            >
+              Interest
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.filterChip, filter === 'housing' && styles.filterSelected]}
-          onPress={() => setFilter('housing')}
-        >
-          <Home size={16} color={filter === 'housing' ? '#fff' : '#666'} />
-          <Text
-            style={[
-              styles.filterText,
-              filter === 'housing' && styles.filterTextSelected,
-            ]}
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'housing' && styles.filterSelected]}
+            onPress={() => setFilter('housing')}
           >
-            Housing Groups
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.filterText,
+                filter === 'housing' && styles.filterTextSelected,
+              ]}
+            >
+              Housing
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'event' && styles.filterSelected]}
+            onPress={() => setFilter('event')}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                filter === 'event' && styles.filterTextSelected,
+              ]}
+            >
+              Events
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.createButtonContainer}>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => router.push('/community/groups/create')}
+          >
+            <Plus size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.buttonLabel}>Group</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -165,6 +185,21 @@ export default function GroupsScreen() {
                 style={styles.groupCard}
                 onPress={() => router.push(`/community/groups/${group.id}`)}
               >
+                <View style={styles.typeLabel}>
+                  <Text style={[
+                    styles.typeLabelText, 
+                    { 
+                      backgroundColor: 
+                        group.type === 'interest' ? '#6C5CE7' : 
+                        group.type === 'housing' ? '#00B894' : 
+                        '#FF9F43' 
+                    }
+                  ]}>
+                    {group.type === 'interest' ? 'Interest' : 
+                     group.type === 'housing' ? 'Housing' : 'Event'}
+                  </Text>
+                </View>
+                
                 <View style={styles.groupTouchable}>
                   <Image 
                     source={{ uri: group.avatar_url || 'https://placehold.co/100x100/e1f0ff/333333?text=Grp' }} 
@@ -178,6 +213,20 @@ export default function GroupsScreen() {
                     <Text style={styles.groupDescription} numberOfLines={2}>
                       {group.description}
                     </Text>
+                    
+                    {group.type === 'event' && group.event_date && (
+                      <View style={styles.eventInfo}>
+                        <CalendarDays size={14} color="#666" />
+                        <Text style={styles.eventDate}>
+                          {new Date(group.event_date).toLocaleDateString()}
+                        </Text>
+                        {group.event_location && (
+                          <>
+                            <Text style={styles.eventLocation}>at {group.event_location}</Text>
+                          </>
+                        )}
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -213,57 +262,52 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 24,
-    paddingTop: 60,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  createButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
   filters: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 8,
-    marginBottom: 16,
-  },
-  filterChip: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
+    gap: 12,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#f5f5f5',
     borderRadius: 20,
   },
   filterSelected: {
     backgroundColor: '#007AFF',
   },
   filterText: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '500',
     color: '#666',
   },
   filterTextSelected: {
     color: '#fff',
+  },
+  createButtonContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    marginBottom: 2,
+  },
+  buttonLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#000',
+    fontWeight: '500',
   },
   content: {
     flex: 1,
@@ -290,25 +334,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   groupsGrid: {
-    padding: 24,
-    gap: 16,
+    padding: 12,
+    gap: 8, // Reduced from 16 to 8
   },
   groupCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e1e1e1',
     padding: 16,
+    marginBottom: 8, // Added to decrease distance between cards
+    position: 'relative', // For absolute positioning of the type label
+  },
+  typeLabel: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 1,
+  },
+  typeLabelText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 8,
+    borderTopRightRadius: 12,
+    overflow: 'hidden',
   },
   groupTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   groupAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 15,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 16,
     backgroundColor: '#e1f0ff',
   },
   groupTextContent: {
@@ -317,10 +379,10 @@ const styles = StyleSheet.create({
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   groupName: {
-    fontSize: 16,
+    fontSize: 18, // Increased from 16 to 18
     fontWeight: '600',
     color: '#1a1a1a',
     marginRight: 5,
@@ -332,10 +394,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  eventInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  eventDate: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  eventLocation: {
+    fontSize: 12,
+    color: '#666',
+  },
   groupFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
   },
   memberCount: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  Animated,
+  Platform,
+  NativeSyntheticEvent,
+  NativeScrollEvent
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -17,8 +21,13 @@ import {
   Plus,
   Smile,
   Users,
+  CalendarHeart
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
+
+// Constants for header heights
+const APP_HEADER_HEIGHT = 100; // Further increased app header height to prevent overlap
+const NAV_HEADER_HEIGHT = 70; // Navigation header height
 
 type Post = {
   id: string;
@@ -35,6 +44,40 @@ export default function CommunityFeed() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
+  
+  // Animation refs and states for the sticky header
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollYValue = useRef(0);
+  const lastScrollDirection = useRef<'up' | 'down'>('up');
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  
+  // Track scroll direction and animate header
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { 
+      useNativeDriver: true,
+      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const currentY = event.nativeEvent.contentOffset.y;
+        const previousY = scrollYValue.current;
+        const direction = currentY > previousY ? 'down' : 'up';
+        
+        // Only animate when scrolled beyond the point where the subheader would naturally disappear
+        if (direction !== lastScrollDirection.current) {
+          lastScrollDirection.current = direction;
+          
+          // Animate header based on scroll direction
+          Animated.spring(headerTranslateY, {
+            toValue: direction === 'down' ? -NAV_HEADER_HEIGHT : 0,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 10
+          }).start();
+        }
+        
+        scrollYValue.current = currentY;
+      }
+    }
+  );
 
   async function loadPosts() {
     try {
@@ -80,33 +123,72 @@ export default function CommunityFeed() {
     }
   };
 
+  // Render the sticky navigation header
+  const renderStickyHeader = () => (
+    <Animated.View 
+      style={[
+        styles.stickyHeader,
+        {
+          transform: [{ translateY: headerTranslateY }],
+          shadowOpacity: scrollYValue.current > 0 ? 0.3 : 0,
+          top: APP_HEADER_HEIGHT // Position it with more space below the main header
+        }
+      ]}
+    >
+      <View style={styles.headerActions}>
+        <View style={styles.navButtons}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/community/groups')} 
+          >
+            <Users size={24} color="#000" />
+            <Text style={styles.buttonLabel}>Groups</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push({
+              pathname: "/(tabs)/community",
+              params: { screen: "events" }
+            })}
+          >
+            <CalendarHeart size={24} color="#000" />
+            <Text style={styles.buttonLabel}>Events</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.createButtonContainer}>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => router.push('/community/create')}
+          >
+            <Plus size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.buttonLabel}>Post</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+
   return (
     <View style={styles.container}>
       <AppHeader title="Community" showBackButton={true} />
       
+      {/* Sticky Navigation Header */}
+      {renderStickyHeader()}
+      
       <View style={styles.content}>
-        <ScrollView
+        <Animated.ScrollView
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: APP_HEADER_HEIGHT + NAV_HEADER_HEIGHT } // Add padding for both headers
+          ]}
         >
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/community/groups')} 
-          >
-            <Users size={24} color="#007AFF" />
-            <Text style={styles.actionText}>groups</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/community/create')}
-          >
-            <Plus size={20} color="#333" />
-            <Text style={styles.actionButtonText}>Create Post</Text>
-          </TouchableOpacity>
-        </View>
-        
         {loading ? (
           <Text style={styles.loadingText}>Loading posts...</Text>
         ) : posts.length === 0 ? (
@@ -143,7 +225,7 @@ export default function CommunityFeed() {
 
               <View style={styles.postActions}>
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={styles.postActionButton}
                   onPress={() => handleLike(post.id)}
                 >
                   <Heart size={24} color="#666" />
@@ -151,7 +233,7 @@ export default function CommunityFeed() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={styles.postActionButton}
                   onPress={() => router.push({
                     pathname: '/community/post',
                     params: { id: post.id }
@@ -161,18 +243,18 @@ export default function CommunityFeed() {
                   <Text style={styles.actionText}>{post.comments_count}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.postActionButton}>
                   <Share2 size={24} color="#666" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.postActionButton}>
                   <Smile size={24} color="#666" />
                 </TouchableOpacity>
               </View>
             </View>
           ))
         )}
-        </ScrollView>
+        </Animated.ScrollView>
       </View>
     </View>
   );
@@ -191,35 +273,77 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a1a',
   },
+  stickyHeader: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    zIndex: 90, // Lower than AppHeader's zIndex
+    height: NAV_HEADER_HEIGHT,
+    paddingTop: 8, // Add some padding at the top for extra spacing
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0.3,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginVertical: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
+    height: '100%',
   },
-  actionButtonText: {
-    color: '#333',
-    fontWeight: '600',
-    marginLeft: 4,
-    fontSize: 14,
+  navButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  iconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonLabel: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#000',
+    fontWeight: '500',
+  },
+  createButtonContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    marginBottom: 2, // Reduced from 4px to 2px to move label closer
+  },
+  postActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   actionText: {
     fontSize: 12,
     color: '#666',
-    marginTop: 4,
+    marginLeft: 4,
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   loadingText: {
     textAlign: 'center',

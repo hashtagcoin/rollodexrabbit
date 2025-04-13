@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  Dimensions,
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  Image, 
+  TouchableOpacity, 
+  Dimensions, 
   ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -27,9 +28,13 @@ import {
   Users,
   Plus,
   User,
+  Info,
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import GroupCard from './components/GroupCard';
+import { HousingGroup, SupportLevel, GroupMember } from './types/housing';
+import { useAuth } from '../../../providers/AuthProvider';
 
 const { width } = Dimensions.get('window');
 
@@ -60,37 +65,26 @@ type HousingListing = {
   };
 };
 
-type HousingGroup = {
-  id: string;
-  name: string;
-  listing_id: string;
-  max_members: number;
-  current_members: number;
-  creator_id: string;
-  created_at: string;
-  members: GroupMember[];
-};
-
-type GroupMember = {
-  id: string;
-  user_id: string;
-  group_id: string;
-  join_date: string;
-  status: string;
-  bio: string;
-  support_level: string;
-  user_profile: {
-    first_name: string;
-    last_name: string;
-    avatar_url: string;
-  };
-};
-
 // Styles must be defined before the component that uses them
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  scrollContainer: {
+    paddingBottom: 80,
+  },
+  contentContainer: {
+    padding: 16,
+  },
+  centeredContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     textAlign: 'center',
@@ -322,103 +316,56 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  groupSection: {
-    marginBottom: 24,
+  groupsSection: {
+    backgroundColor: '#f5f5f5', // Light grey background
+    borderRadius: 8,
+    marginTop: 16,
+    paddingVertical: 16,
   },
-  groupHeader: {
+  groupsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  groupTitle: {
+  groupsTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  createGroupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  createGroupText: {
-    fontSize: 14,
-    color: '#007AFF',
+    color: '#333',
   },
   groupList: {
-    gap: 16,
+    paddingHorizontal: 16,
   },
-  groupCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-  },
-  groupName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  groupStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  memberCount: {
-    fontSize: 14,
-    color: '#666',
-  },
-  membersList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#e1f0ff',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  memberAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#007AFF',
-  },
-  memberName: {
-    fontSize: 14,
-    color: '#1a1a1a',
-  },
-  joinGroupButton: {
-    flexDirection: 'row',
+  groupListLoading: {
+    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    padding: 10,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
   },
-  joinGroupText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  groupEmptyState: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 12,
-  },
-  groupEmptyStateText: {
-    flex: 1,
-    fontSize: 14,
+  groupLoadingText: {
+    marginTop: 8,
     color: '#666',
+  },
+  noGroupsContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noGroupsText: {
+    marginBottom: 16,
+    textAlign: 'center',
+    color: '#666',
+  },
+  createGroupButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  createGroupButtonText: {
+    color: '#fff',
+    fontWeight: '500',
+    fontSize: 14,
   },
   groupMatchBadge: {
     flexDirection: 'row',
@@ -436,18 +383,117 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '500',
   },
+  // Test Group Detail Styles
+  testGroupDetailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  testGroupDetailCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '85%',
+    maxHeight: '80%',
+  },
+  testGroupDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  testGroupDetailTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  testGroupDetailClose: {
+    fontSize: 16,
+    color: '#007AFF',
+  },
+  testGroupDetailDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  testGroupDetailStats: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  testGroupDetailStat: {
+    fontSize: 14,
+    color: '#555',
+  },
+  testGroupDetailMembersTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#555',
+    marginBottom: 8,
+  },
+  testGroupDetailMembersList: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  testGroupDetailMember: {
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  testGroupDetailMemberAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginBottom: 4,
+  },
+  testGroupDetailMemberName: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  testGroupDetailMemberAdmin: {
+    fontSize: 10,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  testGroupDetailButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  testGroupDetailButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
 });
 
 function HousingDetail() {
   const { id, returnIndex, returnViewMode } = useLocalSearchParams();
   const { source } = useLocalSearchParams<{ source: string }>();
   const navigation = useNavigation();
+  const { session } = useAuth(); // Get user session
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<HousingListing | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [housingGroups, setHousingGroups] = useState<HousingGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [selectedTestGroup, setSelectedTestGroup] = useState<HousingGroup | null>(null);
+  const [showingTestGroupDetail, setShowingTestGroupDetail] = useState(false);
+
+  // Set current user ID from session
+  useEffect(() => {
+    if (session?.user) {
+      setUserId(session.user.id);
+    }
+  }, [session]);
 
   // Custom back handler to determine where to navigate back to
   const handleBackPress = () => {
@@ -482,7 +528,7 @@ function HousingDetail() {
   const handleCreateGroup = () => {
     if (listing) {
       router.push({
-        pathname: '/community/groups/create',
+        pathname: '/housing/create-coliving',
         params: { 
           listingId: listing.id,
           listingTitle: listing.title
@@ -491,25 +537,100 @@ function HousingDetail() {
     }
   };
 
-  const handleJoinGroup = (groupId: string) => {
-    router.push({
-      pathname: "/(tabs)/community/groups/[id]",
-      params: { 
-        id: groupId,
-        action: 'join'
-      }
-    });
+  const handleJoinGroup = async (groupId: string) => {
+    console.log('Handling join group request for:', groupId);
+    
+    try {
+      // For all groups, navigate to the housing group detail screen
+      // Include action=join as a query parameter to indicate the intent
+      router.push(`/housing/group/${groupId}?action=join`);
+    } catch (error) {
+      console.error('Error processing join group:', error);
+      Alert.alert('Error', 'Could not process your request');
+    }
+  };
+
+  const handleCloseTestGroupDetail = () => {
+    setShowingTestGroupDetail(false);
+    setSelectedTestGroup(null);
+  };
+
+  const createTestHousingGroup = (listingId: string): HousingGroup => {
+    console.log('Creating a test housing group with real user IDs');
+    
+    // Use real user IDs from our database for better testing
+    const realUserIds = [
+      '7a9ed413-a880-43d1-aeb0-33805d00a3c8', // support_coordinator@example.com
+      'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8', // ryan_h@example.com
+      'd5e1fa56-80b7-4e51-9012-3baac98f2b9e', // lily_w@example.com
+      'fc178f8d-6b47-40be-beaf-462e1c7f31a3', // dhdhd@gfgf.com
+      '9e4fffdc-6dbc-40b0-8601-abcfdd9c4af4'  // bash@gmaikl.com
+    ];
+    
+    // For testing purposes: use a marker that clearly identifies this as a test group
+    const testGroupId = `test-${listingId.substring(0, 8)}`;
+    
+    // Find or use current user ID
+    const currentUserId = userId || realUserIds[0];
+    
+    // Create a test housing group with real user IDs
+    return {
+      id: testGroupId,
+      name: 'Test Housing Group',
+      description: 'This is a test housing group for demonstration purposes',
+      listing_id: listingId,
+      max_members: 4,
+      current_members: 2,
+      creator_id: currentUserId,
+      created_at: new Date().toISOString(),
+      is_active: true,
+      members: [
+        {
+          id: `${testGroupId}-member1`,
+          user_id: currentUserId, // Current user or first real user
+          group_id: testGroupId,
+          join_date: new Date().toISOString(),
+          status: 'approved',
+          bio: 'I like quiet spaces and am tidy',
+          support_level: 'light' as SupportLevel,
+          is_admin: true,
+          user_profile: {
+            first_name: 'Jane',
+            last_name: 'Doe',
+            avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg'
+          }
+        },
+        {
+          id: `${testGroupId}-member2`,
+          user_id: realUserIds[1], // Another real user ID
+          group_id: testGroupId,
+          join_date: new Date().toISOString(),
+          status: 'approved',
+          bio: 'Looking for a supportive environment',
+          support_level: 'moderate' as SupportLevel,
+          is_admin: false,
+          user_profile: {
+            first_name: 'John',
+            last_name: 'Smith',
+            avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
+          }
+        }
+      ]
+    };
   };
 
   useEffect(() => {
-    loadListing();
-  }, [id]);
-
-  useEffect(() => {
-    if (listing) {
-      loadHousingGroups();
+    if (listing && housingGroups.length === 0) {
+      // Create test group with real user IDs using our helper function
+      const testGroup = createTestHousingGroup(id as string);
+      
+      // Add the test group to the local state to display it
+      setHousingGroups([testGroup]);
+      
+      // For test groups, completely skip real database creation
+      console.log('Added test group to local state only, ID:', testGroup.id);
     }
-  }, [listing]);
+  }, [listing, housingGroups.length, userId]);
 
   async function loadListing() {
     try {
@@ -537,14 +658,45 @@ function HousingDetail() {
   async function loadHousingGroups() {
     try {
       setLoadingGroups(true);
+      console.log('Loading housing groups for listing:', id);
       
+      // Skip real database queries entirely for this demo build
+      // Instead, always create a test group
+      console.log('Using test housing groups only');
+      
+      // Create test group with real user IDs using our helper function
+      const testGroup = createTestHousingGroup(id as string);
+      
+      // Add the test group to the local state to display it
+      setHousingGroups([testGroup]);
+      
+      // For test groups, completely skip real database creation
+      console.log('Added test group to local state only, ID:', testGroup.id);
+      
+      /* Commenting out real database queries for now
+      // Fetch housing groups with their members
       const { data, error } = await supabase
         .from('housing_groups')
         .select(`
-          *,
-          members: housing_group_members (
-            *,
-            user_profile: user_id (
+          id,
+          name,
+          description,
+          listing_id,
+          max_members,
+          creator_id,
+          created_at,
+          move_in_date,
+          is_active,
+          members: housing_group_members!group_id(
+            id,
+            user_id,
+            group_id,
+            join_date,
+            status,
+            bio,
+            support_level,
+            is_admin,
+            profiles:user_id(
               first_name,
               last_name,
               avatar_url
@@ -553,15 +705,211 @@ function HousingDetail() {
         `)
         .eq('listing_id', id);
 
-      if (error) throw handleApiError(error);
-      setHousingGroups(data || []);
-    } catch (e) {
-      console.error('Error loading housing groups:', e);
-      // Don't show this error to the user as it's non-critical
+      if (error) {
+        console.error('Error fetching housing groups:', error);
+        throw handleApiError(error);
+      }
+      
+      console.log('Raw housing groups data:', JSON.stringify(data));
+      console.log('Number of housing groups found:', data?.length || 0);
+
+      // Transform the data to calculate current_members from actual members array
+      // and ensure all support levels are valid enum values
+      const transformedGroups: HousingGroup[] = [];
+      
+      if (data) {
+        for (const group of data) {
+          console.log('Processing group:', group.id, group.name);
+          
+          // Calculate current members (only approved ones)
+          const currentMembers = group.members?.filter(m => m.status === 'approved').length || 0;
+          console.log('Members count:', group.members?.length || 0, 'Approved members:', currentMembers);
+          
+          // Transform members with proper support level handling
+          const transformedMembers = group.members?.map(member => {
+            // Safely extract user profile data
+            let firstName = 'User';
+            let lastName = '';
+            let avatarUrl = null;
+            
+            if (member.profiles && Array.isArray(member.profiles) && member.profiles.length > 0) {
+              // Get the first profile from the array
+              const profile = member.profiles[0];
+              firstName = profile.first_name || 'User';
+              lastName = profile.last_name || '';
+              avatarUrl = profile.avatar_url || null;
+            }
+            
+            return {
+              id: member.id,
+              user_id: member.user_id,
+              group_id: member.group_id,
+              join_date: member.join_date,
+              status: member.status,
+              bio: member.bio || '',
+              support_level: (member.support_level || 'none') as SupportLevel,
+              is_admin: member.is_admin,
+              user_profile: {
+                first_name: firstName,
+                last_name: lastName,
+                avatar_url: avatarUrl
+              }
+            };
+          }) || [];
+
+          transformedGroups.push({
+            id: group.id,
+            name: group.name,
+            description: group.description || '',
+            listing_id: group.listing_id,
+            max_members: group.max_members || 4,
+            current_members: currentMembers,
+            creator_id: group.creator_id,
+            created_at: group.created_at,
+            move_in_date: group.move_in_date,
+            is_active: group.is_active !== false, // default to true if undefined
+            members: transformedMembers
+          });
+        }
+        
+        setHousingGroups(transformedGroups);
+      }
+      */
+    } catch (error) {
+      console.error('Error loading housing groups:', error);
+      
+      // Fallback to test data if real data fails to load
+      console.log('Falling back to test data');
+      
+      // Create test group with real user IDs using our helper function
+      const testGroup = createTestHousingGroup(id as string);
+      
+      // Add the test group to the local state to display it
+      setHousingGroups([testGroup]);
     } finally {
       setLoadingGroups(false);
     }
   }
+
+  const renderGroupsSection = () => {
+    return (
+      <View style={styles.groupsSection}>
+        <View style={styles.groupsHeader}>
+          <Text style={styles.groupsTitle}>Group Housing Opportunities</Text>
+          <TouchableOpacity style={styles.createGroupButton} onPress={handleCreateGroup}>
+            <Text style={styles.createGroupButtonText}>+ Create Group</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {loadingGroups ? (
+          <View style={styles.groupListLoading}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.groupLoadingText}>Loading groups...</Text>
+          </View>
+        ) : (
+          renderHousingGroups()
+        )}
+      </View>
+    );
+  };
+
+  const renderHousingGroups = () => {
+    console.log('Rendering housing groups, count:', housingGroups.length);
+    
+    if (housingGroups.length === 0) {
+      return (
+        <View style={styles.noGroupsContainer}>
+          <Text style={styles.noGroupsText}>No housing groups have been created for this listing yet.</Text>
+          <TouchableOpacity style={styles.createGroupButton} onPress={handleCreateGroup}>
+            <Text style={styles.createGroupButtonText}>Create a Housing Group</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.groupList}>
+        {housingGroups.map((group, index) => (
+          <GroupCard 
+            key={group.id} 
+            group={group} 
+            onJoinGroup={handleJoinGroup}
+            index={index} // Pass index for staggered animations
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const TestGroupDetailView = () => {
+    if (!selectedTestGroup) return null;
+
+    return (
+      <View style={styles.testGroupDetailOverlay}>
+        <View style={styles.testGroupDetailCard}>
+          <View style={styles.testGroupDetailHeader}>
+            <Text style={styles.testGroupDetailTitle}>{selectedTestGroup.name}</Text>
+            <TouchableOpacity onPress={handleCloseTestGroupDetail}>
+              <Text style={styles.testGroupDetailClose}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.testGroupDetailDescription}>
+            {selectedTestGroup.description}
+          </Text>
+          
+          <View style={styles.testGroupDetailStats}>
+            <Text style={styles.testGroupDetailStat}>
+              Members: {selectedTestGroup.current_members}/{selectedTestGroup.max_members}
+            </Text>
+          </View>
+          
+          <Text style={styles.testGroupDetailMembersTitle}>Members</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.testGroupDetailMembersList}>
+            {selectedTestGroup.members
+              .filter(member => member.status === 'approved')
+              .map((member: GroupMember, i: number) => (
+                <View key={member.id} style={styles.testGroupDetailMember}>
+                  <Image
+                    source={{ uri: member.user_profile.avatar_url || `https://randomuser.me/api/portraits/${i % 2 === 0 ? 'women' : 'men'}/${10 + i}.jpg` }}
+                    style={styles.testGroupDetailMemberAvatar}
+                  />
+                  <Text style={styles.testGroupDetailMemberName}>
+                    {member.user_profile.first_name}
+                  </Text>
+                  {member.is_admin && (
+                    <Text style={styles.testGroupDetailMemberAdmin}>Admin</Text>
+                  )}
+                </View>
+              ))}
+          </ScrollView>
+          
+          <TouchableOpacity 
+            style={styles.testGroupDetailButton} 
+            onPress={() => {
+              Alert.alert(
+                'Join Group',
+                'For demo purposes, you have successfully joined this test group.'
+              );
+              handleCloseTestGroupDetail();
+            }}
+          >
+            <Text style={styles.testGroupDetailButtonText}>Join Group</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  useEffect(() => {
+    loadListing();
+  }, [id]);
+
+  useEffect(() => {
+    if (listing) {
+      loadHousingGroups();
+    }
+  }, [listing]);
 
   if (loading) {
     return (
@@ -737,78 +1085,7 @@ function HousingDetail() {
             </TouchableOpacity>
           )}
 
-          <View style={styles.groupSection}>
-            <View style={styles.groupHeader}>
-              <Text style={styles.groupTitle}>Group Housing Opportunities</Text>
-              <TouchableOpacity 
-                style={styles.createGroupButton}
-                onPress={handleCreateGroup}
-              >
-                <Plus size={16} color="#007AFF" />
-                <Text style={styles.createGroupText}>Create Group</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {loadingGroups ? (
-              <ActivityIndicator color="#007AFF" />
-            ) : housingGroups.length > 0 ? (
-              <View style={styles.groupList}>
-                {housingGroups.map(group => (
-                  <View key={group.id} style={styles.groupCard}>
-                    <Text style={styles.groupName}>{group.name}</Text>
-                    <View style={styles.groupStats}>
-                      <Users size={16} color="#666" />
-                      <Text style={styles.memberCount}>
-                        {group.current_members} of {group.max_members} members
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.membersList}>
-                      {group.members.slice(0, 3).map(member => (
-                        <View key={member.id} style={styles.memberItem}>
-                          {member.user_profile.avatar_url ? (
-                            <Image 
-                              source={{ uri: member.user_profile.avatar_url }} 
-                              style={styles.memberAvatar} 
-                            />
-                          ) : (
-                            <View style={styles.memberAvatar}>
-                              <User size={16} color="#fff" />
-                            </View>
-                          )}
-                          <Text style={styles.memberName}>
-                            {member.user_profile.first_name}
-                          </Text>
-                        </View>
-                      ))}
-                      {group.members.length > 3 && (
-                        <View style={styles.memberItem}>
-                          <Text style={styles.memberName}>
-                            +{group.members.length - 3} more
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    
-                    <TouchableOpacity 
-                      style={styles.joinGroupButton}
-                      onPress={() => handleJoinGroup(group.id)}
-                    >
-                      <Text style={styles.joinGroupText}>View Group</Text>
-                      <ChevronRight size={16} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.groupEmptyState}>
-                <Users size={20} color="#666" />
-                <Text style={styles.groupEmptyStateText}>
-                  No housing groups for this property yet. Create a group to find roommates!
-                </Text>
-              </View>
-            )}
-          </View>
+          {renderGroupsSection()}
 
           <View style={styles.providerCard}>
             <Text style={styles.providerTitle}>Listed by</Text>
@@ -836,6 +1113,8 @@ function HousingDetail() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {showingTestGroupDetail && <TestGroupDetailView />}
     </View>
   );
 }

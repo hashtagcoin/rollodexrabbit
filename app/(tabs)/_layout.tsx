@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Tabs, usePathname } from 'expo-router'; 
-import { House, User, Users, Search, Wallet } from 'lucide-react-native';
+import { House, User, Users, Search, Wallet, Heart } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { navigateToTab, resetScrollPosition, TabName } from '../../lib/navigationHelpers';
 
@@ -104,6 +104,16 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} />,
           tabBarButton: (props) => (
             <Pressable {...props} onPress={() => navigateToTab('wallet')} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="favorites"
+        options={{
+          title: 'Favorites',
+          tabBarIcon: ({ color, size }) => <Heart size={size} color={color} />,
+          tabBarButton: (props) => (
+            <Pressable {...props} onPress={() => navigateToTab('favorites')} />
           ),
         }}
       />

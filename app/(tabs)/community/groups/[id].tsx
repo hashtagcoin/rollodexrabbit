@@ -811,51 +811,22 @@ export default function GroupDetails() {
 
   const loadEvents = async (page = 1) => {
     try {
-      const isFirstPage = page === 1;
-      if (isFirstPage) {
-        setLoadingEvents(true);
-      } else {
-        setLoadingMoreEvents(true);
-      }
+      setLoadingEvents(true);
       setError(null);
 
-      const from = (page - 1) * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('group_events')
-        .select(`
-          *,
-          organizer:user_profiles!created_by(id, full_name, avatar_url),
-          participants:group_event_participants(
-            user:user_profiles(id, full_name, avatar_url),
-            status
-          )
-        `)
-        .eq('group_id', id)
-        .order('start_time', { ascending: true })
-        .range(from, to);
-
-      if (eventsError) {
-        throw new Error(eventsError.message);
-      }
-
-      if (isFirstPage) {
-        setEvents(eventsData || []);
-      } else {
-        setEvents(prev => [...prev, ...(eventsData || [])]);
-      }
+      // Skip real database queries for demo build
+      console.log('Using test events data only');
       
-      setHasMoreEvents((eventsData || []).length === ITEMS_PER_PAGE);
-      setEventsPage(page);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load events');
+      // Create test events for the group
+      const testEvents = createTestGroupEvents(id as string);
+      
+      // Set the events in state
+      setEvents(testEvents);
+      setHasMoreEvents(false); // No more events to load in test mode
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to load events');
     } finally {
-      if (page === 1) {
-        setLoadingEvents(false);
-      } else {
-        setLoadingMoreEvents(false);
-      }
+      setLoadingEvents(false);
     }
   };
 
@@ -1907,7 +1878,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
-    width: '100%',
     alignItems: 'center',
     marginBottom: 15,
   },
@@ -2334,3 +2304,138 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 });
+
+// Helper function to create test group events
+const createTestGroupEvents = (groupId: string) => {
+  const baseDate = new Date();
+  
+  // Create 3 upcoming events
+  return [
+    {
+      id: `test-event-1-${groupId}`,
+      title: 'Weekly Meetup',
+      description: 'Join us for our weekly community meetup! We\'ll discuss upcoming events and opportunities.',
+      location: 'Community Center, 123 Main St',
+      group_id: groupId,
+      start_time: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+      end_time: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
+      is_public: true,
+      created_at: new Date(baseDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      max_participants: 15,
+      status: 'upcoming',
+      organizer: {
+        id: '7a9ed413-a880-43d1-aeb0-33805d00a3c8',
+        full_name: 'Jane Coordinator',
+        avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg'
+      },
+      participants: [
+        {
+          user: {
+            id: '7a9ed413-a880-43d1-aeb0-33805d00a3c8',
+            full_name: 'Jane Coordinator',
+            avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg'
+          },
+          status: 'going'
+        },
+        {
+          user: {
+            id: 'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8',
+            full_name: 'Ryan H',
+            avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
+          },
+          status: 'going'
+        }
+      ],
+      created_by: {
+        id: '7a9ed413-a880-43d1-aeb0-33805d00a3c8',
+        first_name: 'Jane',
+        last_name: 'Coordinator',
+        avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg'
+      }
+    },
+    {
+      id: `test-event-2-${groupId}`,
+      title: 'Coffee Chat',
+      description: 'Casual coffee meet-up for members to connect and share experiences.',
+      location: 'Brew & Bean Cafe, 456 Oak Ave',
+      group_id: groupId,
+      start_time: new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+      end_time: new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000 + 1.5 * 60 * 60 * 1000).toISOString(), // 1.5 hours later
+      is_public: true,
+      created_at: new Date(baseDate.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      max_participants: 10,
+      status: 'upcoming',
+      organizer: {
+        id: 'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8',
+        full_name: 'Ryan H',
+        avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
+      },
+      participants: [
+        {
+          user: {
+            id: 'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8',
+            full_name: 'Ryan H',
+            avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
+          },
+          status: 'going'
+        }
+      ],
+      created_by: {
+        id: 'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8',
+        first_name: 'Ryan',
+        last_name: 'H',
+        avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
+      }
+    },
+    {
+      id: `test-event-3-${groupId}`,
+      title: 'Workshop: Building Community Connections',
+      description: 'Interactive workshop focused on strengthening community bonds and support networks.',
+      location: 'Community Hub, 789 Pine Street',
+      group_id: groupId,
+      start_time: new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
+      end_time: new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000).toISOString(), // 3 hours later
+      is_public: true,
+      created_at: new Date(baseDate.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      max_participants: 25,
+      status: 'upcoming',
+      organizer: {
+        id: 'd5e1fa56-80b7-4e51-9012-3baac98f2b9e',
+        full_name: 'Lily W',
+        avatar_url: 'https://randomuser.me/api/portraits/women/22.jpg'
+      },
+      participants: [
+        {
+          user: {
+            id: 'd5e1fa56-80b7-4e51-9012-3baac98f2b9e',
+            full_name: 'Lily W',
+            avatar_url: 'https://randomuser.me/api/portraits/women/22.jpg'
+          },
+          status: 'going'
+        },
+        {
+          user: {
+            id: '7a9ed413-a880-43d1-aeb0-33805d00a3c8',
+            full_name: 'Jane Coordinator',
+            avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg'
+          },
+          status: 'going'
+        },
+        {
+          user: {
+            id: 'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8',
+            full_name: 'Ryan H',
+            avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
+          },
+          status: 'going'
+        }
+      ],
+      created_by: {
+        id: 'd5e1fa56-80b7-4e51-9012-3baac98f2b9e',
+        first_name: 'Lily',
+        last_name: 'W',
+        avatar_url: 'https://randomuser.me/api/portraits/women/22.jpg'
+      }
+    }
+  ];
+};

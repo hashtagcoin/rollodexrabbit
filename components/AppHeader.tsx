@@ -9,12 +9,14 @@ interface AppHeaderProps {
   title?: string;
   showBackButton?: boolean;
   onBackPress?: () => void;
+  rightElement?: React.ReactNode;
 }
 
 export default function AppHeader({
   title,
   showBackButton = true,
   onBackPress,
+  rightElement,
 }: AppHeaderProps) {
   const navigation = useNavigation();
   const pathname = usePathname();
@@ -100,23 +102,28 @@ export default function AppHeader({
         </View>
 
         <View style={styles.rightSection}>
-          <NotificationBell />
-
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => router.replace('/(tabs)/profile')}
-            accessibilityLabel="Profile"
-            accessibilityHint="Navigate to your profile"
-          >
-            {avatarUrl ? (
-              <Image 
-                source={{ uri: avatarUrl }} 
-                style={styles.profileImage} 
-              />
-            ) : (
-              <View style={styles.profilePlaceholder} />
-            )}
-          </TouchableOpacity>
+          {rightElement ? (
+            rightElement
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <NotificationBell />
+              <TouchableOpacity
+                style={styles.profileButton}
+                onPress={() => router.replace('/(tabs)/profile')}
+                accessibilityLabel="Profile"
+                accessibilityHint="Navigate to your profile"
+              >
+                {avatarUrl ? (
+                  <Image 
+                    source={{ uri: avatarUrl }} 
+                    style={styles.profileImage} 
+                  />
+                ) : (
+                  <View style={styles.profilePlaceholder} />
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </View>

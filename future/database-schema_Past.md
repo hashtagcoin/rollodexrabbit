@@ -35,80 +35,75 @@ INSERT INTO claims (
 
 **Note:** This table does NOT have a `category` column either. Category information is used in wallet balances but not stored directly in the claims table.
 
-## Housing Module Tables
-
-### housing_listings
-```sql
-CREATE TABLE housing_listings (
-  id uuid PRIMARY KEY,
-  title varchar(255) NOT NULL,
-  description text,
-  weekly_rent numeric NOT NULL,
-  bond_amount numeric,
-  available_from timestamp NOT NULL,
-  bedrooms integer NOT NULL,
-  bathrooms integer NOT NULL,
-  parking_spaces integer NOT NULL,
-  property_type varchar(50) NOT NULL,
-  sda_category varchar(50) NOT NULL,
-  address varchar(255) NOT NULL,
-  suburb varchar(100) NOT NULL,
-  state varchar(50) NOT NULL,
-  postcode varchar(10) NOT NULL,
-  features text[] NOT NULL,
-  accessibility_features text[] NOT NULL,
-  media_urls text[] NOT NULL,
-  virtual_tour_url text,
-  pets_allowed boolean NOT NULL DEFAULT FALSE,
-  ndis_supported boolean NOT NULL DEFAULT TRUE,
-  provider_id uuid REFERENCES providers(id),
-  created_at timestamp DEFAULT NOW(),
-  updated_at timestamp DEFAULT NOW()
-);
-```
-
-### housing_groups
+#### housing_groups
 ```sql
 CREATE TABLE housing_groups (
-  id uuid PRIMARY KEY,
-  name varchar(255) NOT NULL,
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  listing_id uuid REFERENCES housing_listings(id) ON DELETE CASCADE,
+  creator_id uuid REFERENCES auth.users(id),
+  max_members int NOT NULL CHECK (max_members > 0),
+  current_members int DEFAULT 0,
+  move_in_date date,
   description text,
-  listing_id uuid REFERENCES housing_listings(id),
-  max_members integer NOT NULL DEFAULT 4,
-  creator_id uuid REFERENCES user_profiles(user_id),
-  created_at timestamp DEFAULT NOW(),
-  move_in_date timestamp,
-  is_active boolean DEFAULT TRUE
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
 );
 ```
 
-### housing_group_members
+#### housing_group_members
 ```sql
 CREATE TABLE housing_group_members (
-  id uuid PRIMARY KEY,
-  group_id uuid REFERENCES housing_groups(id),
-  user_id uuid REFERENCES user_profiles(user_id),
-  join_date timestamp DEFAULT NOW(),
-  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  group_id uuid REFERENCES housing_groups(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES auth.users(id),
+  status text NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
+  join_date timestamp with time zone DEFAULT now(),
   bio text,
-  support_level varchar(20) NOT NULL DEFAULT 'none' CHECK (support_level IN ('none', 'light', 'moderate', 'high')),
-  gender_preference varchar(20) DEFAULT 'Any',
-  move_in_timeline varchar(50),
-  is_admin boolean DEFAULT FALSE
+  support_level text CHECK (support_level IN ('none', 'light', 'moderate', 'high')),
+  is_admin boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  UNIQUE(group_id, user_id)
 );
 ```
 
-### housing_group_invites
+#### housing_groups_with_members (View)
 ```sql
-CREATE TABLE housing_group_invites (
-  id uuid PRIMARY KEY,
-  group_id uuid REFERENCES housing_groups(id),
-  invite_link text,
-  created_by uuid REFERENCES user_profiles(user_id),
-  created_at timestamp DEFAULT NOW(),
-  expires_at timestamp,
-  is_used boolean DEFAULT FALSE
-);
+CREATE OR REPLACE VIEW housing_groups_with_members AS
+SELECT 
+  g.id,
+  g.name,
+  g.listing_id,
+  g.creator_id,
+  g.max_members,
+  g.current_members,
+  g.move_in_date,
+  g.description,
+  g.is_active,
+  g.created_at,
+  g.updated_at,
+  COALESCE(
+    (SELECT json_agg(
+      json_build_object(
+        'id', m.id, 
+        'user_id', m.user_id, 
+        'status', m.status, 
+        'join_date', m.join_date, 
+        'bio', m.bio, 
+        'support_level', m.support_level, 
+        'is_admin', m.is_admin, 
+        'full_name', u.full_name, 
+        'avatar_url', u.avatar_url, 
+        'age_range', '25-34'
+      )
+    )
+    FROM housing_group_members m
+    LEFT JOIN user_profiles u ON m.user_id = u.id
+    WHERE m.group_id = g.id AND m.status = 'approved'
+    ), '[]'::json) AS members
+FROM housing_groups g;
 ```
 
 ## Functions and Stored Procedures
