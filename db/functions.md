@@ -12,7 +12,11 @@ This file lists all stored functions and procedures in the Rollodex database. Fu
 ## Key Functions for the Application:
 - **book_service**: Manages the service booking process
 - **award_booking_milestone_badge**: Triggers badge awards based on booking milestones
-- Various reward and point management functions
+- **update_user_streak**: Updates a user's streak for a particular activity type
+- **award_points**: Awards points to users for completing activities
+- **claim_badge**: Handles badge claiming and point rewards
+- **update_achievement_progress**: Updates a user's progress towards achievements
+- **check_and_award_badges**: Checks conditions and awards badges based on user activity
 
 ## Note for Friends and Chat Features:
 The database currently lacks specific functions for managing friend relationships or chat operations. When implementing these features, you may need to create functions for:

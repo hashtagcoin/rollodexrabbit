@@ -1,5 +1,7 @@
 # Rollodex Project Overview
 
+> **Important Note**: This document should be read from top to bottom, as development occurred in this chronological order. If you encounter conflicting information, the later (lower) implementation details supersede earlier ones. The features and components described most recently reflect the current state of the project.
+
 ## Introduction
 
 Rollodex is a mobile-first, visually-driven social and services platform tailored to the needs of NDIS participants. It enables users to discover, book, and review services and accessible housing, while engaging in community groups and earning rewards. Inspired by Instagram and Airbnb, Rollodex is built for accessibility, NDIS compliance, and user empowerment.

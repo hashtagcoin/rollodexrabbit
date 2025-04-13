@@ -14,7 +14,8 @@ Welcome to Rollodex, your all-in-one platform for NDIS services, accessible hous
 
 ### Navigation Basics
 - **Bottom Tabs**: Access main sections (Home, Discover, Wallet, Community, Profile)
-- **Header Bar**: Consistent navigation with back button and screen title
+- **Header Bar**: Consistent navigation with back button that returns you to your previous position
+- **View Toggles**: Switch between Grid, List, and Swipe views across the app
 - **Gestures**: Swipe between items and use pull-to-refresh for updates
 
 ## Key Features
@@ -98,22 +99,23 @@ Welcome to Rollodex, your all-in-one platform for NDIS services, accessible hous
 3. Tag friends and places in your posts
 4. Control privacy settings for each post
 
-### Rewards and Achievements
+### Rewards & Achievements
 
-#### Earning Rewards
-1. Complete actions to earn badges and points:
-   - Booking services
-   - Maintaining login streaks
-   - Participating in groups
-   - Referring friends
+#### Accessing Your Rewards
+1. Go to your Profile tab
+2. Find the "Rewards" button next to the "Badges & Achievements" section
+3. View your earned badges, streaks, and available points
+4. Claim badges to receive their associated points
+5. Track your progress toward new achievements
 
-#### Claiming Rewards
-1. Go to the Rewards tab to view your earned badges
-2. Tap on badges to claim their associated rewards
-3. Track your progress toward upcoming achievements
-4. Use earned points for wallet credits or special offers
+#### Using Reward Points
+1. Navigate to your Rewards screen
+2. Check your available points balance
+3. Browse available rewards for redemption
+4. Select a reward to claim
+5. Confirm redemption to receive your benefit
 
-## Accessibility Features
+### Accessibility Features
 
 ### Customizing Your Experience
 - **High Contrast Mode**: Toggle in Settings > Accessibility

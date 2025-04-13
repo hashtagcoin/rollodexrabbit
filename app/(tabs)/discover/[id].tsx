@@ -7,13 +7,27 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { useLocalSearchParams, router, Stack, useNavigation } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { ArrowLeft, MapPin, Star, Calendar, Clock, ChevronRight } from 'lucide-react-native';
+import AppHeader from '../../../components/AppHeader';
 
 export default function ServiceDetails() {
-  const { id } = useLocalSearchParams();
+  const { id, returnIndex, returnViewMode } = useLocalSearchParams();
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
+
+  // Custom back handler to return to discover screen
+  const handleBackPress = () => {
+    // Always navigate back to discover screen, preserving the view mode and position
+    router.push({
+      pathname: "/(tabs)/discover",
+      params: { 
+        returnIndex,
+        returnViewMode
+      }
+    });
+  };
 
   // This would normally be fetched from the API
   const service = {
@@ -46,15 +60,10 @@ export default function ServiceDetails() {
 
   return (
     <View style={styles.container}>
+      <AppHeader title="Service Details" showBackButton={true} onBackPress={handleBackPress} />
       <ScrollView>
         <View style={styles.imageContainer}>
           <Image source={{ uri: service.image }} style={styles.image} />
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft color="#fff" size={24} />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -134,17 +143,6 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 60,
-    left: 24,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,

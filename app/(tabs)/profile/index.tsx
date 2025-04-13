@@ -12,9 +12,9 @@ import {
   ActivityIndicator,
   FlatList,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { Settings, CreditCard as Edit, BadgeCheck, User as User2, LogOut, Users, Calendar, MessageSquare, Wallet, ChevronRight, Award, House, Heart, Wrench, FileCheck, UserPlus } from 'lucide-react-native';
+import { Settings, CreditCard as Edit, BadgeCheck, User as User2, LogOut, Users, Calendar, MessageSquare, Wallet, ChevronRight, Award, House, Heart, Wrench, FileCheck, UserPlus, Plus } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { RewardsService } from '../../../lib/rewardsService';
 import { resetScrollPosition } from '../../../lib/navigationHelpers';
@@ -38,6 +38,7 @@ type UserProfile = {
 type TabType = 'posts' | 'groups' | 'bookings' | 'friends';
 
 export default function ProfileScreen() {
+  const { newPost, postId } = useLocalSearchParams<{ newPost: string, postId: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -87,6 +88,33 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  // Refresh posts when returning from creating a new post
+  useEffect(() => {
+    if (newPost === 'true' && postId) {
+      loadPosts();
+    }
+  }, [newPost, postId]);
+
+  async function loadPosts() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Load user posts
+      const { data: postsData } = await supabase
+        .from('posts_with_users')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      setPosts(postsData || []);
+      return postsData;
+    } catch (error) {
+      console.error('Error loading posts:', error);
+      return [];
+    }
+  }
+
   async function loadProfile() {
     try {
       setLoading(true);
@@ -113,13 +141,7 @@ export default function ProfileScreen() {
       setIsProvider(!!providerData);
 
       // Load user posts
-      const { data: postsData } = await supabase
-        .from('posts_with_users')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      
-      setPosts(postsData || []);
+      await loadPosts();
 
       // Load user groups
       const { data: groupsData } = await supabase
@@ -265,11 +287,11 @@ export default function ProfileScreen() {
     );
   };
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadProfile();
+    await Promise.all([loadProfile(), loadPosts()]);
     setRefreshing(false);
-  };
+  }, []);
 
   // Award badges based on profile completion and activities
   const getBadges = () => {
@@ -296,103 +318,13 @@ export default function ProfileScreen() {
   };
   
   const navigateToRewards = () => {
-    router.push('/rewards' as any);
-  };
-
-  // Render the friends tab content separately to avoid nesting VirtualizedLists in ScrollView
-  const renderFriendsTabContent = () => {
-    console.log('Profile friends tab - Friends count:', friends?.length || 0);
-    
-    if (friendsLoading && !friendsRefreshing) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4F46E5" />
-          <Text style={styles.loadingText}>Loading friends...</Text>
-        </View>
-      );
-    }
-    
-    if (friendsError) {
-      return (
-        <View style={styles.emptyState}>
-          <User2 size={48} color="#EF4444" />
-          <Text style={styles.emptyStateTitle}>Something went wrong</Text>
-          <Text style={styles.emptyStateText}>
-            {friendsError}
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyStateButton}
-            onPress={() => refreshFriends()}
-          >
-            <Text style={styles.emptyStateButtonText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    
-    if (friends.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <User2 size={48} color="#e1e1e1" />
-          <Text style={styles.emptyStateTitle}>No Friends Yet</Text>
-          <Text style={styles.emptyStateText}>
-            Start connecting with friends, family, and service providers
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyStateButton}
-            onPress={() => router.push('/profile/friends/find')}
-          >
-            <UserPlus size={20} color="#fff" style={{marginRight: 8}} />
-            <Text style={styles.emptyStateButtonText}>Find Friends</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    
-    return (
-      <FlatList
-        data={friends.slice(0, 5)} // Show only first 5 friends on profile
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={() => (
-          <TouchableOpacity 
-            style={styles.viewAllButton}
-            onPress={() => router.push('/profile/friends')}
-          >
-            <Text style={styles.viewAllText}>View All Friends</Text>
-          </TouchableOpacity>
-        )}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.listCard}
-            onPress={() => router.push(`/profile/friends/${item.id}`)}
-          >
-            <View style={styles.listIconContainer}>
-              {item.friend_avatar ? (
-                <Image source={{ uri: item.friend_avatar }} style={styles.friendAvatar} />
-              ) : (
-                <View style={[styles.friendAvatar, styles.avatarPlaceholder]}>
-                  <User2 size={20} color="#fff" />
-                </View>
-              )}
-            </View>
-            <View style={styles.listContent}>
-              <Text style={styles.listTitle}>{item.friend_name || 'Unknown'}</Text>
-              <Text style={styles.listSubtitle}>
-                {item.category && item.category.charAt(0).toUpperCase() + item.category.slice(1) || 'Friend'}
-              </Text>
-            </View>
-            <ChevronRight size={20} color="#666" />
-          </TouchableOpacity>
-        )}
-        refreshControl={
-          <RefreshControl 
-            refreshing={friendsRefreshing} 
-            onRefresh={refreshFriends} 
-          />
-        }
-        contentContainerStyle={styles.friendsListContent}
-      />
-    );
+    // Immediately navigate to rewards screen without waiting
+    router.push({
+      pathname: '/rewards' as any,
+      params: { 
+        preload: 'true' // Parameter to indicate this is a preloaded navigation
+      }
+    });
   };
 
   // Render all other tabs' content
@@ -409,10 +341,11 @@ export default function ProfileScreen() {
                   Share your experiences with the community
                 </Text>
                 <TouchableOpacity
-                  style={styles.emptyStateButton}
+                  style={styles.createPostButton}
                   onPress={() => router.push('/community/create')}
                 >
-                  <Text style={styles.emptyStateButtonText}>Create Post</Text>
+                  <Plus size={16} color="#fff" />
+                  <Text style={styles.createPostButtonText}>Create Post</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -563,227 +496,270 @@ export default function ProfileScreen() {
           </View>
         );
         
+      case 'friends':
+        return (
+          <View style={styles.tabContent}>
+            {friends.length === 0 ? (
+              <View style={styles.emptyState}>
+                <User2 size={48} color="#e1e1e1" />
+                <Text style={styles.emptyStateTitle}>No Friends Yet</Text>
+                <Text style={styles.emptyStateText}>
+                  Connect with others in the community
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyStateButton}
+                  onPress={() => router.push('/profile/friends/find')}
+                >
+                  <Text style={styles.emptyStateButtonText}>Find Friends</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity 
+                  style={styles.viewAllButton}
+                  onPress={() => router.push('/profile/friends')}
+                >
+                  <Text style={styles.viewAllText}>View All Friends</Text>
+                </TouchableOpacity>
+
+                {friends.slice(0, 5).map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.listCard}
+                    onPress={() => router.push(`/profile/friends/${item.id}`)}
+                  >
+                    <View style={styles.listIconContainer}>
+                      {item.friend_avatar ? (
+                        <Image source={{ uri: item.friend_avatar }} style={styles.friendAvatar} />
+                      ) : (
+                        <View style={[styles.friendAvatar, styles.avatarPlaceholder]}>
+                          <User2 size={20} color="#fff" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.listContent}>
+                      <Text style={styles.listTitle}>{item.friend_name || 'Unknown'}</Text>
+                      <Text style={styles.listSubtitle}>
+                        {item.category && item.category.charAt(0).toUpperCase() + item.category.slice(1) || 'Friend'}
+                      </Text>
+                    </View>
+                    <ChevronRight size={20} color="#666" />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </View>
+        );
+        
       default:
         return null;
     }
   };
 
-  // Render main content based on active tab - special handling for friends tab
+  // Render main content based on active tab
   const renderMainContent = () => {
-    // Tab bar is always visible
-    const tabBar = (
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'posts' && styles.activeTabButton]}
-          onPress={() => setActiveTab('posts')}
-        >
-          <MessageSquare 
-            size={20} 
-            color={activeTab === 'posts' ? '#007AFF' : '#666'} 
-          />
-          <Text 
-            style={[
-              styles.tabButtonText, 
-              activeTab === 'posts' && styles.activeTabButtonText
-            ]}
-          >
-            Posts
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'groups' && styles.activeTabButton]}
-          onPress={() => setActiveTab('groups')}
-        >
-          <Users 
-            size={20} 
-            color={activeTab === 'groups' ? '#007AFF' : '#666'} 
-          />
-          <Text 
-            style={[
-              styles.tabButtonText, 
-              activeTab === 'groups' && styles.activeTabButtonText
-            ]}
-          >
-            Groups
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'bookings' && styles.activeTabButton]}
-          onPress={() => setActiveTab('bookings')}
-        >
-          <Calendar 
-            size={20}
-            color={activeTab === 'bookings' ? '#007AFF' : '#666'} 
-          />
-          <Text 
-            style={[
-              styles.tabButtonText, 
-              activeTab === 'bookings' && styles.activeTabButtonText
-            ]}
-          >
-            Bookings
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'friends' && styles.activeTabButton]}
-          onPress={() => setActiveTab('friends')}
-        >
-          <User2 
-            size={20} 
-            color={activeTab === 'friends' ? '#007AFF' : '#666'} 
-          />
-          <Text 
-            style={[
-              styles.tabButtonText, 
-              activeTab === 'friends' && styles.activeTabButtonText
-            ]}
-          >
-            Friends
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-    
-    // Profile and badges section
-    const profileSection = (
-      <>
-        {/* Profile Info Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={styles.profileImage}
-              />
-            ) : (
-              <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
-                <User2 size={40} color="#999" />
-              </View>
-            )}
-          </View>
-          
-         {/* Wrapper View for Name and Badge */}
-          <View style={styles.profileNameContainer}>
-            <Text style={styles.profileNameText}>
-              {(profile?.full_name || 'User').trim()}
-            </Text>
-            {profile?.ndis_verified && (
-              <BadgeCheck size={16} color="#007AFF" style={styles.verifiedBadgeIcon} />
-            )}
-          </View>
-          
-          <Text style={styles.username}>@{profile?.username?.trim() || 'user'}</Text>
-          
-          {profile?.bio && (
-            <Text style={styles.bio}>{profile.bio.trim()}</Text>
-          )}
-          
-          <View style={styles.profileActions}>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => router.push('/profile/edit')}
-            >
-              <Edit size={16} color="#007AFF" />
-              <Text style={styles.editButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.walletButton}
-              onPress={() => router.push('/wallet')}
-            >
-              <Wallet size={16} color="#fff" />
-              <Text style={styles.walletButtonText}>Wallet</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.ndisButton}
-              onPress={() => router.push('/ndis-plan')}
-            >
-              <FileCheck size={16} color="#fff" />
-              <Text style={styles.ndisButtonText}>NDIS</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        {/* Provider Mode Section */}
-        {profile?.role === 'provider' || isProvider ? (
-          <View style={styles.providerSection}>
-            <TouchableOpacity 
-              style={styles.providerButton}
-              onPress={handleProviderDashboard}
-            >
-              <Wrench size={20} color="#fff" />
-              <Text style={styles.providerButtonText}>Provider Dashboard</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-        
-        {/* Badges Section */}
-        <View style={styles.badgesSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Badges & Achievements</Text>
-            {profile?.role !== 'provider' && (
-              <TouchableOpacity onPress={navigateToRewards}>
-                <Text style={styles.seeAllLink}>See all</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.badgesScrollView} 
-            contentContainerStyle={[styles.badgesContainer, { alignItems: 'center' }]}
-          >
-            {getBadges().map((badge, index) => (
-              <View key={index} style={styles.badgeItem}>
-                <View style={styles.badgeIcon}>
-                  <Award size={24} color="#007AFF" />
-                </View>
-                <Text style={styles.badgeName}>{badge}</Text>
-              </View>
-            ))}
-            <TouchableOpacity 
-              style={styles.rewardsButton}
-              onPress={navigateToRewards}
-            >
-              <Award size={16} color="#fff" />
-              <Text style={styles.rewardsButtonText}>View Rewards</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </>
-    );
-    
-    // For the Friends tab, we'll handle it separately to avoid nesting scrollables
-    if (activeTab === 'friends') {
+    if (loading && !refreshing) {
       return (
         <View style={styles.container}>
-          <AppHeader title="My Profile" showBackButton={false} />
-          {profileSection}
-          {tabBar}
-          {renderFriendsTabContent()}
+          <AppHeader title="Profile" showBackButton={true} />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#4F46E5" />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
         </View>
       );
     }
-    
-    // For all other tabs, use the ScrollView approach
+
     return (
       <View style={styles.container}>
-        <AppHeader title="My Profile" showBackButton={false} />
+        <AppHeader title="Profile" showBackButton={true} />
+        
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {profileSection}
-          {tabBar}
+          {/* Profile and badges section */}
+          <View style={styles.profileSection}>
+            <View style={styles.profileImageContainer}>
+              {profile?.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
+                  <User2 size={40} color="#999" />
+                </View>
+              )}
+            </View>
+            
+           {/* Wrapper View for Name and Badge */}
+            <View style={styles.profileNameContainer}>
+              <Text style={styles.profileNameText}>
+                {(profile?.full_name || 'User').trim()}
+              </Text>
+              {profile?.ndis_verified && (
+                <BadgeCheck size={16} color="#007AFF" style={styles.verifiedBadgeIcon} />
+              )}
+            </View>
+            
+            <Text style={styles.username}>@{profile?.username?.trim() || 'user'}</Text>
+            
+            {profile?.bio && (
+              <Text style={styles.bio}>{profile.bio.trim()}</Text>
+            )}
+            
+            <View style={styles.profileActions}>
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={() => router.push('/profile/edit')}
+              >
+                <Edit size={16} color="#007AFF" />
+                <Text style={styles.editButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.walletButton}
+                onPress={() => router.push('/wallet')}
+              >
+                <Wallet size={16} color="#fff" />
+                <Text style={styles.walletButtonText}>Wallet</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.ndisButton}
+                onPress={() => router.push('/ndis-plan')}
+              >
+                <FileCheck size={16} color="#fff" />
+                <Text style={styles.ndisButtonText}>NDIS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {/* Provider Mode Section */}
+          {profile?.role === 'provider' || isProvider ? (
+            <View style={styles.providerSection}>
+              <TouchableOpacity 
+                style={styles.providerButton}
+                onPress={handleProviderDashboard}
+              >
+                <Wrench size={20} color="#fff" />
+                <Text style={styles.providerButtonText}>Provider Dashboard</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          
+          {/* Badges Section */}
+          <View style={styles.badgesSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Badges & Achievements</Text>
+              {profile?.role !== 'provider' && (
+                <TouchableOpacity 
+                  style={styles.rewardsButtonSmall}
+                  onPress={navigateToRewards}
+                >
+                  <Award size={16} color="#007AFF" />
+                  <Text style={styles.rewardsButtonSmallText}>Rewards</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.badgesScrollView} 
+              contentContainerStyle={[styles.badgesContainer, { alignItems: 'flex-start' }]}
+            >
+              {getBadges().map((badge, index) => (
+                <View key={index} style={styles.badgeItem}>
+                  <View style={styles.badgeIcon}>
+                    <Award size={24} color="#007AFF" />
+                  </View>
+                  <Text style={styles.badgeName}>{badge}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+          
+          {/* Tab bar */}
+          <View style={styles.tabBar}>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'posts' && styles.activeTabButton]}
+              onPress={() => setActiveTab('posts')}
+            >
+              <MessageSquare 
+                size={20} 
+                color={activeTab === 'posts' ? '#007AFF' : '#666'} 
+              />
+              <Text 
+                style={[
+                  styles.tabButtonText, 
+                  activeTab === 'posts' && styles.activeTabButtonText
+                ]}
+              >
+                Posts
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'groups' && styles.activeTabButton]}
+              onPress={() => setActiveTab('groups')}
+            >
+              <Users 
+                size={20} 
+                color={activeTab === 'groups' ? '#007AFF' : '#666'} 
+              />
+              <Text 
+                style={[
+                  styles.tabButtonText, 
+                  activeTab === 'groups' && styles.activeTabButtonText
+                ]}
+              >
+                Groups
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'bookings' && styles.activeTabButton]}
+              onPress={() => setActiveTab('bookings')}
+            >
+              <Calendar 
+                size={20}
+                color={activeTab === 'bookings' ? '#007AFF' : '#666'} 
+              />
+              <Text 
+                style={[
+                  styles.tabButtonText, 
+                  activeTab === 'bookings' && styles.activeTabButtonText
+                ]}
+              >
+                Bookings
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'friends' && styles.activeTabButton]}
+              onPress={() => setActiveTab('friends')}
+            >
+              <User2 
+                size={20} 
+                color={activeTab === 'friends' ? '#007AFF' : '#666'} 
+              />
+              <Text 
+                style={[
+                  styles.tabButtonText, 
+                  activeTab === 'friends' && styles.activeTabButtonText
+                ]}
+              >
+                Friends
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Tab content */}
           {renderTabContent()}
         </ScrollView>
       </View>
@@ -791,7 +767,6 @@ export default function ProfileScreen() {
   };
 
   return renderMainContent();
-
 }
 
 const styles = StyleSheet.create({
@@ -931,19 +906,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
   },
+  rewardsButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e1f0ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  rewardsButtonSmallText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#007AFF',
+  },
   badgesScrollView: {
     marginLeft: -24,
     paddingLeft: 24,
   },
   badgesContainer: {
     paddingRight: 24,
+    paddingVertical: 12,
     gap: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   badgeItem: {
     alignItems: 'center',
     width: 80,
+    height: 90, // Fixed height for consistency
   },
   badgeIcon: {
     width: 56,
@@ -958,21 +949,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1a1a1a',
     textAlign: 'center',
-  },
-  rewardsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF9500', 
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    gap: 8,
-  },
-  rewardsButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    height: 32, // Fixed height for text to ensure alignment
+    overflow: 'hidden',
   },
   tabBar: {
     flexDirection: 'row',
@@ -1022,15 +1000,29 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyStateButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
+    marginTop: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
   },
   emptyStateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    color: '#666',
+    fontWeight: '500',
+  },
+  createPostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 4,
+  },
+  createPostButtonText: {
+    color: '#FFF',
+    fontWeight: '500',
   },
   // Post card styles
   postCard: {

@@ -252,53 +252,52 @@ export default function ChatScreen() {
         onBackPress={() => router.push('/(tabs)/chat' as any)} 
       />
       
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={100}
-      >
-        <Stack.Screen
-          options={{
-            title: conversationName,
-            headerLeft: () => (
-              <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-                <ArrowLeft size={24} color="#000000" />
-              </TouchableOpacity>
-            ),
-            headerTitle: () => (
-              <View style={styles.headerTitle}>
-                {conversationAvatar ? (
-                  <Image source={{ uri: conversationAvatar }} style={styles.headerAvatar} />
-                ) : (
-                  <View style={styles.headerAvatarFallback}>
-                    <User size={16} color="#ffffff" />
-                  </View>
-                )}
-                <Text style={styles.headerText} numberOfLines={1}>
-                  {conversationName}
-                </Text>
-              </View>
-            ),
-          }}
-        />
-
-        {loading && !refreshing ? (
-          renderLoadingState()
-        ) : error ? (
-          renderErrorState()
-        ) : (
-          <>
-            <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              renderItem={renderMessageItem}
-              contentContainerStyle={styles.messagesList}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
-
+      <Stack.Screen
+        options={{
+          title: conversationName,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+              <ArrowLeft size={24} color="#000000" />
+            </TouchableOpacity>
+          ),
+          headerTitle: () => (
+            <View style={styles.headerTitle}>
+              {conversationAvatar ? (
+                <Image source={{ uri: conversationAvatar }} style={styles.headerAvatar} />
+              ) : (
+                <View style={styles.headerAvatarFallback}>
+                  <User size={16} color="#ffffff" />
+                </View>
+              )}
+              <Text style={styles.headerText} numberOfLines={1}>
+                {conversationName}
+              </Text>
+            </View>
+          ),
+        }}
+      />
+      
+      {loading && !refreshing ? (
+        renderLoadingState()
+      ) : error ? (
+        renderErrorState()
+      ) : (
+        <View style={styles.chatContentContainer}>
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessageItem}
+            contentContainerStyle={styles.messagesList}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+          
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={100}
+          >
             {imagePreview ? (
               <View style={styles.imagePreviewContainer}>
                 <Image source={{ uri: imagePreview }} style={styles.imagePreview} />
@@ -344,34 +343,34 @@ export default function ChatScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </>
-        )}
+          </KeyboardAvoidingView>
+        </View>
+      )}
 
-        {/* Full-screen image viewer modal */}
-        <Modal
-          visible={!!viewingImage}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={closeImageViewer}
-        >
-          <View style={styles.imageViewerContainer}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={closeImageViewer}
-            >
-              <X size={28} color="#ffffff" />
-            </TouchableOpacity>
-            
-            {viewingImage && (
-              <Image
-                source={{ uri: viewingImage }}
-                style={styles.fullScreenImage}
-                resizeMode="contain"
-              />
-            )}
-          </View>
-        </Modal>
-      </KeyboardAvoidingView>
+      {/* Full-screen image viewer modal */}
+      <Modal
+        visible={!!viewingImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeImageViewer}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={closeImageViewer}
+          >
+            <X size={28} color="#ffffff" />
+          </TouchableOpacity>
+          
+          {viewingImage && (
+            <Image
+              source={{ uri: viewingImage }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -382,7 +381,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   keyboardAvoidingView: {
+    width: '100%',
+  },
+  chatContentContainer: {
     flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
   },
   headerButton: {
     marginRight: 16,

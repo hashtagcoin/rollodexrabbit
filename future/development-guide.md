@@ -1,5 +1,7 @@
 # Rollodex Development Guide
 
+> **Important Note**: This document should be read from top to bottom, as development occurred in this chronological order. If you encounter conflicting information, the later (lower) implementation details supersede earlier ones. For example, the modern Expo ImagePicker implementation described later in this document is the correct approach to use, not any earlier methods.
+
 ## Application Overview
 
 Rollodex is a social and service booking application designed to help users:
@@ -53,28 +55,42 @@ The media upload system handles user-generated content like profile photos and g
 
 #### Media Upload Solution
 
-We implemented a base64 approach for reliable cross-platform image uploads:
+We've implemented a reliable cross-platform image upload solution that works consistently across devices:
 
 1. **[base64Utils.ts](../lib/base64Utils.ts)**: Utilities for decoding base64 data for Supabase storage
 2. **Image Upload Components**:
    - **[Profile Edit](../app/(tabs)/profile/edit.tsx)**: Handles avatar uploads
    - **[Group Creation](../app/(tabs)/community/groups/create.tsx)**: Handles group avatar and cover image uploads
 
-#### Best Practices
+#### Image Picker Implementation
 
-- Request base64 data directly from ImagePicker
-- Use proper content-type based on file extension
-- Follow TypeScript error handling best practices
-- Implement detailed logging for troubleshooting
+For selecting images, we use Expo's ImagePicker with the following approach:
 
 ```typescript
-try {
-  // Upload code
-} catch (e: unknown) {
-  // Proper error typing and checking
-  setError(e instanceof Error ? e.message : 'An unknown error occurred');
-}
+// Launch the picker with modern API
+const pickerResult = await pickerMethod({
+  mediaTypes: 'images', // Use string 'images' instead of deprecated MediaTypeOptions
+  allowsEditing: true,
+  aspect: [1, 1], // Square for avatars, [16, 9] for covers
+  quality: 0.8,
+  base64: true,
+  exif: false,
+});
 ```
+
+#### Best Practices
+
+- Use the string `'images'` for `mediaTypes` (not the deprecated `MediaTypeOptions.Images`)
+- Support both camera and gallery by using the appropriate picker methods:
+  ```typescript
+  const pickerMethod = source === 'library' 
+    ? ImagePicker.launchImageLibraryAsync 
+    : ImagePicker.launchCameraAsync;
+  ```
+- Request appropriate permissions based on the image source
+- Always encode as base64 for reliable cross-platform uploads
+- Use proper error handling with alerts for better user feedback
+- Provide separate UI buttons for camera and gallery options
 
 ### 3. Properly Typed Error Handling
 
@@ -93,6 +109,38 @@ This pattern:
 - Prevents TypeScript errors
 - Provides better error messages to users
 - Follows TypeScript best practices
+
+### 4. Advanced UI Animations
+
+The app uses sophisticated animations for an engaging user experience, particularly in the Discover section's swipe view.
+
+#### Swipe Card Animation System
+
+The swipe card functionality uses React Native's Animated API for smooth transitions between cards:
+
+```typescript
+// Set up animation values
+const position = useRef(new Animated.ValueXY()).current;
+const nextCardScale = useRef(new Animated.Value(0.92)).current;
+const nextCardOpacity = useRef(new Animated.Value(0.9)).current;
+const nextCardTranslateY = useRef(new Animated.Value(15)).current;
+const rotateCard = useRef(new Animated.Value(0)).current;
+```
+
+Key features of the animation system:
+- Card stacking with z-index management for proper layering
+- Progressive animation of the next card during swipes
+- Rotation and translation physics for natural movement
+- Like/dislike indicators that appear during gestures
+- Smooth spring animations for card resets
+- Optimized performance using native drivers
+
+Implementation notes:
+- Use PanResponder for gesture handling
+- Combine multiple animations with Animated.parallel for fluid transitions
+- Implement proper animation cleanup and state management
+- Use interpolation for smooth transitions between animation states
+- Apply z-index properly to ensure correct card stacking
 
 ## Development Environment Setup
 

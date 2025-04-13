@@ -124,7 +124,7 @@ export default function WalletScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="My NDIS Wallet" showBackButton={false} />
+      <AppHeader title="Wallet" showBackButton={true} />
       
       <ScrollView
         style={styles.scrollView}

@@ -1,5 +1,7 @@
 # Rollodex Technical Architecture
 
+> **Important Note**: This document should be read from top to bottom, as development occurred in this chronological order. If you encounter conflicting information, the later (lower) implementation details supersede earlier ones. The most recent implementations and architectural decisions are the ones that should be followed.
+
 ## System Overview
 
 Rollodex is built using a modern tech stack designed for scalability, accessibility, and developer productivity. This document outlines the architecture and key components of the system.
@@ -69,6 +71,23 @@ Rollodex is built using a modern tech stack designed for scalability, accessibil
 #### State Management
 - **React Hooks**: useState, useEffect, useContext for state management
 - **Context API**: Shared state for authentication and theme settings
+
+#### Media & Animations
+
+#### Image Handling System
+- **ImagePicker Integration**: Modern implementation with both camera and gallery support
+- **Media Storage**: Supabase storage buckets with proper security policies (`avatars`, `group-avatars`, `group-posts`)
+- **Upload Pipeline**: Base64 encoding for reliable cross-platform file uploads
+- **Error Handling**: Comprehensive error handling with user-friendly alerts
+- **Permission Management**: Proper camera and media library permission requests
+
+#### Animation System
+- **React Native Animated API**: Core animation system for fluid UI interactions
+- **PanResponder Gestures**: Advanced gesture handling for swipe interactions
+- **Optimized Performance**: Native driver usage for hardware-accelerated animations
+- **Animation Composition**: Parallel animations for complex, coordinated movements
+- **Progressive Feedback**: Visual indicators that respond to gesture intensity
+- **Animation Cleanup**: Proper state management to prevent memory leaks
 
 ### Backend Architecture
 

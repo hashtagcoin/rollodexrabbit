@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { Trophy, Award, Zap, UserPlus, CalendarCheck, MessageSquare, ChevronRight, Gift as GiftIcon, TrendingUp } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
@@ -34,6 +34,7 @@ type RewardItem = {
 };
 
 export default function RewardsScreen() {
+  const { preload } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [rewards, setRewards] = useState<RewardItem[]>([]);
@@ -41,6 +42,13 @@ export default function RewardsScreen() {
   const [streaks, setStreaks] = useState<UserStreak[]>([]);
   const [userPoints, setUserPoints] = useState<UserPoints | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Simulated badges data for immediate display during preload
+  const preloadBadges = [
+    { name: 'Loading...', description: 'Please wait while we fetch your badges' },
+    { name: 'Loading...', description: 'Please wait while we fetch your badges' },
+    { name: 'Loading...', description: 'Please wait while we fetch your badges' },
+  ];
 
   useEffect(() => {
     loadRewards();
@@ -50,6 +58,32 @@ export default function RewardsScreen() {
     try {
       setLoading(true);
       setError(null);
+      
+      // We already loaded placeholder content for preload=true, so we can fetch data in the background
+      if (preload === 'true') {
+        // Show skeleton UI immediately, then fetch real data
+        setUserPoints({ 
+          total_points: 0, 
+          available_points: 0, 
+          lifetime_points: 0
+        } as UserPoints);
+        
+        // Set placeholder rewards for immediate display
+        setRewards(preloadBadges.map((badge, index) => ({
+          id: `placeholder-${index}`,
+          type: 'badge',
+          label: badge.name,
+          status: 'earned',
+          metadata: {
+            description: badge.description,
+            icon: null,
+            points: 0,
+            category: 'loading'
+          },
+          created_at: new Date().toISOString()
+        })));
+      }
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 

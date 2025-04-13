@@ -53,7 +53,7 @@ export default function CreateGroup() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{coverUrl?: string, avatarUrl?: string}>({});
 
-  const handleImagePick = async (type: 'cover' | 'avatar') => {
+  const handleImagePick = async (type: 'cover' | 'avatar', source: 'library' | 'camera' = 'library') => {
     try {
       // Set the appropriate loading state
       if (type === 'cover') {
@@ -65,26 +65,41 @@ export default function CreateGroup() {
       // Clear previous error
       setError(null);
       
-      // Request permission to access media library
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // Request appropriate permissions based on source
+      let permissionResult;
       
-      if (!permissionResult.granted) {
-        setError('Permission to access camera roll is required');
-        return;
+      if (source === 'library') {
+        permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          setError('Permission to access media library is required');
+          return;
+        }
+      } else {
+        permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permissionResult.granted) {
+          setError('Permission to access camera is required');
+          return;
+        }
       }
       
-      // Launch image picker with base64 option
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      // Launch image picker or camera based on source
+      const pickerMethod = source === 'library' 
+        ? ImagePicker.launchImageLibraryAsync 
+        : ImagePicker.launchCameraAsync;
+      
+      // Configure options based on image type
+      const aspect: [number, number] = type === 'cover' ? [16, 9] : [1, 1];
+      
+      const result = await pickerMethod({
+        mediaTypes: 'images',
         allowsEditing: true,
-        aspect: type === 'cover' ? [16, 9] : [1, 1],
+        aspect,
         quality: 0.8,
-        base64: true, // Request base64 encoding
-        exif: false, // No need for EXIF data
+        base64: true,
+        exif: false,
       });
 
       if (result.canceled) {
-        console.log('Image picker cancelled');
         return;
       }
       
@@ -94,36 +109,34 @@ export default function CreateGroup() {
         throw new Error('No image or base64 data selected');
       }
       
-      console.log(`Selected ${type} image:`, image.uri.substring(0, 30) + '...');
-      console.log(`Base64 data length: ${image.base64.length}`);
-      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
       // Determine file extension and content type
       const fileExt = image.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+      const contentType = fileExt === 'jpg' ? 'image/jpeg' : `image/${fileExt}`;
       
       // Create a unique file path
       const filePath = `${type}/${user.id}_${Date.now()}.${fileExt}`;
       
-      console.log(`Uploading ${type} image to bucket with content type: ${contentType}`);
+      // Process base64 data - ensure we don't have any prefixes
+      let base64Data = image.base64;
+      if (base64Data.includes('base64,')) {
+        base64Data = base64Data.split('base64,')[1];
+      }
       
       // Upload directly using base64 data
       const { data, error } = await supabase.storage
         .from(type === 'cover' ? 'group-posts' : 'group-avatars')
-        .upload(filePath, decode(image.base64), {
+        .upload(filePath, decode(base64Data), {
           contentType,
           upsert: true
         });
         
       if (error) {
-        console.error('Upload error details:', error);
         throw new Error(`Failed to upload file: ${error.message}`);
       }
-      
-      console.log('File uploaded successfully. Getting URL...');
       
       // Get the public URL
       const { data: urlData } = supabase.storage
@@ -131,7 +144,6 @@ export default function CreateGroup() {
         .getPublicUrl(filePath);
         
       const imageUrl = urlData.publicUrl;
-      console.log(`Got URL: ${imageUrl}`);
       
       // Store debug info and update state
       if (type === 'cover') {
@@ -142,15 +154,13 @@ export default function CreateGroup() {
         setAvatarImage(imageUrl);
       }
       
-      // Show success message
       Alert.alert('Success', `${type === 'cover' ? 'Cover' : 'Avatar'} image uploaded successfully`);
       
-    } catch (e: unknown) {
-      // Enhanced error logging following TypeScript best practices
-      console.error(`Error uploading ${type} image:`, e);
-      setError(e instanceof Error ? e.message : 'An unknown error occurred');
+    } catch (err: any) {
+      setError(err.message || 'Failed to pick or upload image');
+      Alert.alert('Error', err.message || 'Failed to pick or upload image');
     } finally {
-      // Reset loading state
+      // Clear loading state
       if (type === 'cover') {
         setCoverUploading(false);
       } else {
@@ -220,7 +230,6 @@ export default function CreateGroup() {
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'An error occurred while creating the group');
-      console.error('Error creating group:', e);
     } finally {
       setLoading(false);
     }
@@ -249,27 +258,25 @@ export default function CreateGroup() {
               <Image 
                 source={{ uri: coverImage }} 
                 style={styles.coverPreview} 
-                onError={(e) => console.error('Cover image loading error:', e.nativeEvent.error)}
+                onError={(e) => setError('Cover image loading error')}
               />
               <TouchableOpacity 
                 style={styles.changeImageBtn}
-                onPress={() => handleImagePick('cover')}
+                onPress={() => handleImagePick('cover', 'library')}
               >
                 <Text style={styles.changeImageText}>Change Cover</Text>
               </TouchableOpacity>
-              {__DEV__ && debugInfo.coverUrl && (
-                <View style={styles.debugUrlContainer}>
-                  <Text style={styles.debugUrlLabel}>Cover URL:</Text>
-                  <Text style={styles.debugUrl} selectable={true}>
-                    {debugInfo.coverUrl}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity 
+                style={styles.changeImageBtn}
+                onPress={() => handleImagePick('cover', 'camera')}
+              >
+                <Text style={styles.changeImageText}>Take Cover Photo</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity 
               style={styles.imageUpload}
-              onPress={() => handleImagePick('cover')}
+              onPress={() => handleImagePick('cover', 'library')}
             >
               <ImageIcon size={24} color="#666" />
               <Text style={styles.imageUploadText}>Add Cover Image</Text>
@@ -286,21 +293,13 @@ export default function CreateGroup() {
                 <Image 
                   source={{ uri: avatarImage }} 
                   style={styles.avatarPreview} 
-                  onError={(e) => console.error('Avatar image loading error:', e.nativeEvent.error)}
+                  onError={(e) => setError('Avatar image loading error')}
                 />
-                {__DEV__ && debugInfo.avatarUrl && (
-                  <View style={styles.debugUrlContainer}>
-                    <Text style={styles.debugUrlLabel}>Avatar URL:</Text>
-                    <Text style={styles.debugUrl} selectable={true}>
-                      {debugInfo.avatarUrl}
-                    </Text>
-                  </View>
-                )}
               </View>
             ) : (
               <TouchableOpacity 
                 style={styles.avatarPlaceholder}
-                onPress={() => handleImagePick('avatar')}
+                onPress={() => handleImagePick('avatar', 'library')}
               >
                 <ImageIcon size={24} color="#666" />
               </TouchableOpacity>
@@ -308,11 +307,20 @@ export default function CreateGroup() {
             
             <TouchableOpacity 
               style={styles.avatarUpload}
-              onPress={() => handleImagePick('avatar')}
+              onPress={() => handleImagePick('avatar', 'library')}
               disabled={avatarUploading}
             >
               <Text style={styles.avatarUploadText}>
                 {avatarImage ? 'Change Icon' : 'Add Group Icon'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.avatarUpload}
+              onPress={() => handleImagePick('avatar', 'camera')}
+              disabled={avatarUploading}
+            >
+              <Text style={styles.avatarUploadText}>
+                {avatarImage ? 'Take Icon Photo' : 'Take Group Icon Photo'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -686,25 +694,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: '600',
-  },
-  debugUrlContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 4,
-    marginTop: 4,
-    marginHorizontal: 8,
-  },
-  debugUrlLabel: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  debugUrl: {
-    fontSize: 10,
-    color: '#666',
-    padding: 4,
-    backgroundColor: '#fff',
-    borderRadius: 2,
-    marginTop: 2,
   },
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,11 @@ import {
   ScrollView,
   Switch,
   Image,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
+import { useAuth } from '../../../../providers/AuthProvider';
 import {
   ArrowLeft,
   Camera,
@@ -22,6 +24,8 @@ import {
 export default function CreateServiceScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth(); // Get authenticated user from AuthProvider
+  const [hasProviderProfile, setHasProviderProfile] = useState(false);
   
   // Form state
   const [title, setTitle] = useState('');
@@ -32,6 +36,34 @@ export default function CreateServiceScreen() {
   const [available, setAvailable] = useState(true);
   
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+
+  // Check if user has a provider profile
+  useEffect(() => {
+    const checkProviderProfile = async () => {
+      if (!user?.id) return;
+      
+      try {
+        console.log('Checking if user has provider profile, user ID:', user.id);
+        const { data, error } = await supabase
+          .from('service_providers')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+          
+        if (error) {
+          console.error('Error checking provider profile:', error.message);
+          return;
+        }
+        
+        setHasProviderProfile(!!data);
+        console.log('Provider profile exists:', !!data);
+      } catch (e) {
+        console.error('Error checking provider profile:', e);
+      }
+    };
+    
+    checkProviderProfile();
+  }, [user]);
 
   // Predefined options
   const CATEGORIES = [
@@ -45,6 +77,7 @@ export default function CreateServiceScreen() {
 
   const handleCreateService = async () => {
     try {
+      // Validate form fields
       if (!title || !category || !format || !price) {
         setError('Please fill in all required fields');
         return;
@@ -55,13 +88,86 @@ export default function CreateServiceScreen() {
         return;
       }
 
+      // Check authentication
+      if (!user?.id) {
+        setError('You must be signed in to create a service');
+        Alert.alert(
+          'Authentication Required',
+          'Please sign in to create a service',
+          [{ text: 'OK', onPress: () => router.push('/login') }]
+        );
+        return;
+      }
+      
+      // Check if user has a provider profile
+      if (!hasProviderProfile) {
+        const createProviderProfile = async () => {
+          try {
+            console.log('Creating provider profile for user:', user.id);
+            const { data: profile, error: profileError } = await supabase
+              .from('service_providers')
+              .insert({
+                id: user.id,
+                business_name: 'My Provider Business', // Default name
+                service_area: 'Local Area', // Default area
+                created_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+              
+            if (profileError) {
+              console.error('Error creating provider profile:', profileError);
+              throw new Error(profileError.message);
+            }
+            
+            console.log('Provider profile created:', profile);
+            setHasProviderProfile(true);
+            return true;
+          } catch (e) {
+            console.error('Failed to create provider profile:', e);
+            return false;
+          }
+        };
+        
+        Alert.alert(
+          'Provider Profile Required',
+          'You need a provider profile to create services. Would you like to create one now?',
+          [
+            { 
+              text: 'Yes', 
+              onPress: async () => {
+                const success = await createProviderProfile();
+                if (success) {
+                  Alert.alert(
+                    'Success', 
+                    'Provider profile created. You can now create services.',
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  Alert.alert(
+                    'Error', 
+                    'Failed to create provider profile. Please try again later.',
+                    [{ text: 'OK' }]
+                  );
+                }
+              } 
+            },
+            { 
+              text: 'No', 
+              style: 'cancel'
+            }
+          ]
+        );
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error: insertError } = await supabase
+      console.log('Creating service with provider ID:', user.id);
+      
+      // Create service in database - removed media_urls field that doesn't exist in schema
+      const { data, error: insertError } = await supabase
         .from('services')
         .insert({
           provider_id: user.id,
@@ -70,13 +176,23 @@ export default function CreateServiceScreen() {
           category,
           format,
           price: parseFloat(price),
-          available,
-          media_urls: uploadedImages.length > 0 ? uploadedImages : null,
-        });
+          available
+          // Removed media_urls field that doesn't exist in the database schema
+        })
+        .select()
+        .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Database error:', insertError);
+        throw new Error(insertError.message || 'Failed to create service');
+      }
 
-      router.push('/provider/services');
+      console.log('Service created successfully:', data);
+      Alert.alert(
+        'Success',
+        'Service created successfully!',
+        [{ text: 'OK', onPress: () => router.push('/provider/services') }]
+      );
     } catch (e: unknown) {
       console.error('Error creating service:', e);
       setError(e instanceof Error ? e.message : 'Failed to create service');

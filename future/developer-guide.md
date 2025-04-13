@@ -46,6 +46,7 @@ rollodex2/
 │   └── _layout.tsx    # Root layout component
 ├── components/        # Reusable components
 ├── lib/               # Utility functions and libraries
+│   └── rewardsService.ts # Rewards, badges & achievements service
 ├── supabase/          # Supabase configuration
 │   └── migrations/    # Database migrations
 ├── assets/            # Static assets
@@ -136,6 +137,81 @@ export default function ScreenComponent() {
   );
 }
 ```
+
+## Key UI Components
+
+### AppHeader
+
+The `AppHeader` component provides consistent navigation across all screens.
+
+```tsx
+<AppHeader 
+  title="Screen Title"  
+  showBackButton={true}
+  onBackPress={() => {
+    // Custom navigation logic
+  }}
+/>
+```
+
+Key features:
+- Configurable title and subtitle
+- Optional back button with custom navigation handlers
+- Support for action buttons and menu items
+- Consistent styling across the application
+
+### View Toggle
+
+The ViewToggle component allows users to switch between different view modes:
+
+```tsx
+<ViewToggle
+  activeView={viewMode}
+  onChange={setViewMode}
+  options={['grid', 'list', 'swipe']}
+/>
+```
+
+- Supports Grid, List, and Swipe views
+- Preserves view state during navigation
+- Consistent implementation across Housing and Discover screens
+
+## Navigation Implementation
+
+### Back Navigation
+
+Rollodex implements advanced back navigation with position preservation:
+
+1. **Standard Back**: Simple navigation to previous screen
+   ```tsx
+   router.back();
+   ```
+
+2. **Position-Preserving Back**: Returns user to their exact previous position
+   ```tsx
+   router.push({
+     pathname: '/previousScreen',
+     params: { 
+       returnIndex: currentIndex,
+       returnViewMode: currentViewMode
+     }
+   });
+   ```
+
+3. **Custom Back Handlers**: Used for complex navigation scenarios
+   ```tsx
+   <AppHeader 
+     onBackPress={() => {
+       // Preserve state, set params, etc.
+       router.push({ ... });
+     }}
+   />
+   ```
+
+Key implementation details:
+- Use URL parameters to preserve screen state
+- Handle initial state loading based on navigation parameters
+- Maintain view mode consistency across app sections
 
 ## Database Interaction
 

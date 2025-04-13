@@ -55,12 +55,36 @@ type HousingListing = {
 };
 
 export default function HousingDetail() {
-  const { id } = useLocalSearchParams();
+  const { id, returnIndex, returnViewMode } = useLocalSearchParams();
+  const { source } = useLocalSearchParams<{ source: string }>();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<HousingListing | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Custom back handler to determine where to navigate back to
+  const handleBackPress = () => {
+    if (source === 'discover') {
+      // Navigate back to discover screen with both returnIndex and returnViewMode
+      router.push({
+        pathname: "/(tabs)/discover",
+        params: { 
+          returnIndex,
+          returnViewMode
+        }
+      });
+    } else {
+      // Default: Navigate back to housing screen with both returnIndex and returnViewMode
+      router.push({
+        pathname: "/(tabs)/housing",
+        params: { 
+          returnIndex,
+          returnViewMode
+        }
+      });
+    }
+  };
 
   useEffect(() => {
     loadListing();
@@ -91,6 +115,7 @@ export default function HousingDetail() {
   if (loading) {
     return (
       <View style={styles.container}>
+        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
         <Text style={styles.loadingText}>Loading listing...</Text>
       </View>
     );
@@ -99,6 +124,7 @@ export default function HousingDetail() {
   if (error || !listing) {
     return (
       <View style={styles.container}>
+        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
         <View style={styles.error}>
           <AlertCircle size={24} color="#ff3b30" />
           <Text style={styles.errorText}>
@@ -118,7 +144,7 @@ export default function HousingDetail() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Housing" showBackButton={true} onBackPress={() => navigation.goBack()} />
+      <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
       <ScrollView>
         <View style={styles.imageContainer}>
           <ScrollView

@@ -82,7 +82,8 @@ export default function CommunityFeed() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Community Feed" showBackButton={false} />      
+      <AppHeader title="Community" showBackButton={true} />
+      
       <View style={styles.content}>
         <ScrollView
           refreshControl={
@@ -101,7 +102,8 @@ export default function CommunityFeed() {
             style={styles.actionButton}
             onPress={() => router.push('/community/create')}
           >
-            <Plus size={24} color="#007AFF" />
+            <Plus size={20} color="#333" />
+            <Text style={styles.actionButtonText}>Create Post</Text>
           </TouchableOpacity>
         </View>
         
@@ -191,18 +193,25 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 16,
-    padding: 16,
+    marginVertical: 8,
   },
   actionButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#f5f5f5',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', 
-    padding: 8,
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+  },
+  actionButtonText: {
+    color: '#333',
+    fontWeight: '600',
+    marginLeft: 4,
+    fontSize: 14,
   },
   actionText: {
     fontSize: 12,
@@ -278,14 +287,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#666',
   },
 });

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { ArrowLeft, User, Upload, Hash, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, User, Upload, Hash, CircleAlert as AlertCircle, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MediaError, MediaErrorType } from '../../../lib/mediaService';
 import { decode } from '../../../lib/base64Utils';
@@ -92,7 +92,6 @@ export default function EditProfile() {
       setPreferredCategories(data.preferred_categories || []);
       setPreferredFormats(data.preferred_service_formats || []);
     } catch (e: unknown) {
-      console.error('Error loading profile:', e);
       setError(e instanceof Error ? e.message : 'Failed to load profile');
     } finally {
       setLoading(false);
@@ -131,7 +130,6 @@ export default function EditProfile() {
 
       router.back();
     } catch (e: unknown) {
-      console.error('Error saving profile:', e);
       setError(e instanceof Error ? e.message : 'Failed to save profile');
     } finally {
       setSaving(false);
@@ -163,7 +161,7 @@ export default function EditProfile() {
   };
 
   // Handle avatar upload using base64 encoding for improved reliability
-  const handleUploadAvatar = async () => {
+  const handleUploadAvatar = async (source: 'library' | 'camera' = 'library') => {
     try {
       // Show loading state
       setSaving(true);
@@ -171,28 +169,43 @@ export default function EditProfile() {
       // Clear any previous errors
       setError(null);
       
-      // Request permission to access the media library
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // Request appropriate permissions based on source
+      let permissionResult;
       
-      if (!permissionResult.granted) {
-        setError('Permission to access camera roll is required');
-        return;
+      if (source === 'library') {
+        permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          setError('Permission to access media library is required');
+          return;
+        }
+      } else {
+        permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permissionResult.granted) {
+          setError('Permission to access camera is required');
+          return;
+        }
       }
       
-      // Launch the image picker with base64 option
-      const pickerResult = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      // Launch image picker or camera based on source
+      const pickerMethod = source === 'library' 
+        ? ImagePicker.launchImageLibraryAsync 
+        : ImagePicker.launchCameraAsync;
+      
+      // Configure options for profile photo (square aspect ratio)
+      const aspect: [number, number] = [1, 1];
+      
+      // Launch the picker
+      const pickerResult = await pickerMethod({
+        mediaTypes: 'images',
         allowsEditing: true,
-        aspect: [1, 1],
+        aspect,
         quality: 0.8,
-        base64: true, // Request base64 encoding
-        exif: false,  // No need for EXIF data
+        base64: true,
+        exif: false,
       });
       
       if (pickerResult.canceled) {
-        console.log('Image picker canceled');
-        setSaving(false);
-        return; // User canceled the picker
+        return;
       }
       
       // Get the selected asset
@@ -201,55 +214,55 @@ export default function EditProfile() {
         throw new Error('No image or base64 data selected');
       }
       
-      console.log('Selected profile image:', image.uri.substring(0, 30) + '...');
-      console.log(`Base64 data length: ${image.base64.length}`);
-      
       // Get the current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
       // Determine file extension and content type
       const fileExt = image.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+      const contentType = fileExt === 'jpg' ? 'image/jpeg' : `image/${fileExt}`;
       
       // Create a unique file path
       const filePath = `avatar/${user.id}_${Date.now()}.${fileExt}`;
-      
-      console.log(`Uploading profile image with content type: ${contentType}`);
-      
-      // Upload directly using base64 data
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, decode(image.base64), {
-          contentType,
-          upsert: true
-        });
-        
-      if (error) {
-        console.error('Upload error details:', error);
-        throw new Error(`Failed to upload file: ${error.message}`);
+
+      // Process base64 data - ensure we don't have any prefixes
+      let base64Data = image.base64;
+      if (base64Data.includes('base64,')) {
+        base64Data = base64Data.split('base64,')[1];
       }
       
-      console.log('File uploaded successfully. Getting URL...');
-      
-      // Get the public URL
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-      
-      const imageUrl = urlData.publicUrl;
-      console.log(`Got URL: ${imageUrl}`);
-      
-      // Update the avatar URL state
-      setAvatarUrl(imageUrl);
-      
-      // Show success message
-      Alert.alert('Success', 'Profile photo updated successfully');
-      
-    } catch (e: unknown) {
-      // Error handling following TypeScript best practices
-      console.error('Error uploading avatar:', e);
-      setError(e instanceof Error ? e.message : 'An unknown error occurred');
+      // Upload directly using base64 data
+      try {
+        // Use the correct 'avatars' bucket for user profile images
+        const { data, error } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, decode(base64Data), {
+            contentType,
+            upsert: true
+          });
+          
+        if (error) {
+          throw new Error(`Failed to upload file: ${error.message}`);
+        }
+        
+        // Get the public URL
+        const { data: urlData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+        
+        const imageUrl = urlData.publicUrl;
+        
+        // Update the avatar URL state
+        setAvatarUrl(imageUrl);
+        
+        // Show success message
+        Alert.alert('Success', 'Profile photo updated successfully');
+      } catch (uploadError: any) {
+        throw uploadError; // Re-throw to be caught by the outer catch block
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload profile photo');
+      Alert.alert('Error', err.message || 'Failed to upload profile photo');
     } finally {
       setSaving(false);
     }
@@ -295,32 +308,32 @@ export default function EditProfile() {
               <Image
                 source={{ uri: avatarUrl }}
                 style={styles.avatarPreview}
-                onError={(e) => console.error('Image loading error:', e.nativeEvent.error)}
+                onError={(e) => setError('Image loading error')}
               />
-              {__DEV__ && (
-                <View style={styles.debugContainer}>
-                  <Text style={styles.debugLabel}>Image URL:</Text>
-                  <Text style={styles.debugText} selectable={true}>
-                    {avatarUrl}
-                  </Text>
-                </View>
-              )}
             </View>
           ) : (
             <View style={styles.avatarPlaceholder}>
               <User size={40} color="#666" />
             </View>
           )}
-          <TouchableOpacity
-            style={styles.uploadButton}
-            onPress={handleUploadAvatar}
-            disabled={saving}
-          >
-            <Upload size={20} color="#fff" />
-            <Text style={styles.uploadButtonText}>
-              {saving ? 'Uploading...' : 'Change Photo'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.uploadButtons}>
+            <TouchableOpacity
+              style={styles.uploadButton}
+              onPress={() => handleUploadAvatar('library')}
+              disabled={saving}
+            >
+              <Upload size={20} color="#fff" />
+              <Text style={styles.uploadButtonText}>Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.uploadButton}
+              onPress={() => handleUploadAvatar('camera')}
+              disabled={saving}
+            >
+              <Camera size={20} color="#fff" />
+              <Text style={styles.uploadButtonText}>Camera</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.form}>
@@ -538,6 +551,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
+  uploadButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -622,27 +639,6 @@ const styles = StyleSheet.create({
   },
   selectedChipText: {
     color: '#fff',
-  },
-  debugText: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 2,
-    textAlign: 'center',
-    width: '100%',
-    padding: 4,
-  },
-  debugContainer: {
-    marginTop: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
-    padding: 4,
-    maxWidth: 250,
-    alignSelf: 'center',
-  },
-  debugLabel: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#333',
   },
   avatarLoading: {
     width: 120,

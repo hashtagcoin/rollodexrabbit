@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Calendar, MapPin, ChevronRight, Wallet, FileCheck, Clock } from 'lucide-react-native';
 import { supabase } from '../../../../lib/supabase';
@@ -95,100 +95,102 @@ export default function BookingConfirmation() {
   return (
     <View style={styles.container}>
       <AppHeader title="Booking Confirmation" showBackButton={true} onBackPress={() => navigation.goBack()} />
-      <View style={styles.content}>
-        <View style={styles.successIcon}>
-          <Image
-            source={service?.provider?.avatar_url 
-              ? { uri: service.provider.avatar_url } 
-              : { uri: 'https://images.unsplash.com/photo-1530695440407-21fef47230b1?q=80&w=2070&auto=format&fit=crop' }}
-            style={styles.providerImage}
-          />
-          <View style={styles.checkmark}>
-            <Text style={styles.checkmarkText}>✓</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          <View style={styles.successIcon}>
+            <Image
+              source={service?.provider?.avatar_url 
+                ? { uri: service.provider.avatar_url } 
+                : { uri: 'https://images.unsplash.com/photo-1530695440407-21fef47230b1?q=80&w=2070&auto=format&fit=crop' }}
+              style={styles.providerImage}
+            />
+            <View style={styles.checkmark}>
+              <Text style={styles.checkmarkText}>✓</Text>
+            </View>
           </View>
+
+          <Text style={styles.title}>Booking Confirmed!</Text>
+          <Text style={styles.subtitle}>
+            Your appointment has been successfully scheduled
+          </Text>
+
+          <View style={styles.bookingCard}>
+            <Text style={styles.cardTitle}>{service?.title || 'Service Appointment'}</Text>
+            <Text style={styles.provider}>with {service?.provider?.business_name || 'Provider'}</Text>
+
+            <View style={styles.detailsContainer}>
+              <View style={styles.detailItem}>
+                <Calendar size={20} color="#666" />
+                <View>
+                  <Text style={styles.detailLabel}>Date & Time</Text>
+                  <Text style={styles.detailText}>{scheduledDateTime.date} at {scheduledDateTime.time}</Text>
+                </View>
+              </View>
+
+              <View style={styles.detailItem}>
+                <MapPin size={20} color="#666" />
+                <View>
+                  <Text style={styles.detailLabel}>Location</Text>
+                  <Text style={styles.detailText}>{service?.location || '123 Health Street, Melbourne'}</Text>
+                </View>
+              </View>
+              
+              <View style={styles.detailItem}>
+                <Clock size={20} color="#666" />
+                <View>
+                  <Text style={styles.detailLabel}>Duration</Text>
+                  <Text style={styles.detailText}>{service?.duration || '60'} minutes</Text>
+                </View>
+              </View>
+              
+              <View style={styles.detailItem}>
+                <FileCheck size={20} color="#666" />
+                <View>
+                  <Text style={styles.detailLabel}>Booking Status</Text>
+                  <Text style={[styles.detailText, styles.statusText]}>{booking?.status || 'pending'}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.priceContainer}>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>Total Amount</Text>
+                <Text style={styles.priceAmount}>${booking?.total_price.toFixed(2) || '0.00'}</Text>
+              </View>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>NDIS Covered</Text>
+                <Text style={styles.ndisAmount}>${booking?.ndis_covered_amount.toFixed(2) || '0.00'}</Text>
+              </View>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>Gap Payment</Text>
+                <Text style={styles.gapAmount}>${booking?.gap_payment.toFixed(2) || '0.00'}</Text>
+              </View>
+              
+              <View style={styles.walletInfo}>
+                <Wallet size={16} color="#0055FF" />
+                <Text style={styles.walletText}>
+                  This amount has been reserved from your {booking?.category?.replace('_', ' ') || 'NDIS'} budget
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => router.push('/wallet')}
+          >
+            <Text style={styles.buttonText}>View in Wallet</Text>
+            <ChevronRight size={20} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.push('/discover')}
+          >
+            <Text style={styles.secondaryButtonText}>Back to Discover</Text>
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.title}>Booking Confirmed!</Text>
-        <Text style={styles.subtitle}>
-          Your appointment has been successfully scheduled
-        </Text>
-
-        <View style={styles.bookingCard}>
-          <Text style={styles.cardTitle}>{service?.title || 'Service Appointment'}</Text>
-          <Text style={styles.provider}>with {service?.provider?.business_name || 'Provider'}</Text>
-
-          <View style={styles.detailsContainer}>
-            <View style={styles.detailItem}>
-              <Calendar size={20} color="#666" />
-              <View>
-                <Text style={styles.detailLabel}>Date & Time</Text>
-                <Text style={styles.detailText}>{scheduledDateTime.date} at {scheduledDateTime.time}</Text>
-              </View>
-            </View>
-
-            <View style={styles.detailItem}>
-              <MapPin size={20} color="#666" />
-              <View>
-                <Text style={styles.detailLabel}>Location</Text>
-                <Text style={styles.detailText}>{service?.location || '123 Health Street, Melbourne'}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.detailItem}>
-              <Clock size={20} color="#666" />
-              <View>
-                <Text style={styles.detailLabel}>Duration</Text>
-                <Text style={styles.detailText}>{service?.duration || '60'} minutes</Text>
-              </View>
-            </View>
-            
-            <View style={styles.detailItem}>
-              <FileCheck size={20} color="#666" />
-              <View>
-                <Text style={styles.detailLabel}>Booking Status</Text>
-                <Text style={[styles.detailText, styles.statusText]}>{booking?.status || 'pending'}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.priceContainer}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Total Amount</Text>
-              <Text style={styles.priceAmount}>${booking?.total_price.toFixed(2) || '0.00'}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>NDIS Covered</Text>
-              <Text style={styles.ndisAmount}>${booking?.ndis_covered_amount.toFixed(2) || '0.00'}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Gap Payment</Text>
-              <Text style={styles.gapAmount}>${booking?.gap_payment.toFixed(2) || '0.00'}</Text>
-            </View>
-            
-            <View style={styles.walletInfo}>
-              <Wallet size={16} color="#0055FF" />
-              <Text style={styles.walletText}>
-                This amount has been reserved from your {booking?.category?.replace('_', ' ') || 'NDIS'} budget
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.push('/wallet')}
-        >
-          <Text style={styles.buttonText}>View in Wallet</Text>
-          <ChevronRight size={20} color="#fff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => router.push('/discover')}
-        >
-          <Text style={styles.secondaryButtonText}>Back to Discover</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -221,6 +223,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
+    padding: 20,
+  },
+  scrollContent: {
     padding: 20,
   },
   successIcon: {
