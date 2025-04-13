@@ -16,6 +16,7 @@ interface SwipeViewProps {
   getItemPrice: (item: ListingItem) => number;
   isHousingListing: (item: ListingItem) => item is HousingListing;
   renderServiceProvider: (item: ListingItem) => JSX.Element;
+  hasHousingGroup?: (item: ListingItem) => boolean;
 }
 
 const SwipeView: React.FC<SwipeViewProps> = ({
@@ -27,6 +28,7 @@ const SwipeView: React.FC<SwipeViewProps> = ({
   getItemPrice,
   isHousingListing,
   renderServiceProvider,
+  hasHousingGroup,
 }) => {
   // Add a state to track if the current card is being swiped
   const [isCardSwiping, setIsCardSwiping] = useState(false);
@@ -101,84 +103,79 @@ const SwipeView: React.FC<SwipeViewProps> = ({
     animateNextCardToFront();
   };
 
-  // Set up the initial animation values when component mounts
-  useEffect(() => {
-    nextCardScale.setValue(0.92);
-    nextCardOpacity.setValue(0.9);
-    nextCardTranslateY.setValue(10);
-    nextCardWidth.setValue(width - 80);
-    nextCardHeight.setValue(530);
-    nextCardElevation.setValue(2);
-  }, []);
+  const getCurrentItem = () => {
+    if (listings.length === 0) return null;
+    return listings[currentIndex];
+  };
 
+  const getNextItem = () => {
+    if (listings.length <= 1) return null;
+    return listings[(currentIndex + 1) % listings.length];
+  };
+
+  // If no listings are available
   if (listings.length === 0) {
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateTitle}>No Listings Found</Text>
-        <Text style={styles.emptyStateText}>
-          Try adjusting your search or filters
-        </Text>
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No listings available</Text>
       </View>
     );
   }
-
-  const currentItem = listings[currentIndex];
-  const nextIndex = (currentIndex + 1) % listings.length;
-  const nextItem = listings[nextIndex];
-
-  // Create animated styles for the next card
-  const nextCardAnimatedStyle = {
-    transform: [
-      { scale: nextCardScale },
-      { translateY: nextCardTranslateY }
-    ],
-    opacity: nextCardOpacity,
-    width: nextCardWidth,
-    height: nextCardHeight,
-    elevation: nextCardElevation,
-  };
 
   return (
     <ErrorBoundary>
       <View style={styles.container}>
         <View style={styles.cardsContainer}>
-          {/* Bottom/background card (next card) with animation */}
-          {listings.length > 1 && (
-            <View style={styles.nextCardContainer}>
-              <Animated.View style={[styles.nextCardBase, nextCardAnimatedStyle]}>
-                <SwipeCard
-                  item={nextItem}
-                  isNext={true}
-                  getItemImage={getItemImage}
-                  getItemPrice={getItemPrice}
-                  isHousingListing={isHousingListing}
-                  renderServiceProvider={renderServiceProvider}
-                />
-              </Animated.View>
-            </View>
-          )}
-
-          {/* Top/foreground card (current card) */}
-          <View style={styles.currentCardContainer}>
+          {/* Next card - shown behind current card */}
+          <Animated.View
+            style={[
+              styles.cardContainer,
+              styles.nextCardContainer,
+              {
+                transform: [
+                  { scale: nextCardScale },
+                  { translateY: nextCardTranslateY }
+                ],
+                opacity: nextCardOpacity,
+                width: nextCardWidth,
+                height: nextCardHeight,
+                elevation: nextCardElevation,
+                zIndex: 1
+              }
+            ]}
+          >
+            {getNextItem() && (
+              <SwipeCard
+                item={getNextItem()!}
+                isNext={true}
+                getItemImage={getItemImage}
+                getItemPrice={getItemPrice}
+                isHousingListing={isHousingListing}
+                renderServiceProvider={renderServiceProvider}
+              />
+            )}
+          </Animated.View>
+          
+          {/* Current card - shown on top */}
+          <View style={[styles.cardContainer, styles.currentCardContainer]}>
             <SwipeCard
-              // Add a key to force re-render when card changes
               key={`card-${currentIndex}`}
-              item={currentItem}
-              onTap={() => onCardTap(currentItem)}
+              item={getCurrentItem()!}
+              onTap={() => onCardTap(getCurrentItem()!)}
               onSwipe={handleSwipe}
               onCardLeftScreen={handleSwipe}
               getItemImage={getItemImage}
               getItemPrice={getItemPrice}
               isHousingListing={isHousingListing}
               renderServiceProvider={renderServiceProvider}
+              hasHousingGroup={hasHousingGroup}
             />
           </View>
         </View>
-
-        <SwipeActions
-          onSwipeLeft={() => handleSwipe('left')}
-          onSwipeRight={() => handleSwipe('right')}
-        />
+        
+        <View style={styles.actionsContainer}>
+          <SwipeActions onSwipe={handleSwipe} />
+        </View>
       </View>
     </ErrorBoundary>
   );
@@ -191,60 +188,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardsContainer: {
-    width: width,
-    height: 550,
-    position: 'relative',
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 20,
+  },
+  cardContainer: {
+    position: 'absolute',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  currentCardContainer: {
+    width: width - 40,
+    height: 550,
+    elevation: 5,
+    zIndex: 10,
   },
   nextCardContainer: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  },
+  actionsContainer: {
+    width: '100%',
+    paddingBottom: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 0,
   },
-  nextCardBase: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    overflow: 'hidden',
-  },
-  currentCardContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
-  emptyState: {
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 16,
+  emptyText: {
+    fontSize: 18,
     color: '#666',
-    textAlign: 'center',
   },
 });
 
-// Export the component as both a named export and a default export
 export { SwipeView };
 export default SwipeView;

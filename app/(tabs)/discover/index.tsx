@@ -9,6 +9,7 @@ import {
   FlatList,
   RefreshControl,
   Image,
+  ScrollView,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -25,11 +26,16 @@ import {
   Laptop,
   X,
   FilePlus as Helping,
-  Filter
+  Filter,
+  Users,
+  ArrowDownUp,
+  MessageCircleHeart,
+  PersonStanding
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { SwipeView } from './components/SwipeView';
 import { ListingItem, ViewMode, Service, HousingListing } from './types';
+import { ShadowCard } from './components/ShadowCard';
 
 // Define categories with proper icon rendering
 const CATEGORIES = [
@@ -38,6 +44,8 @@ const CATEGORIES = [
   { id: 'Support', name: 'Support', icon: (props: any) => <Helping {...props} /> },
   { id: 'Transport', name: 'Transport', icon: (props: any) => <Car {...props} /> },
   { id: 'Tech', name: 'Tech', icon: (props: any) => <Laptop {...props} /> },
+  { id: 'Personal', name: 'Personal', icon: (props: any) => <MessageCircleHeart {...props} /> },
+  { id: 'Social', name: 'Social', icon: (props: any) => <PersonStanding {...props} /> },
 ];
 
 const { width } = Dimensions.get('window');
@@ -65,6 +73,65 @@ export default function DiscoverScreen() {
   const [lastTap, setLastTap] = useState<number>(0);
   const [lastTapItem, setLastTapItem] = useState<string | null>(null);
   const DOUBLE_TAP_DELAY = 300; // milliseconds
+
+  // For storing housing group information
+  const [housingGroupsMap, setHousingGroupsMap] = useState<Record<string, boolean>>({});
+
+  // Function to fetch housing groups for all housing listings
+  async function fetchHousingGroups(listingIds: string[]) {
+    if (!listingIds || listingIds.length === 0) return;
+    
+    try {
+      console.log('Fetching housing groups for listings, count:', listingIds.length);
+      
+      // Create a map of listing_id to boolean (has group)
+      const groupMap: Record<string, boolean> = {};
+      
+      // Initialize all listings to false (no group)
+      listingIds.forEach(id => {
+        groupMap[id] = false;
+      });
+
+      // Process in smaller batches to avoid query limits
+      const BATCH_SIZE = 30;
+      for (let i = 0; i < listingIds.length; i += BATCH_SIZE) {
+        const batchIds = listingIds.slice(i, i + BATCH_SIZE);
+        
+        try {
+          const { data, error } = await supabase
+            .from('housing_groups')
+            .select('id, listing_id')
+            .in('listing_id', batchIds);
+          
+          if (error) {
+            console.error('Error fetching housing groups batch:', error);
+            continue; // Skip this batch but continue with others
+          }
+          
+          // Mark listings with groups as true
+          if (data && Array.isArray(data)) {
+            data.forEach(group => {
+              if (group && group.listing_id) {
+                groupMap[group.listing_id] = true;
+              }
+            });
+          }
+        } catch (batchError) {
+          console.error('Batch processing error:', batchError);
+          // Continue with next batch
+        }
+      }
+      
+      console.log('Housing groups map created, groups found:', 
+        Object.values(groupMap).filter(value => value === true).length);
+      setHousingGroupsMap(groupMap);
+      
+    } catch (error) {
+      console.error('Error in fetchHousingGroups:', error);
+      // Don't rethrow, just log and continue with empty map
+      setHousingGroupsMap({});
+    }
+  }
 
   async function loadListings() {
     try {
@@ -95,10 +162,17 @@ export default function DiscoverScreen() {
         // Add empty provider object to housing listings to maintain consistent structure
         const transformedData = data?.map(item => ({
           ...item,
-          provider: { business_name: 'Housing Provider', verified: false }
+          provider: { business_name: 'Housing Provider', verified: false },
+          has_housing_group: false // Initialize this property
         })) as HousingListing[];
         
         setListings(transformedData || []);
+        
+        // Fetch housing groups for all listings
+        if (transformedData && transformedData.length > 0) {
+          const listingIds = transformedData.map(item => item.id);
+          await fetchHousingGroups(listingIds);
+        }
       } else {
         // Load services with specific category
         const { data, error } = await supabase
@@ -195,6 +269,14 @@ export default function DiscoverScreen() {
     }
   };
 
+  // Helper to check if a housing listing has a group
+  const hasHousingGroup = (item: ListingItem) => {
+    if (isHousingListing(item)) {
+      return housingGroupsMap[item.id] || false;
+    }
+    return false;
+  };
+
   // Helper to get item image
   const getItemImage = (item: ListingItem) => {
     if (isHousingListing(item)) {
@@ -269,6 +351,19 @@ export default function DiscoverScreen() {
     }
   };
 
+  // Render Group Match badge for grid and list view
+  const renderGroupMatchBadge = (item: ListingItem) => {
+    if (isHousingListing(item) && housingGroupsMap[item.id]) {
+      return (
+        <View style={styles.groupMatchBadge}>
+          <Users size={12} color="#fff" />
+          <Text style={styles.groupMatchText}>Group Match</Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
   const renderGridView = () => {
     if (listings.length === 0) {
       return (
@@ -294,63 +389,37 @@ export default function DiscoverScreen() {
         }
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.serviceCard}
+            style={styles.serviceCardTouchable}
             onPress={() => navigateToDetails(item)}
           >
-            <Image
-              source={{ uri: getItemImage(item) }}
-              style={styles.serviceImage}
-            />
-            <View style={styles.serviceContent}>
-              <Text style={styles.serviceTitle}>{item.title}</Text>
-              
-              {isHousingListing(item) ? (
-                // Housing listing
-                <>
-                  <View style={styles.locationContainer}>
-                    <MapPin size={12} color="#666" />
-                    <Text style={styles.locationText}>
-                      {item.suburb}, {item.state}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.housingFeatures}>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {item.bedrooms} Beds
-                      </Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {item.bathrooms} Baths
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              ) : (
-                // Service
-                renderServiceProvider(item)
-              )}
-              
-              {!isHousingListing(item) && (
-                <Text style={styles.serviceDescription} numberOfLines={2}>
-                  {item.description}
-                </Text>
-              )}
-              
-              <View style={styles.serviceFooter}>
-                {!isHousingListing(item) && (
-                  <View style={styles.serviceRating}>
-                    <Star size={16} color="#FFB800" fill="#FFB800" />
-                    <Text style={styles.ratingText}>4.9</Text>
-                  </View>
-                )}
-                <Text style={styles.servicePrice}>
-                  ${getItemPrice(item)}
-                  {isHousingListing(item) ? '/week' : ''}
-                </Text>
+            <ShadowCard 
+              width={(width - 36) / 2}
+              height={240}
+              radius={12}
+              style={styles.serviceCard}
+            >
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: getItemImage(item) }}
+                  style={styles.serviceImage}
+                />
+                {renderGroupMatchBadge(item)}
               </View>
-            </View>
+              
+              <View style={styles.serviceDetails}>
+                <Text style={styles.serviceTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                {renderServiceProvider(item)}
+
+                <View style={styles.serviceFooter}>
+                  <Text style={styles.servicePrice}>
+                    ${getItemPrice(item)}
+                    {isHousingListing(item) ? '/week' : ''}
+                  </Text>
+                </View>
+              </View>
+            </ShadowCard>
           </TouchableOpacity>
         )}
       />
@@ -380,184 +449,197 @@ export default function DiscoverScreen() {
         }
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.serviceListItem}
+            style={styles.serviceListItemTouchable}
             onPress={() => navigateToDetails(item)}
           >
-            <Image
-              source={{ uri: getItemImage(item) }}
-              style={styles.serviceListImage}
-            />
-            <View style={styles.serviceListContent}>
-              <Text style={styles.serviceTitle}>{item.title}</Text>
-              
-              {isHousingListing(item) ? (
-                // Housing listing
-                <>
-                  <View style={styles.locationContainer}>
-                    <MapPin size={14} color="#666" />
-                    <Text style={styles.locationText}>
-                      {item.suburb}, {item.state}
+            <ShadowCard
+              width={width - 16}
+              height={124}
+              radius={12}
+              style={styles.serviceListItem}
+            >
+              <View style={styles.listItemInner}>
+                <View style={styles.listImageContainer}>
+                  <Image
+                    source={{ uri: getItemImage(item) }}
+                    style={styles.serviceListImage}
+                  />
+                  {renderGroupMatchBadge(item)}
+                </View>
+                
+                <View style={styles.serviceListDetails}>
+                  <View>
+                    <Text style={styles.serviceTitle} numberOfLines={1}>
+                      {item.title}
                     </Text>
-                  </View>
-                  
-                  <View style={styles.housingFeatures}>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {item.bedrooms} Beds
+                    {renderServiceProvider(item)}
+                    {isHousingListing(item) ? (
+                      <View style={styles.locationContainer}>
+                        <MapPin size={12} color="#666" />
+                        <Text style={styles.locationText}>
+                          {item.suburb || 'Unknown'}, {item.state || 'Unknown'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text 
+                        style={styles.serviceDescription} 
+                        numberOfLines={2}
+                      >
+                        {item.description}
                       </Text>
-                    </View>
-                    <View style={styles.featureItem}>
-                      <Text style={styles.featureText}>
-                        {item.bathrooms} Baths
-                      </Text>
-                    </View>
+                    )}
                   </View>
-                </>
-              ) : (
-                // Service
-                renderServiceProvider(item)
-              )}
-              
-              <View style={styles.serviceListMeta}>
-                {!isHousingListing(item) && (
-                  <View style={styles.serviceRating}>
-                    <Star size={16} color="#FFB800" fill="#FFB800" />
-                    <Text style={styles.ratingText}>4.9</Text>
-                  </View>
-                )}
-                <Text style={styles.servicePrice}>
-                  ${getItemPrice(item)}
-                  {isHousingListing(item) ? '/week' : ''}
-                </Text>
+                  <Text style={styles.servicePrice}>
+                    ${getItemPrice(item)}
+                    {isHousingListing(item) ? '/week' : ''}
+                  </Text>
+                </View>
               </View>
-            </View>
+            </ShadowCard>
           </TouchableOpacity>
         )}
       />
     );
   };
 
-  const renderContentView = () => {
-    if (loading) {
-      return <Text style={styles.loadingText}>Loading listings...</Text>;
-    }
-
-    switch (viewMode) {
-      case 'list':
-        return renderListView();
-      case 'swipe':
-        return (
-          <SwipeView
-            listings={listings}
-            currentIndex={currentIndex}
-            setCurrentIndex={setCurrentIndex}
-            onCardTap={handleCardTap}
-            getItemImage={getItemImage}
-            getItemPrice={getItemPrice}
-            isHousingListing={isHousingListing}
-            renderServiceProvider={renderServiceProvider}
-          />
-        );
-      case 'grid':
-      default:
-        return renderGridView();
-    }
-  };
-
   return (
     <View style={styles.container}>
       <AppHeader 
         title="Discover Services" 
-        showBackButton={true}
-        onBackPress={viewMode === 'swipe' ? () => {
-          // When in swipe view, clicking back should return to grid/list view with the current category preserved
-          router.push({
-            pathname: "/(tabs)/discover",
-            params: { 
-              returnIndex: currentIndex.toString(),
-              returnViewMode: returnViewMode || 'grid',
-              category: selectedCategory
-            }
-          });
-        } : undefined} 
+        showBackButton={false}
       />
       
-      {/* View Mode Toggle Buttons */}
-      <View style={styles.viewToggleContainer}>
-        <TouchableOpacity
-          style={[
-            styles.viewToggleButton,
-            viewMode === 'grid' && styles.viewToggleButtonActive,
-          ]}
-          onPress={() => setViewMode('grid')}
-        >
-          <Grid size={20} color={viewMode === 'grid' ? '#007AFF' : '#666'} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.viewToggleButton,
-            viewMode === 'list' && styles.viewToggleButtonActive,
-          ]}
-          onPress={() => setViewMode('list')}
-        >
-          <List size={20} color={viewMode === 'list' ? '#007AFF' : '#666'} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.viewToggleButton,
-            viewMode === 'swipe' && styles.viewToggleButtonActive,
-          ]}
-          onPress={() => setViewMode('swipe')}
-        >
-          <Heart size={20} color={viewMode === 'swipe' ? '#007AFF' : '#666'} />
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Search size={16} color="#666" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search services, housing, and more..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.clearSearch}
+            >
+              <X size={16} color="#666" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        
+        <TouchableOpacity style={styles.filterButton}>
+          <Filter size={20} color="#333" />
         </TouchableOpacity>
       </View>
-
-      {viewMode !== 'swipe' && (
-        <View style={styles.header}>
-          {/* Category Buttons */}
-          <View style={styles.categoryContainer}>
-            {CATEGORIES.map((category) => (
-              <TouchableOpacity
-                key={category.id}
+      
+      <View style={styles.categoryContainer}>
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScrollContent}
+        >
+          {CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[
+                styles.categoryButton,
+                selectedCategory === cat.id && styles.selectedCategory,
+              ]}
+              onPress={() => setSelectedCategory(cat.id)}
+            >
+              {cat.icon({ 
+                size: 16, 
+                color: selectedCategory === cat.id ? '#FFF' : '#333' 
+              })}
+              <Text
                 style={[
-                  styles.categoryButton,
-                  selectedCategory === category.id && styles.categoryButtonActive,
-                ]}
-                onPress={() => {
-                  setSelectedCategory(category.id);
-                  loadListings();
-                }}
-              >
-                {category.icon({ size: 24, color: '#666' })}
-                <Text style={[
                   styles.categoryText,
-                  selectedCategory === category.id && styles.categoryTextActive,
-                ]}>
-                  {category.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          <View style={styles.searchContainer}>
-            <Search size={20} color="#666" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={selectedCategory === 'Housing' ? "Search housing..." : "Search services..."}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            <TouchableOpacity style={styles.filterButton}>
-              <Filter size={20} color="#666" />
+                  selectedCategory === cat.id && styles.selectedCategoryText,
+                ]}
+              >
+                {cat.name}
+              </Text>
             </TouchableOpacity>
-          </View>
+          ))}
+        </ScrollView>
+      </View>
+      
+      <View style={styles.viewToggleContainer}>
+        <View style={styles.viewToggleGroup}>
+          <TouchableOpacity
+            style={[
+              styles.viewToggleButton,
+              viewMode === 'grid' && styles.selectedViewToggle,
+            ]}
+            onPress={() => setViewMode('grid')}
+          >
+            <Grid
+              size={20}
+              color={viewMode === 'grid' ? '#007AFF' : '#333'}
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.viewToggleButton,
+              viewMode === 'list' && styles.selectedViewToggle,
+            ]}
+            onPress={() => setViewMode('list')}
+          >
+            <List
+              size={20}
+              color={viewMode === 'list' ? '#007AFF' : '#333'}
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.viewToggleButton,
+              viewMode === 'swipe' && styles.selectedViewToggle,
+            ]}
+            onPress={() => setViewMode('swipe')}
+          >
+            <Heart
+              size={20}
+              color={viewMode === 'swipe' ? '#007AFF' : '#333'}
+            />
+          </TouchableOpacity>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.sortButton}
+          onPress={() => {
+            // Add filtering functionality here in the future
+          }}
+        >
+          <ArrowDownUp size={20} color="#333" />
+        </TouchableOpacity>
+      </View>
+      
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <Text>Loading services...</Text>
+        </View>
+      ) : (
+        <View style={styles.contentContainer}>
+          {viewMode === 'grid' && renderGridView()}
+          {viewMode === 'list' && renderListView()}
+          {viewMode === 'swipe' && (
+            <SwipeView
+              listings={listings}
+              currentIndex={currentIndex}
+              setCurrentIndex={setCurrentIndex}
+              onCardTap={handleCardTap}
+              getItemImage={getItemImage}
+              getItemPrice={getItemPrice}
+              isHousingListing={isHousingListing}
+              renderServiceProvider={renderServiceProvider}
+              hasHousingGroup={hasHousingGroup}
+            />
+          )}
         </View>
       )}
-      
-      {renderContentView()}
     </View>
   );
 }
@@ -565,105 +647,220 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 16,
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  categoryButton: {
-    alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  categoryButtonActive: {
-    
-  },
-  categoryIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     backgroundColor: '#f5f5f5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
   },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-    textAlign: 'center',
-  },
-  categoryTextActive: {
-    color: '#007AFF',
-    fontWeight: '600',
+  contentContainer: {
+    flex: 1,
   },
   searchContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
     paddingHorizontal: 16,
-    height: 48,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    gap: 10,
   },
-  searchIcon: {
-    marginRight: 12,
+  searchBar: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#1a1a1a',
+    height: '100%',
+    fontSize: 14,
+  },
+  clearSearch: {
+    padding: 4,
   },
   filterButton: {
-    marginLeft: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryContainer: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingVertical: 12,
+  },
+  categoryScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: 'row',
+  },
+  categoryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f1f1f1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  selectedCategory: {
+    backgroundColor: '#007AFF',
+  },
+  categoryText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  selectedCategoryText: {
+    color: '#FFF',
   },
   viewToggleContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    backgroundColor: '#fff',
+    marginBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eee',
+    alignItems: 'center',
+  },
+  viewToggleGroup: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 2,
   },
   viewToggleButton: {
     padding: 8,
-    marginLeft: 16,
+    borderRadius: 16,
   },
-  viewToggleButtonActive: {
-    backgroundColor: '#f0f0f0',
+  selectedViewToggle: {
+    backgroundColor: '#f5f5f5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  sortButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  servicesGrid: {
+    padding: 8,
+  },
+  servicesList: {
+    paddingVertical: 8,
+  },
+  gridColumnWrapper: {
+    justifyContent: 'space-between',
+  },
+  serviceCardTouchable: {
+    marginBottom: 16,
+    width: (width - 36) / 2, // Adjust for 8px padding on container and 12px gap between cards
+  },
+  serviceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  serviceListItemTouchable: {
+    marginHorizontal: 8,
+    marginBottom: 8,
+  },
+  serviceListItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  listItemInner: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 12,
+  },
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+  },
+  serviceImage: {
+    width: '100%',
+    height: 140,
+  },
+  serviceListImage: {
+    width: 100,
+    height: 100,
     borderRadius: 8,
   },
-  viewToggleText: {
-    display: 'none',
+  serviceDetails: {
+    padding: 12,
   },
-  content: {
-    flex: 1,
+  serviceTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
   },
-  loadingText: {
-    textAlign: 'center',
+  serviceProvider: {
+    fontSize: 12,
     color: '#666',
-    marginTop: 24,
+    marginBottom: 4,
+  },
+  verifiedBadge: {
+    color: '#4CD964',
+  },
+  serviceDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
+  serviceFooter: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  servicePrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  serviceListDetails: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  listImageContainer: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    color: '#666',
   },
   emptyState: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    padding: 24,
+    alignItems: 'center',
+    padding: 20,
   },
   emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 8,
   },
   emptyStateText: {
@@ -671,131 +868,21 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  servicesGrid: {
-    padding: 16,
-  },
-  gridColumnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  serviceCard: {
-    width: (width - 40) / 2, // Dynamically calculate width for 2 columns with padding
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
-    marginBottom: 16,
-  },
-  serviceImage: {
-    width: '100%',
-    height: 120,
-  },
-  serviceContent: {
-    padding: 12,
-  },
-  serviceTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  serviceProvider: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
-  },
-  verifiedBadge: {
-    color: '#007AFF',
-  },
-  serviceDescription: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  serviceFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  serviceRating: {
+  groupMatchBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(76, 217, 100, 0.8)', // 80% opacity
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  ratingText: {
+  groupMatchText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  servicePrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  // Housing specific styles
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  housingFeatures: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  featureText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  // List view styles
-  servicesList: {
-    padding: 24,
-  },
-  serviceListItem: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
-    marginBottom: 16,
-  },
-  serviceListImage: {
-    width: 100,
-    height: 100,
-  },
-  serviceListContent: {
-    flex: 1,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  serviceListMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  // Missing styles from the original file that were referenced
-  emptySwipeState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    flex: 1,
-  },
-  swipeContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#fff',
+    fontWeight: '500',
   },
 });

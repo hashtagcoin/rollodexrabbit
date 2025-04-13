@@ -1,30 +1,34 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Heart, X } from 'lucide-react-native';
+import { ShadowCard } from './ShadowCard';
 
 interface SwipeActionsProps {
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
+  onSwipe: (direction: string) => void;
 }
 
 const SwipeActions: React.FC<SwipeActionsProps> = ({
-  onSwipeLeft,
-  onSwipeRight,
+  onSwipe,
 }) => {
   return (
     <View style={styles.swipeActions}>
-      <TouchableOpacity 
-        style={styles.swipeActionLeft}
-        onPress={onSwipeLeft}
-      >
-        <X size={40} color="#ff3b30" />
-      </TouchableOpacity>
-      <TouchableOpacity 
-        style={styles.swipeActionRight}
-        onPress={onSwipeRight}
-      >
-        <Heart size={40} color="#4cd964" fill="#4cd964" />
-      </TouchableOpacity>
+      <ShadowCard width={60} height={60} radius={30} style={styles.actionShadow}>
+        <TouchableOpacity 
+          style={styles.swipeActionLeft}
+          onPress={() => onSwipe('left')}
+        >
+          <X size={40} color="#ff3b30" />
+        </TouchableOpacity>
+      </ShadowCard>
+      
+      <ShadowCard width={60} height={60} radius={30} style={styles.actionShadow}>
+        <TouchableOpacity 
+          style={styles.swipeActionRight}
+          onPress={() => onSwipe('right')}
+        >
+          <Heart size={40} color="#4cd964" fill="#4cd964" />
+        </TouchableOpacity>
+      </ShadowCard>
     </View>
   );
 };
@@ -34,6 +38,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 16,
+    width: '100%',
+  },
+  actionShadow: {
+    backgroundColor: 'transparent',
   },
   swipeActionLeft: {
     width: 60,
@@ -42,11 +50,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   swipeActionRight: {
     width: 60,
@@ -55,11 +58,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
 });
 

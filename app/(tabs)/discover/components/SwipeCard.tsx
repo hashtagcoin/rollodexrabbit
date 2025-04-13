@@ -6,6 +6,7 @@ import { supabase } from '../../../../lib/supabase';
 
 const { width } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
+const DEFAULT_IMAGE = 'https://via.placeholder.com/400x300?text=No+Image';
 
 interface SwipeCardProps {
   item: ListingItem;
@@ -17,6 +18,7 @@ interface SwipeCardProps {
   getItemPrice: (item: ListingItem) => number;
   isHousingListing: (item: ListingItem) => item is HousingListing;
   renderServiceProvider: (item: ListingItem) => JSX.Element;
+  hasHousingGroup?: (item: ListingItem) => boolean;
 }
 
 const SwipeCard: React.FC<SwipeCardProps> = ({
@@ -29,8 +31,10 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   getItemPrice,
   isHousingListing,
   renderServiceProvider,
+  hasHousingGroup,
 }) => {
-  const [hasHousingGroup, setHasHousingGroup] = useState(false);
+  const [hasGroup, setHasGroup] = useState(false);
+  const [isCheckingGroups, setIsCheckingGroups] = useState(false);
   
   // Animation values
   const position = useRef(new Animated.ValueXY()).current;
@@ -63,7 +67,7 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
     Animated.timing(position, {
       toValue: { x, y: 0 },
       duration: 300,
-      useNativeDriver: true
+      useNativeDriver: false
     }).start(() => {
       if (onSwipe) onSwipe(direction);
       if (onCardLeftScreen) onCardLeftScreen(direction);
@@ -75,7 +79,7 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
       toValue: { x: 0, y: 0 },
       friction: 5,
       tension: 40,
-      useNativeDriver: true
+      useNativeDriver: false
     }).start();
   };
 
@@ -87,80 +91,136 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   });
 
   useEffect(() => {
-    // Check if this housing listing has associated housing groups
-    if (isHousingListing(item)) {
+    // Check if item is defined before proceeding
+    if (!item) return;
+
+    // If hasHousingGroup prop is provided, use it directly
+    if (hasHousingGroup && isHousingListing(item)) {
+      setHasGroup(hasHousingGroup(item));
+    } 
+    // Otherwise fallback to database query
+    else if (isHousingListing(item)) {
       checkForHousingGroups(item.id);
     } else {
-      setHasHousingGroup(false);
+      setHasGroup(false);
     }
     
     // Reset position when item changes
     position.setValue({ x: 0, y: 0 });
     rotate.setValue(0);
-  }, [item]);
+  }, [item, hasHousingGroup]);
 
   const checkForHousingGroups = async (listingId: string) => {
+    if (isCheckingGroups) return;
+    
     try {
+      setIsCheckingGroups(true);
+      console.log('Checking housing groups for listing:', listingId);
+      
       const { data, error } = await supabase
         .from('housing_groups')
         .select('id')
         .eq('listing_id', listingId)
         .limit(1);
       
-      if (!error && data && data.length > 0) {
-        setHasHousingGroup(true);
+      if (error) {
+        console.error('Error checking for housing groups:', error);
+        setHasGroup(false);
+        return;
+      }
+      
+      console.log('Housing groups query result:', { data, error });
+      
+      if (data && Array.isArray(data) && data.length > 0) {
+        console.log('Found housing group for listing:', listingId);
+        setHasGroup(true);
       } else {
-        setHasHousingGroup(false);
+        console.log('No housing groups found for listing:', listingId);
+        setHasGroup(false);
       }
     } catch (error) {
       console.error('Error checking for housing groups:', error);
-      setHasHousingGroup(false);
+      setHasGroup(false);
+    } finally {
+      setIsCheckingGroups(false);
     }
   };
 
+  // If item is undefined, render a placeholder card
+  if (!item) {
+    return (
+      <View style={styles.swipeCard}>
+        <View style={styles.placeholderContainer}>
+          <Text style={styles.placeholderText}>No listing available</Text>
+        </View>
+      </View>
+    );
+  }
+
   const CardContent = () => (
     <>
-      <Image
-        source={{ uri: getItemImage(item) }}
-        style={styles.swipeImage}
-      />
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: (() => {
+            try {
+              return getItemImage(item);
+            } catch (e) {
+              console.error('Error getting image:', e);
+              return DEFAULT_IMAGE;
+            }
+          })() }}
+          style={styles.swipeImage}
+        />
+        
+        {/* Group Match Badge - Now positioned on top of image */}
+        {isHousingListing(item) && hasGroup && (
+          <View style={styles.groupMatchBadgeOverlay}>
+            <Users size={14} color="#fff" />
+            <Text style={styles.groupMatchText}>Group Match</Text>
+          </View>
+        )}
+      </View>
+      
       <View style={styles.swipeContent}>
-        <Text style={styles.swipeTitle}>{item.title}</Text>
+        <Text style={styles.swipeTitle}>{item.title || 'Untitled Listing'}</Text>
         
         {isHousingListing(item) ? (
           <>
             <View style={styles.locationContainer}>
               <MapPin size={16} color="#666" />
               <Text style={styles.locationText}>
-                {item.suburb}, {item.state}
+                {item.suburb || 'Unknown'}, {item.state || 'Unknown'}
               </Text>
-              {hasHousingGroup && (
-                <View style={styles.groupMatchBadge}>
-                  <Users size={12} color="#fff" />
-                  <Text style={styles.groupMatchText}>Group Match</Text>
-                </View>
-              )}
             </View>
             
             <View style={styles.housingFeatures}>
               <View style={styles.featureItem}>
                 <Text style={styles.featureText}>
-                  {item.bedrooms} {item.bedrooms === 1 ? 'Bed' : 'Beds'}
+                  {item.bedrooms || 0} {item.bedrooms === 1 ? 'Bed' : 'Beds'}
                 </Text>
               </View>
               <View style={styles.featureItem}>
                 <Text style={styles.featureText}>
-                  {item.bathrooms} {item.bathrooms === 1 ? 'Bath' : 'Baths'}
+                  {item.bathrooms || 0} {item.bathrooms === 1 ? 'Bath' : 'Baths'}
                 </Text>
               </View>
             </View>
           </>
         ) : (
-          renderServiceProvider(item)
+          <View style={styles.serviceProviderContainer}>
+            {(() => {
+              try {
+                return renderServiceProvider(item);
+              } catch (e) {
+                console.error('Error rendering service provider:', e);
+                return <Text>Provider information unavailable</Text>;
+              }
+            })()}
+          </View>
         )}
         
         <Text style={styles.swipeDescription} numberOfLines={3}>
-          {item.description}
+          {item.description || 'No description available'}
         </Text>
         
         <View style={styles.swipeMeta}>
@@ -169,7 +229,14 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
             <Text style={styles.ratingText}>4.9</Text>
           </View>
           <Text style={styles.swipePrice}>
-            ${getItemPrice(item)}
+            ${(() => {
+              try {
+                return getItemPrice(item);
+              } catch (e) {
+                console.error('Error getting price:', e);
+                return 0;
+              }
+            })()}
             {isHousingListing(item) ? '/week' : ''}
           </Text>
         </View>
@@ -220,9 +287,27 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
-  swipeImage: {
+  imageContainer: {
+    position: 'relative',
     width: '100%',
     height: 280,
+  },
+  swipeImage: {
+    width: '100%',
+    height: '100%',
+  },
+  groupMatchBadgeOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(76, 217, 100, 0.8)', // 80% opacity
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    zIndex: 10,
   },
   swipeContent: {
     padding: 16,
@@ -243,16 +328,6 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 12,
     color: '#666',
-  },
-  groupMatchBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#4cd964',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginLeft: 8,
   },
   groupMatchText: {
     fontSize: 12,
@@ -300,6 +375,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  serviceProviderContainer: {
+    marginBottom: 8,
   },
 });
 
