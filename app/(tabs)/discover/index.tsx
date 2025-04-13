@@ -33,8 +33,8 @@ import {
   PersonStanding
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
-import { SwipeView } from './components/SwipeView';
-import { ListingItem, ViewMode, Service, HousingListing } from './types';
+import SwipeView from './components/SwipeView';
+import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
 import { ShadowCard } from './components/ShadowCard';
 
 // Define categories with proper icon rendering
@@ -53,7 +53,7 @@ const { width } = Dimensions.get('window');
 export default function DiscoverScreen() {
   const { returnIndex, returnViewMode, category } = useLocalSearchParams<{ 
     returnIndex: string;
-    returnViewMode: string;
+    returnViewMode: ViewMode;
     category: string;
   }>();
   
@@ -234,7 +234,9 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     if (returnViewMode) {
-      setViewMode(returnViewMode as ViewMode);
+      if (isViewMode(returnViewMode)) {
+        setViewMode(returnViewMode);
+      }
     }
     
     if (returnIndex) {
@@ -249,11 +251,14 @@ export default function DiscoverScreen() {
     loadListings();
   }, [returnViewMode, returnIndex, category]);
 
-  const onRefresh = async () => {
+  async function onRefresh() {
     setRefreshing(true);
     await loadListings();
     setRefreshing(false);
   };
+
+  // Helper function to safely check view mode
+  const isMode = (current: ViewMode, target: ViewMode): boolean => current === target;
 
   // Determine if item is a housing listing
   const isHousingListing = (item: ListingItem): item is HousingListing => {
@@ -509,123 +514,190 @@ export default function DiscoverScreen() {
         showBackButton={false}
       />
       
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search size={16} color="#666" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search services, housing, and more..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
+      {/* View toggle buttons - moved directly below header when in swipe view */}
+      {isMode(viewMode, 'swipe') && (
+        <View style={styles.swipeViewToggleContainer}>
+          <View style={styles.viewToggleGroup}>
             <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearSearch}
-            >
-              <X size={16} color="#666" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        
-        <TouchableOpacity style={styles.filterButton}>
-          <Filter size={20} color="#333" />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.categoryContainer}>
-        <ScrollView 
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScrollContent}
-        >
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
               style={[
-                styles.categoryButton,
-                selectedCategory === cat.id && styles.selectedCategory,
+                styles.viewToggleButton,
+                isMode(viewMode, 'grid') && styles.selectedViewToggle,
               ]}
-              onPress={() => setSelectedCategory(cat.id)}
+              onPress={() => setViewMode('grid')}
             >
-              {cat.icon({ 
-                size: 16, 
-                color: selectedCategory === cat.id ? '#FFF' : '#333' 
-              })}
-              <Text
-                style={[
-                  styles.categoryText,
-                  selectedCategory === cat.id && styles.selectedCategoryText,
-                ]}
-              >
-                {cat.name}
-              </Text>
+              <Grid
+                size={20}
+                color={isMode(viewMode, 'grid') ? '#007AFF' : '#333'}
+              />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-      
-      <View style={styles.viewToggleContainer}>
-        <View style={styles.viewToggleGroup}>
-          <TouchableOpacity
-            style={[
-              styles.viewToggleButton,
-              viewMode === 'grid' && styles.selectedViewToggle,
-            ]}
-            onPress={() => setViewMode('grid')}
-          >
-            <Grid
-              size={20}
-              color={viewMode === 'grid' ? '#007AFF' : '#333'}
-            />
-          </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.viewToggleButton,
+                isMode(viewMode, 'list') && styles.selectedViewToggle,
+              ]}
+              onPress={() => setViewMode('list')}
+            >
+              <List
+                size={20}
+                color={isMode(viewMode, 'list') ? '#007AFF' : '#333'}
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.viewToggleButton,
+                isMode(viewMode, 'swipe') && styles.selectedViewToggle,
+              ]}
+              onPress={() => setViewMode('swipe')}
+            >
+              <Heart
+                size={20}
+                color={isMode(viewMode, 'swipe') ? '#007AFF' : '#333'}
+              />
+            </TouchableOpacity>
+          </View>
           
-          <TouchableOpacity
-            style={[
-              styles.viewToggleButton,
-              viewMode === 'list' && styles.selectedViewToggle,
-            ]}
-            onPress={() => setViewMode('list')}
+          <TouchableOpacity 
+            style={styles.sortButton}
+            onPress={() => {
+              // Add filtering functionality here in the future
+            }}
           >
-            <List
-              size={20}
-              color={viewMode === 'list' ? '#007AFF' : '#333'}
-            />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[
-              styles.viewToggleButton,
-              viewMode === 'swipe' && styles.selectedViewToggle,
-            ]}
-            onPress={() => setViewMode('swipe')}
-          >
-            <Heart
-              size={20}
-              color={viewMode === 'swipe' ? '#007AFF' : '#333'}
-            />
+            <ArrowDownUp size={20} color="#333" />
           </TouchableOpacity>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.sortButton}
-          onPress={() => {
-            // Add filtering functionality here in the future
-          }}
-        >
-          <ArrowDownUp size={20} color="#333" />
-        </TouchableOpacity>
-      </View>
+      )}
+      
+      {/* Search bar - hidden in swipe view */}
+      {!isMode(viewMode, 'swipe') && (
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Search size={16} color="#666" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search services, housing, and more..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery ? (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearSearch}
+              >
+                <X size={16} color="#666" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          
+          <TouchableOpacity style={styles.filterButton}>
+            <Filter size={20} color="#333" />
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {/* Categories - hidden in swipe view */}
+      {!isMode(viewMode, 'swipe') && (
+        <View style={styles.categoryContainer}>
+          <ScrollView 
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryScrollContent}
+          >
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.categoryButton,
+                  selectedCategory === cat.id && styles.selectedCategory,
+                ]}
+                onPress={() => setSelectedCategory(cat.id)}
+              >
+                {cat.icon({ 
+                  size: 16, 
+                  color: selectedCategory === cat.id ? '#FFF' : '#333' 
+                })}
+                <Text
+                  style={[
+                    styles.categoryText,
+                    selectedCategory === cat.id && styles.selectedCategoryText,
+                  ]}
+                >
+                  {cat.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      
+      {/* View toggles for grid and list view modes - only shown in non-swipe views */}
+      {!isMode(viewMode, 'swipe') && (
+        <View style={styles.viewToggleContainer}>
+          <View style={styles.viewToggleGroup}>
+            <TouchableOpacity
+              style={[
+                styles.viewToggleButton,
+                isMode(viewMode, 'grid') && styles.selectedViewToggle,
+              ]}
+              onPress={() => setViewMode('grid')}
+            >
+              <Grid
+                size={20}
+                color={isMode(viewMode, 'grid') ? '#007AFF' : '#333'}
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.viewToggleButton,
+                isMode(viewMode, 'list') && styles.selectedViewToggle,
+              ]}
+              onPress={() => setViewMode('list')}
+            >
+              <List
+                size={20}
+                color={isMode(viewMode, 'list') ? '#007AFF' : '#333'}
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.viewToggleButton,
+                isMode(viewMode, 'swipe') && styles.selectedViewToggle,
+              ]}
+              onPress={() => setViewMode('swipe')}
+            >
+              <Heart
+                size={20}
+                color={isMode(viewMode, 'swipe') ? '#007AFF' : '#333'}
+              />
+            </TouchableOpacity>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.sortButton}
+            onPress={() => {
+              // Add filtering functionality here in the future
+            }}
+          >
+            <ArrowDownUp size={20} color="#333" />
+          </TouchableOpacity>
+        </View>
+      )}
       
       {loading ? (
         <View style={styles.loadingContainer}>
           <Text>Loading services...</Text>
         </View>
       ) : (
-        <View style={styles.contentContainer}>
-          {viewMode === 'grid' && renderGridView()}
-          {viewMode === 'list' && renderListView()}
-          {viewMode === 'swipe' && (
+        <View style={[
+          styles.contentContainer,
+          isMode(viewMode, 'swipe') && styles.swipeContentContainer
+        ]}>
+          {isMode(viewMode, 'grid') && renderGridView()}
+          {isMode(viewMode, 'list') && renderListView()}
+          {isMode(viewMode, 'swipe') && (
             <SwipeView
               listings={listings}
               currentIndex={currentIndex}
@@ -651,6 +723,16 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
+  },
+  swipeContentContainer: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    marginBottom: 0,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -724,6 +806,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    alignItems: 'center',
+  },
+  swipeViewToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
     alignItems: 'center',
   },
   viewToggleGroup: {

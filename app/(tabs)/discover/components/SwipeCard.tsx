@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Animated, PanResponder } from 'react-native';
-import { MapPin, Star, Users } from 'lucide-react-native';
+import { MapPin, Star, Users, Heart, X } from 'lucide-react-native';
 import { ListingItem, HousingListing } from '../types';
 import { supabase } from '../../../../lib/supabase';
+import { ShadowCard } from './ShadowCard';
 
 const { width } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
@@ -14,11 +15,13 @@ interface SwipeCardProps {
   onTap?: () => void;
   onSwipe?: (direction: string) => void;
   onCardLeftScreen?: (direction: string) => void;
+  onSwipeProgress?: (progress: number, direction: string) => void;
   getItemImage: (item: ListingItem) => string;
   getItemPrice: (item: ListingItem) => number;
   isHousingListing: (item: ListingItem) => item is HousingListing;
   renderServiceProvider: (item: ListingItem) => JSX.Element;
   hasHousingGroup?: (item: ListingItem) => boolean;
+  showActionButtons?: boolean;
 }
 
 const SwipeCard: React.FC<SwipeCardProps> = ({
@@ -27,11 +30,13 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   onTap,
   onSwipe,
   onCardLeftScreen,
+  onSwipeProgress,
   getItemImage,
   getItemPrice,
   isHousingListing,
   renderServiceProvider,
   hasHousingGroup,
+  showActionButtons = false,
 }) => {
   const [hasGroup, setHasGroup] = useState(false);
   const [isCheckingGroups, setIsCheckingGroups] = useState(false);
@@ -48,6 +53,13 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
       onPanResponderMove: (_, gesture) => {
         position.setValue({ x: gesture.dx, y: gesture.dy * 0.2 });
         rotate.setValue(gesture.dx / 15);
+        
+        // Calculate swipe progress (0-1) and direction
+        if (onSwipeProgress) {
+          const progress = Math.min(Math.abs(gesture.dx) / SWIPE_THRESHOLD, 1);
+          const direction = gesture.dx > 0 ? 'right' : 'left';
+          onSwipeProgress(progress, direction);
+        }
       },
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dx > SWIPE_THRESHOLD) {
@@ -56,6 +68,10 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
           finishSwipe('left');
         } else {
           resetPosition();
+          // Reset swipe progress when card returns to center
+          if (onSwipeProgress) {
+            onSwipeProgress(0, 'none');
+          }
         }
       },
     })
@@ -157,6 +173,33 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
     );
   }
 
+  // Action buttons component
+  const ActionButtons = () => {
+    if (!showActionButtons || isNext) return null;
+    
+    return (
+      <View style={styles.actionButtonsContainer}>
+        <ShadowCard width={60} height={60} radius={30} style={styles.actionShadow}>
+          <TouchableOpacity 
+            style={styles.swipeActionLeft}
+            onPress={() => onSwipe && onSwipe('left')}
+          >
+            <X size={36} color="#ff3b30" />
+          </TouchableOpacity>
+        </ShadowCard>
+        
+        <ShadowCard width={60} height={60} radius={30} style={styles.actionShadow}>
+          <TouchableOpacity 
+            style={styles.swipeActionRight}
+            onPress={() => onSwipe && onSwipe('right')}
+          >
+            <Heart size={36} color="#4cd964" fill="#4cd964" />
+          </TouchableOpacity>
+        </ShadowCard>
+      </View>
+    );
+  };
+
   const CardContent = () => (
     <>
       <View style={styles.imageContainer}>
@@ -241,6 +284,9 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
           </Text>
         </View>
       </View>
+
+      {/* Action buttons - only shown for top card if enabled */}
+      <ActionButtons />
     </>
   );
 
@@ -388,6 +434,46 @@ const styles = StyleSheet.create({
   },
   serviceProviderContainer: {
     marginBottom: 8,
+  },
+  actionButtonsContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    width: '100%',
+    zIndex: 20,
+  },
+  actionShadow: {
+    backgroundColor: 'transparent',
+  },
+  swipeActionLeft: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  swipeActionRight: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });
 
