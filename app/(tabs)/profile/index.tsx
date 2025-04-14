@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { Settings, CreditCard as Edit, BadgeCheck, User as User2, LogOut, Users, Calendar, MessageSquare, Wallet, ChevronRight, Award, House, Heart, Wrench, FileCheck, UserPlus, Plus } from 'lucide-react-native';
+import { Settings, CreditCard as Edit, BadgeCheck, User as User2, LogOut, Users as CommunityIcon, Calendar, MessageSquare, Wallet, ChevronRight, Award, House, Heart, Wrench, FileCheck, UserPlus, Plus, Clock } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { RewardsService } from '../../../lib/rewardsService';
 import { resetScrollPosition } from '../../../lib/navigationHelpers';
@@ -35,6 +35,20 @@ type UserProfile = {
   role: string;
 };
 
+type HousingGroupMembership = {
+  id: string; // housing_group_members ID
+  status: 'pending' | 'approved';
+  group: {
+    id: string; // housing_groups ID
+    name: string | null;
+    description: string | null;
+    listing: {
+      title: string;
+      media_urls: string[] | null;
+    } | null;
+  } | null;
+};
+
 type TabType = 'posts' | 'groups' | 'bookings' | 'friends';
 
 export default function ProfileScreen() {
@@ -45,6 +59,7 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   const [posts, setPosts] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
+  const [housingGroups, setHousingGroups] = useState<HousingGroupMembership[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [isProvider, setIsProvider] = useState(false);
   const [recentBadges, setRecentBadges] = useState<any[]>([]);
@@ -144,7 +159,7 @@ export default function ProfileScreen() {
       await loadPosts();
 
       // Load user groups
-      const { data: groupsData } = await supabase
+      const { data: groupsData, error: groupsError } = await supabase
         .from('group_members')
         .select(`
           id,
@@ -158,7 +173,36 @@ export default function ProfileScreen() {
         `)
         .eq('user_id', user.id);
       
+      // Handle potential error loading community groups
+      if (groupsError) console.error('Error loading community groups:', groupsError);
       setGroups(groupsData || []);
+
+      // --- Load user's housing groups --- 
+      const { data: housingGroupsData, error: housingGroupsError } = await supabase
+        .from('housing_group_members')
+        .select(`
+          id,
+          status,
+          group:housing_groups!inner (
+            id,
+            name,
+            description,
+            listing:housing_listings!inner (
+              title,
+              media_urls
+            )
+          )
+        `)
+        .eq('user_id', user.id); // Filter by current user
+
+      if (housingGroupsError) {
+        console.error('Error loading housing groups:', housingGroupsError);
+        // Decide if you want to throw or just log, setting empty array for now
+        setHousingGroups([]);
+      } else {
+        // Assert type to help TypeScript, similar to previous fix
+        setHousingGroups((housingGroupsData as any[] || []) as HousingGroupMembership[]);
+      }
 
       // Load user bookings
       const { data: bookingsData } = await supabase
@@ -327,6 +371,45 @@ export default function ProfileScreen() {
     });
   };
 
+  // Memoize the combined group list
+  const combinedGroupsList = useMemo(() => {
+    console.log('DEBUG [ProfileScreen - useMemo]: Raw groups state:', groups);
+    console.log('DEBUG [ProfileScreen - useMemo]: Raw housingGroups state:', housingGroups);
+
+    const communityGroupItems = (groups || [])
+      .filter(cg => cg.group) // Ensure group data exists
+      .map(cg => ({
+        id: cg.group!.id,
+        name: cg.group!.name || 'Unnamed Group',
+        // Assign type based on the actual group type from the database
+        type: cg.group!.type === 'housing' ? 'housing' as const : 'community' as const,
+        description: cg.group!.description || '',
+        avatar_url: cg.group!.avatar_url || null,
+        role: cg.role || 'member',
+        source: 'groups' // Indicate source table
+      }));
+
+    const housingGroupItems = (housingGroups || [])
+      .filter(hg => hg.group) // Ensure group data exists
+      .map(hg => ({
+        id: hg.group!.id,
+        name: hg.group!.name || hg.group!.listing?.title || 'Housing Group',
+        type: 'housing' as const, // Explicitly type as housing
+        description: hg.group!.description || '',
+        // Use first listing image as avatar, or null
+        avatar_url: hg.group!.listing?.media_urls?.[0] || null,
+        status: hg.status || 'unknown',
+        source: 'housing_groups' // Indicate source table
+      }));
+
+    // Combine and remove potential duplicates based on ID
+    const combined = [...communityGroupItems, ...housingGroupItems];
+    const uniqueGroups = Array.from(new Map(combined.map(item => [item.id, item])).values());
+
+    console.log('DEBUG [ProfileScreen - useMemo]: Final combinedGroupsList:', uniqueGroups);
+    return uniqueGroups;
+  }, [groups, housingGroups]); // Recalculate only when groups or housingGroups change
+
   // Render all other tabs' content
   const renderTabContent = () => {
     switch (activeTab) {
@@ -397,52 +480,54 @@ export default function ProfileScreen() {
         );
         
       case 'groups':
+        if (combinedGroupsList.length === 0) {
+          return (
+            <View style={styles.emptyState}>
+              <CommunityIcon size={48} color="#e1e1e1" />
+              <Text style={styles.emptyStateTitle}>No Groups Yet</Text>
+              <Text style={styles.emptyStateText}>
+                Join community or housing groups to see them here.
+              </Text>
+              <TouchableOpacity
+                style={styles.browseGroupsButton}
+                onPress={() => router.push('/(tabs)/community/groups')}
+              >
+                <Text style={styles.browseGroupsButtonText}>Browse Groups</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        }
         return (
-          <View style={styles.tabContent}>
-            {groups.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Users size={48} color="#e1e1e1" />
-                <Text style={styles.emptyStateTitle}>No Groups Yet</Text>
-                <Text style={styles.emptyStateText}>
-                  Connect with others in community groups
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyStateButton}
-                  onPress={() => router.push('/community/groups')}
-                >
-                  <Text style={styles.emptyStateButtonText}>Explore Groups</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              groups.map((group: any) => (
-                <TouchableOpacity
-                  key={group.id}
-                  style={styles.listCard}
-                  onPress={() => router.push(`/community/groups/${group.group.id}`)}
-                >
-                  <View style={styles.listIconContainer}>
-                    {group.group.type === 'interest' ? (
-                      <Heart size={24} color="#007AFF" />
-                    ) : (
-                      <House size={24} color="#007AFF" />
-                    )}
+          <FlatList
+            data={combinedGroupsList}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.groupListItem}
+                onPress={() => router.push(item.navigatePath as any)}
+              >
+                <Image
+                  source={item.avatarUrl ? { uri: item.avatarUrl } : require('../../../assets/images/default-group.png')}
+                  style={styles.groupListAvatar}
+                />
+                <View style={styles.groupListInfo}>
+                  <Text style={styles.groupListName}>{item.name}</Text>
+                  <Text style={styles.groupListType}>
+                    {item.type === 'housing' ? 'Housing Group' : 'Community Group'}
+                  </Text>
+                </View>
+                {item.status === 'pending' && (
+                  <View style={styles.pendingIndicator}>
+                    <Clock size={16} color="orange" />
+                    <Text style={styles.pendingText}>Pending</Text>
                   </View>
-                  <View style={styles.listContent}>
-                    <Text style={styles.listTitle}>{group.group.name}</Text>
-                    <Text style={styles.listSubtitle}>
-                      {group.group.type.charAt(0).toUpperCase() + group.group.type.slice(1)} Group
-                      {group.role === 'admin' && (
-                        <Text style={styles.roleTag}> • Admin</Text>
-                      )}
-                    </Text>
-                  </View>
-                  <ChevronRight size={20} color="#666" />
-                </TouchableOpacity>
-              ))
+                )}
+              </TouchableOpacity>
             )}
-          </View>
+            contentContainerStyle={styles.tabContent}
+          />
         );
-        
+
       case 'bookings':
         return (
           <View style={styles.tabContent}>
@@ -501,7 +586,7 @@ export default function ProfileScreen() {
           <View style={styles.tabContent}>
             {friends.length === 0 ? (
               <View style={styles.emptyState}>
-                <User2 size={48} color="#e1e1e1" />
+                <CommunityIcon size={48} color="#e1e1e1" />
                 <Text style={styles.emptyStateTitle}>No Friends Yet</Text>
                 <Text style={styles.emptyStateText}>
                   Connect with others in the community
@@ -708,7 +793,7 @@ export default function ProfileScreen() {
               style={[styles.tabButton, activeTab === 'groups' && styles.activeTabButton]}
               onPress={() => setActiveTab('groups')}
             >
-              <Users 
+              <CommunityIcon 
                 size={20} 
                 color={activeTab === 'groups' ? '#007AFF' : '#666'} 
               />
@@ -979,157 +1064,75 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabContent: {
-    paddingVertical: 16,
-    paddingHorizontal: 0,
+    padding: 16,
+    paddingBottom: 80, // Added padding for scrollable lists
   },
   emptyState: {
+    flex: 1, // Ensure it takes up space
     alignItems: 'center',
     padding: 32,
   },
   emptyStateTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#555',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: '#777',
     textAlign: 'center',
     marginBottom: 16,
   },
-  emptyStateButton: {
-    marginTop: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-  },
-  emptyStateButtonText: {
-    color: '#666',
-    fontWeight: '500',
-  },
-  createPostButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
+  browseGroupsButton: {
+    marginTop: 20,
     backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 20,
-    gap: 4,
   },
-  createPostButtonText: {
-    color: '#FFF',
-    fontWeight: '500',
+  browseGroupsButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
-  // Post card styles
-  postCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
-    padding: 16,
-    marginBottom: 16,
-  },
-  postCaption: {
-    fontSize: 16,
-    color: '#1a1a1a',
-    marginBottom: 12,
-  },
-  postImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  postFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  postMetrics: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  metricItem: {
+  groupListItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  metricText: {
-    fontSize: 14,
-    color: '#666',
+  groupListAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: '#f0f0f0',
   },
-  postDate: {
-    fontSize: 12,
-    color: '#666',
-  },
-  // List card styles (for groups and bookings)
-  listCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
-    marginBottom: 12,
-  },
-  listIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#e1f0ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  listContent: {
+  groupListInfo: {
     flex: 1,
   },
-  listTitle: {
+  groupListName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  listSubtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  roleTag: {
-    color: '#007AFF',
-  },
-  bookingDetails: {
-    marginTop: 8,
-  },
-  bookingDate: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 6,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
-  },
-  statusConfirmed: {
-    backgroundColor: '#e1f0ff',
-  },
-  statusCompleted: {
-    backgroundColor: '#e6f7e9',
-  },
-  statusCancelled: {
-    backgroundColor: '#ffe6e6',
-  },
-  statusText: {
-    fontSize: 12,
     fontWeight: '500',
-    color: '#666',
+    color: '#333',
+  },
+  groupListType: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
+  },
+  pendingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  pendingText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: 'orange',
+    fontStyle: 'italic',
   },
   postsGrid: {
     flexDirection: 'row',
@@ -1211,6 +1214,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   friendsListContent: {
-    paddingBottom: 80, // Add some padding at the bottom for better scrolling
+    paddingBottom: 80,
+  },
+  createPostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 4,
+  },
+  createPostButtonText: {
+    color: '#FFF',
+    fontWeight: '500',
+  },
+  metricItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metricText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyStateButton: {
+    marginTop: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  emptyStateButtonText: {
+    color: '#666',
+    fontWeight: '500',
+  },
+  listCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+    marginBottom: 12,
+  },
+  listIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e1f0ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  listContent: {
+    flex: 1,
+  },
+  listTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  listSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  bookingDetails: {
+    marginTop: 8,
+  },
+  bookingDate: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+  },
+  statusConfirmed: {
+    backgroundColor: '#e1f0ff',
+  },
+  statusCompleted: {
+    backgroundColor: '#e6f7e9',
+  },
+  statusCancelled: {
+    backgroundColor: '#ffe6e6',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    // Colors based on status can be added here if needed
   },
 });

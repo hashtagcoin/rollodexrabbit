@@ -415,7 +415,7 @@ export default function Onboarding() {
                 <View style={styles.addressInput}>
                   <MapPin size={20} color="#666" style={styles.addressIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { width: '100%' }]}
                     value={address}
                     onChangeText={setAddress}
                     placeholder="Enter your address"
@@ -581,7 +581,7 @@ export default function Onboarding() {
                 <View style={styles.addressInput}>
                   <MapPin size={20} color="#666" style={styles.inputIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { width: '100%' }]}
                     value={businessAddress}
                     onChangeText={setBusinessAddress}
                     placeholder="Enter business address"

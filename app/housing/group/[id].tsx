@@ -42,6 +42,7 @@ interface ExtendedGroupMember extends Omit<GroupMember, 'user_profile'> {
 
 interface ExtendedHousingGroup extends Omit<HousingGroup, 'members'> {
   members: ExtendedGroupMember[];
+  avatar_url?: string | null; // <-- ADDED: Allow avatar URL for standard groups
 }
 
 // Define type for the housing listing summary
@@ -71,7 +72,7 @@ const supportLevelColors: Record<SupportLevel, string> = {
 };
 
 export default function HousingGroupDetail() {
-  const { id, action } = useLocalSearchParams<{ id: string; action: string }>();
+  const { id, action, source } = useLocalSearchParams<{ id: string; action: string; source?: 'groups' | 'housing_groups' }>();
   const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user.id;
@@ -106,8 +107,16 @@ export default function HousingGroupDetail() {
     }
     
     // Only load from database for real UUIDs
-    loadGroupDetails();
-  }, [id, userId]);
+    setLoading(true);
+    if (source === 'groups') {
+      console.log(`DEBUG: Loading standard housing group (source=${source}, id=${id})`);
+      loadStandardHousingGroup(id);
+    } else {
+      // Default to co-living group if source is 'housing_groups' or undefined
+      console.log(`DEBUG: Loading co-living housing group (source=${source || 'undefined'}, id=${id})`);
+      loadCoLivingHousingGroup(id); 
+    }
+  }, [id, userId, source]);
 
   useEffect(() => {
     // If action is 'join', show the join confirmation dialog
@@ -244,148 +253,200 @@ export default function HousingGroupDetail() {
   };
 
   // Load group details from database (only for real UUIDs)
-  const loadGroupDetails = async () => {
+  async function loadCoLivingHousingGroup(groupId: string) {
+    console.log('Executing loadCoLivingHousingGroup for ID:', groupId);
     try {
-      // Skip entirely for test group IDs
-      if (typeof id === 'string' && id.startsWith('test-')) {
-        console.log('Skipping real database queries for test group ID');
-        return;
-      }
-      
-      console.log('Loading real group details from database for ID:', id);
-      
-      setLoading(true);
-      
-      // Fetch the housing group with members
+      // Step 1: Fetch the housing group with basic members (no profile join yet)
       const { data: groupData, error: groupError } = await supabase
         .from('housing_groups')
         .select(`
-          id,
-          name,
-          description,
-          listing_id,
-          max_members,
-          current_members,
-          creator_id,
-          created_at,
-          move_in_date,
-          is_active,
-          members: housing_group_members!group_id (
-            id,
-            user_id,
-            group_id,
-            join_date,
-            status,
-            bio,
-            support_level,
-            is_admin,
-            profiles:user_id (
-              id,
-              first_name,
-              last_name,
-              avatar_url,
-              age_range,
-              bio
-            )
-          )
+          *,
+          listing:housing_listings(*),
+          members:housing_group_members(*)
         `)
-        .eq('id', id)
+        .eq('id', groupId)
         .single();
 
-      if (groupError) {
-        console.error('Error fetching group:', groupError);
-        throw handleApiError(groupError);
-      }
-      
-      if (groupData) {
-        // Transform the data to ensure it matches our expected types
-        const transformedGroup: ExtendedHousingGroup = {
-          id: groupData.id,
-          name: groupData.name,
-          description: groupData.description || '',
-          listing_id: groupData.listing_id,
-          max_members: groupData.max_members,
-          current_members: groupData.members.filter(m => m.status === 'approved').length,
-          creator_id: groupData.creator_id,
-          created_at: groupData.created_at,
-          move_in_date: groupData.move_in_date,
-          is_active: groupData.is_active,
-          members: groupData.members.map((m: any) => ({
-            id: m.id,
-            user_id: m.user_id,
-            group_id: m.group_id,
-            join_date: m.join_date,
-            status: m.status,
-            bio: m.bio || '',
-            support_level: (m.support_level || 'none') as SupportLevel,
-            is_admin: m.is_admin,
-            user_profile: {
-              first_name: m.profiles && Array.isArray(m.profiles) && m.profiles.length > 0 
-                ? m.profiles[0].first_name || 'User' 
-                : 'User',
-              last_name: m.profiles && Array.isArray(m.profiles) && m.profiles.length > 0 
-                ? m.profiles[0].last_name || '' 
-                : '',
-              avatar_url: m.profiles && Array.isArray(m.profiles) && m.profiles.length > 0 
-                ? m.profiles[0].avatar_url || null 
-                : null,
-              // Include additional fields from user profile
-              id: m.profiles && Array.isArray(m.profiles) && m.profiles.length > 0 
-                ? m.profiles[0].id || '' 
-                : '',
-              age_range: m.profiles && Array.isArray(m.profiles) && m.profiles.length > 0 
-                ? m.profiles[0].age_range || null 
-                : null,
-              bio: m.profiles && Array.isArray(m.profiles) && m.profiles.length > 0 
-                ? m.profiles[0].bio || null 
-                : null
-            }
-          }))
-        };
+      if (groupError) throw groupError;
+      if (!groupData) throw new Error('Co-living housing group not found.');
 
-        setGroup(transformedGroup);
-        
-        // Check if the current user is already a member
-        if (userId) {
-          const memberRecord = transformedGroup.members.find(m => m.user_id === userId);
-          setUserMembership(memberRecord || null);
+      // Step 2: Extract member user IDs
+      const memberUserIds = (groupData.members || []).map((m: { user_id: string }) => m.user_id).filter((id: string | null | undefined): id is string => !!id);
+
+      // Step 3: Fetch user profiles for the members if there are any members
+      let userProfilesMap = new Map<string, any>();
+      if (memberUserIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .in('user_id', memberUserIds);
+
+        if (profilesError) {
+          console.warn('Could not fetch user profiles for members:', profilesError);
+          // Continue without profiles if fetching fails
+        } else {
+          profilesData?.forEach(profile => {
+            userProfilesMap.set(profile.id, profile);
+          });
         }
+      }
 
-        // Fetch the housing listing summary
-        if (groupData.listing_id) {
-          try {
-            const { data: listingData, error: listingError } = await supabase
-              .from('housing_listings')
-              .select(`
-                id,
-                title,
-                address,
-                suburb,
-                weekly_rent,
-                available_from,
-                media_urls
-              `)
-              .eq('id', groupData.listing_id)
-              .single();
-
-            if (listingError) {
-              console.error('Error fetching listing:', listingError);
-            } else {
-              setListing(listingData);
-            }
-          } catch (listingErr) {
-            console.error('Error in listing fetch:', listingErr);
-            // Continue without listing data rather than failing the whole operation
+      // Step 4: Map members and combine with fetched profiles
+      const mappedMembers: ExtendedGroupMember[] = (groupData.members || []).map((m: any) => {
+        const userProfile = userProfilesMap.get(m.user_id);
+        return {
+          id: m.id,
+          user_id: m.user_id,
+          group_id: groupId,
+          join_date: m.join_date,
+          status: m.status,
+          bio: m.bio, // This is the member's bio in the housing group
+          support_level: (m.support_level || 'none') as SupportLevel,
+          is_admin: m.is_admin,
+          user_profile: userProfile ? {
+            id: userProfile.id,
+            first_name: userProfile.first_name || 'User',
+            last_name: userProfile.last_name || '',
+            avatar_url: userProfile.avatar_url || null,
+            age_range: userProfile.age_range || null,
+            bio: userProfile.bio || null // This is the profile's main bio
+          } : {
+            // Provide default structure if profile fetch failed or profile doesn't exist
+            id: m.user_id,
+            first_name: 'Unknown',
+            last_name: 'User',
+            avatar_url: null,
+            age_range: null,
+            bio: null
           }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading group details:', error);
-      Alert.alert('Error', 'Failed to load group details. Please try again.');
+        };
+      });
+
+      // Find the current user's membership
+      const currentUserMembership = mappedMembers.find(m => m.user_id === userId) || null;
+
+      // Construct the final group object
+      const finalGroupData: ExtendedHousingGroup = {
+        // Map fields from groupData, excluding the original 'members' array
+        id: groupData.id,
+        name: groupData.name,
+        description: groupData.description,
+        listing_id: groupData.listing_id,
+        max_members: groupData.max_members,
+        creator_id: groupData.creator_id,
+        created_at: groupData.created_at,
+        move_in_date: groupData.move_in_date,
+        is_active: groupData.is_active,
+        avatar_url: groupData.avatar_url, // Assuming housing_groups might have this too
+        // Add the manually constructed members array and current member count
+        members: mappedMembers,
+        current_members: mappedMembers.length,
+      };
+
+      // Update component state
+      setGroup(finalGroupData);
+      setListing(groupData.listing || null);
+      setUserMembership(currentUserMembership);
+
+    } catch (error: any) {
+      console.error('Error loading co-living housing group:', error);
+      handleApiError(error);
+      setGroup(null);
+      setListing(null);
+      setUserMembership(null);
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  // --- IMPLEMENTED: Loading function for standard groups ---
+  async function loadStandardHousingGroup(groupId: string) {
+    console.log('Executing loadStandardHousingGroup for ID:', groupId);
+    // setLoading(true); // setLoading is called in the main useEffect
+    try {
+      // 1. Fetch basic group details from 'groups' table
+      const { data: groupCoreData, error: groupCoreError } = await supabase
+        .from('groups')
+        .select('id, name, description, created_at, owner_id, is_public, avatar_url') // Add avatar_url
+        .eq('id', groupId)
+        .single();
+
+      if (groupCoreError) throw groupCoreError;
+      if (!groupCoreData) throw new Error('Standard housing group not found.');
+
+      // 2. Fetch all members from 'group_members' table, joining with profiles
+      const { data: membersData, error: membersError } = await supabase
+        .from('group_members')
+        .select(`
+          id, 
+          user_id, 
+          join_date, 
+          role,
+          user_profile:user_profiles (id, first_name, last_name, avatar_url, age_range, bio)
+        `)
+        .eq('group_id', groupId);
+
+      if (membersError) throw membersError;
+
+      // 3. Map fetched data to the component's state structure
+      const mappedMembers: ExtendedGroupMember[] = (membersData || []).map((member: any) => ({
+        id: member.id,
+        user_id: member.user_id,
+        group_id: groupId,
+        join_date: member.join_date,
+        // Standard groups don't have 'status', 'bio', 'support_level' in group_members
+        // We set defaults or omit them. Status assumed 'approved'.
+        status: 'approved', 
+        bio: member.user_profile?.bio || '', // Use profile bio if available
+        support_level: 'none', // Default support level
+        is_admin: member.role === 'admin' || member.user_id === groupCoreData.owner_id,
+        user_profile: {
+          id: member.user_profile?.id || member.user_id,
+          first_name: member.user_profile?.first_name || 'Unknown',
+          last_name: member.user_profile?.last_name || 'User',
+          avatar_url: member.user_profile?.avatar_url || null,
+          age_range: member.user_profile?.age_range || null,
+          bio: member.user_profile?.bio || null,
+        }
+      }));
+
+      // 4. Find the current user's membership among the fetched members
+      const currentUserMembership = mappedMembers.find(m => m.user_id === userId) || null;
+
+      // 5. Construct the final group object for the state
+      const finalGroupData: ExtendedHousingGroup = {
+        id: groupCoreData.id,
+        name: groupCoreData.name || 'Standard Housing Group',
+        description: groupCoreData.description || '',
+        // Fields specific to 'housing_groups' table are not applicable here
+        listing_id: '', // Default empty string for string type
+        max_members: 0, // Default 0 for number type
+        current_members: mappedMembers.length,
+        creator_id: groupCoreData.owner_id, // Assuming owner_id is creator
+        created_at: groupCoreData.created_at,
+        move_in_date: undefined, // Use undefined instead of null
+        is_active: true, // Assume active unless otherwise specified (if needed)
+        // Assign mapped members
+        members: mappedMembers,
+        // Add avatar_url from groupCoreData
+        avatar_url: groupCoreData.avatar_url 
+      };
+
+      // 6. Update component state
+      setGroup(finalGroupData);
+      setListing(null); // Standard groups don't have a linked listing object
+      setUserMembership(currentUserMembership);
+
+    } catch (error: any) {
+      console.error('Error loading standard housing group:', error);
+      handleApiError(error); // Remove second argument
+      setGroup(null);
+      setListing(null);
+      setUserMembership(null);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const confirmJoinGroup = () => {
     if (!userId) {
@@ -542,7 +603,7 @@ export default function HousingGroupDetail() {
 
       // Try to reload group details to reflect the change, but don't depend on it
       try {
-        await loadGroupDetails();
+        await loadCoLivingHousingGroup(id);
       } catch (reloadError) {
         console.warn('Could not reload group details, but join request was successful:', reloadError);
         // Continue with updated local state

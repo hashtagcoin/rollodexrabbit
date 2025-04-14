@@ -101,6 +101,7 @@ export default function HousingGroupDetail() {
   const [listing, setListing] = useState<HousingListingSummary | null>(null);
   const [userMembership, setUserMembership] = useState<ExtendedGroupMember | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<'idle' | 'pending' | 'member' | 'error'>('idle');
 
   // Format date as Month Day
   const formatMoveInDate = (dateString: string) => {
@@ -128,7 +129,20 @@ export default function HousingGroupDetail() {
 
   // Load group details when the ID changes
   useEffect(() => {
-    if (!id) return;
+    if (!id || !userId) {
+      if (!id) {
+        console.log("Group ID is missing.");
+        // Optionally handle missing ID error (e.g., show message, navigate back)
+        setLoading(false);
+        return;
+      }
+      // If only userId is missing, maybe wait or handle guest state?
+      // For now, we'll proceed assuming userId will become available.
+      // If it stays null, the fetch might fail gracefully or require specific handling.
+      console.log("Waiting for user session...");
+      // setLoading(true); // Keep loading state potentially
+      return; // Don't fetch yet if userId is missing
+    }
 
     // Check if this is a test group ID
     if (typeof id === 'string' && id.startsWith('test-')) {
@@ -137,8 +151,8 @@ export default function HousingGroupDetail() {
       return;
     }
 
-    loadGroupDetails();
-  }, [id, userId]);
+    loadGroupDetails(id, userId); // Pass userId
+  }, [id, userId]); // Re-run if id or userId changes
 
   // Handle join action if provided
   useEffect(() => {
@@ -148,21 +162,65 @@ export default function HousingGroupDetail() {
   }, [action, group, userMembership]);
 
   // Load group details from the database
-  const loadGroupDetails = async () => {
+  const loadGroupDetails = async (groupId: string, currentUserId: string) => {
+    console.log(`Loading real group details for ID: ${groupId} and User: ${currentUserId}`);
+    setLoading(true);
     try {
-      setLoading(true);
+      // 1. Fetch Group Details (including listing and members with profiles)
+      const { data: groupData, error: groupError } = await supabase
+        .from('housing_groups')
+        .select(`
+          *,
+          listing:housing_listings (*),
+          members:housing_group_members (
+            *,
+            user_profile:user_profiles (*)
+          )
+        `)
+        .eq('id', groupId)
+        .single();
 
-      // For test group IDs, use our test data handler
-      if (typeof id === 'string' && id.startsWith('test-')) {
-        return handleTestGroup(id as string);
+      if (groupError) throw groupError;
+      if (!groupData) throw new Error('Group not found.');
+
+      setGroup(groupData as ExtendedHousingGroup);
+      setListing(groupData.listing as HousingListingSummary);
+
+      // 2. Fetch Current User's Membership Status for this group
+      const { data: membershipData, error: membershipError } = await supabase
+        .from('housing_group_members')
+        .select('*')
+        .eq('group_id', groupId)
+        .eq('user_id', currentUserId)
+        .maybeSingle(); // Use maybeSingle as user might not be a member
+
+      if (membershipError) {
+        console.error("Error fetching membership:", membershipError);
+        // Decide how to handle - maybe allow viewing but disable join button?
+        // For now, assume 'idle' if fetch fails
+        setRequestStatus('idle'); // Or set to 'error'?
+      } else if (membershipData) {
+        setUserMembership(membershipData as ExtendedGroupMember);
+        // Set initial request status based on fetched data
+        setRequestStatus(membershipData.status === 'pending' ? 'pending' : 'member');
+        console.log("User membership status:", membershipData.status);
+      } else {
+        setUserMembership(null);
+        setRequestStatus('idle'); // User is not a member and hasn't requested
+        console.log("User is not a member of this group.");
       }
 
-      // Otherwise load real data from database (this section isn't needed for demo)
-      console.log('Would load real group data here');
-      setLoading(false);
+      // 3. Check if favorite (optional, implement if needed)
+      // await checkFavoriteStatus(groupId, currentUserId);
+
     } catch (error) {
-      console.error('Error loading group details:', error);
+      console.error('Error loading real group details:', error);
       Alert.alert('Error', 'Failed to load group details. Please try again.');
+      setGroup(null); // Clear data on error
+      setListing(null);
+      setUserMembership(null);
+      setRequestStatus('idle'); // Reset status on error
+    } finally {
       setLoading(false);
     }
   };
@@ -278,6 +336,7 @@ export default function HousingGroupDetail() {
           const memberRecord = testGroup.members.find((m) => m.user_id === userId);
           if (memberRecord) {
             setUserMembership(memberRecord);
+            setRequestStatus('member');
           }
         }
 
@@ -384,6 +443,8 @@ export default function HousingGroupDetail() {
           setGroup(updatedGroup);
           setUserMembership(newMembership);
         }
+
+        setRequestStatus('pending');
 
         Alert.alert(
           'Request Sent',
@@ -538,13 +599,17 @@ export default function HousingGroupDetail() {
         <TouchableOpacity
           style={styles.joinButton}
           onPress={confirmJoinGroup}
-          disabled={joining || userMembership !== null}
+          disabled={joining || requestStatus === 'pending' || requestStatus === 'member'}
         >
           {joining ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.joinButtonText}>
-              {userMembership ? 'Already a Member' : 'Request to Join Group'}
+              {requestStatus === 'member'
+                ? 'Already a Member'
+                : requestStatus === 'pending'
+                ? 'Request Pending'
+                : 'Request to Join Group'}
             </Text>
           )}
         </TouchableOpacity>

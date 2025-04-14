@@ -12,6 +12,8 @@ import { router } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
 import { ArrowLeft, Users, Plus, Chrome as Home, Heart, Filter, Lock, CalendarDays } from 'lucide-react-native';
 import AppHeader from '../../../../components/AppHeader';
+import { useAuth } from '../../../../providers/AuthProvider';
+import defaultGroupAvatar from '../../../../assets/images/default-group.png';
 
 type Group = {
   id: string;
@@ -28,49 +30,132 @@ type Group = {
   }[] | null;
   event_date?: string;
   event_location?: string;
+  membership_status?: 'pending' | 'approved';
+  listing_title?: string;
+  listing_media_urls?: string[];
+  source: 'groups' | 'housing_groups';
 };
 
 export default function GroupsScreen() {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [filter, setFilter] = useState<'all' | 'interest' | 'housing' | 'event'>('all');
 
   async function loadGroups() {
+    setLoading(true);
+    let combinedGroups: Group[] = [];
+    const groupIds = new Set<string>();
+
     try {
-      setLoading(true);
-      const { data: groupsData, error } = await supabase
-        .from('groups')
-        .select(`
-          id,
-          name,
-          type,
-          description,
-          created_at,
-          avatar_url,
-          is_public,
-          event_date,
-          event_location,
-          member_count:group_members!group_id(count),
-          owner:user_profiles!owner_id (
-            full_name,
-            avatar_url
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // --- MODIFIED CONDITION: Include 'housing' filter case ---
+      if (filter === 'all' || filter === 'interest' || filter === 'event' || filter === 'housing') {
+        const query = supabase
+          .from('groups')
+          .select(`
+            id, name, type, description, created_at, avatar_url, is_public, event_date, event_location,
+            member_count:group_members!group_id(count),
+            owner:user_profiles!owner_id (full_name, avatar_url)
+          `)
+          .order('created_at', { ascending: false });
 
-      let filteredGroups = groupsData || [];
-      if (filter !== 'all') {
-        filteredGroups = filteredGroups.filter((group) => group.type === filter);
+        if (filter !== 'all') {
+          // Apply the type filter if not 'all'
+          query.eq('type', filter);
+        }
+
+        const { data: standardGroupsData, error: standardGroupsError } = await query;
+
+        if (standardGroupsError) {
+          console.error('Error loading standard groups:', standardGroupsError);
+          throw standardGroupsError;
+        }
+
+        if (standardGroupsData) {
+          standardGroupsData.forEach(group => {
+            if (!groupIds.has(group.id)) {
+              combinedGroups.push({
+                ...group,
+                member_count: group.member_count || [],
+                owner: group.owner || null,
+                source: 'groups'
+              });
+              groupIds.add(group.id);
+            }
+          });
+        }
       }
 
-      if (error) {
-        console.error('Error loading groups:', error);
+      // --- Fetch co-living groups (only if filter is 'all' or 'housing') ---
+      // This part remains the same
+      if (userId && (filter === 'all' || filter === 'housing')) {
+        const { data: userHousingGroupsData, error: userHousingGroupsError } = await supabase
+          .from('housing_group_members')
+          .select(`
+            status,
+            group:housing_groups!inner (
+              id,
+              name,
+              description,
+              created_at,
+              listing:housing_listings!inner (
+                title,
+                media_urls
+              )
+            )
+          `)
+          .eq('user_id', userId);
+
+        if (userHousingGroupsError) {
+          console.error('Error loading user housing groups:', userHousingGroupsError);
+        }
+
+        if (userHousingGroupsData) {
+          const potentiallyUnsafeData = userHousingGroupsData as any[];
+
+          const mappedHousingGroups: Group[] = potentiallyUnsafeData
+            .filter(item => item && item.group)
+            .map((item) => {
+              const group = item.group as any;
+              const listing = group.listing;
+
+              return {
+                id: group.id,
+                name: group.name || listing?.title || 'Housing Group',
+                type: 'housing' as const,
+                description: group.description || '',
+                created_at: group.created_at || new Date().toISOString(),
+                avatar_url: listing?.media_urls?.[0] || null,
+                is_public: false,
+                member_count: [],
+                owner: null,
+                membership_status: item.status as ('pending' | 'approved'),
+                listing_title: listing?.title,
+                listing_media_urls: listing?.media_urls || [],
+                source: 'housing_groups'
+              };
+            });
+
+          mappedHousingGroups.forEach(group => {
+            if (!groupIds.has(group.id)) {
+              combinedGroups.push({
+                ...group,
+                source: 'housing_groups'
+              }); 
+              groupIds.add(group.id);
+            }
+          });
+        }
       }
 
-      setGroups(filteredGroups);
+      combinedGroups.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setGroups(combinedGroups);
     } catch (error) {
-      console.error('Error loading groups:', error);
+      console.error('Error in loadGroups:', error);
     } finally {
       setLoading(false);
     }
@@ -183,11 +268,18 @@ export default function GroupsScreen() {
               <TouchableOpacity
                 key={group.id}
                 style={styles.groupCard}
-                onPress={() => router.push(`/community/groups/${group.id}`)}
+                onPress={() => {
+                  if (group.type === 'housing') {
+                    // Pass source as a query parameter
+                    router.push(`/housing/group/${group.id}?source=${group.source}`);
+                  } else {
+                    router.push(`/community/groups/${group.id}`);
+                  }
+                }}
               >
                 <View style={styles.typeLabel}>
                   <Text style={[
-                    styles.typeLabelText, 
+                    styles.typeLabelText,
                     { 
                       backgroundColor: 
                         group.type === 'interest' ? '#6C5CE7' : 
@@ -199,54 +291,52 @@ export default function GroupsScreen() {
                      group.type === 'housing' ? 'Housing' : 'Event'}
                   </Text>
                 </View>
-                
-                <View style={styles.groupTouchable}>
-                  <Image 
-                    source={{ uri: group.avatar_url || 'https://placehold.co/100x100/e1f0ff/333333?text=Grp' }} 
-                    style={styles.groupAvatar} 
-                  />
-                  <View style={styles.groupTextContent}>
-                    <View style={styles.groupHeader}>
-                      <Text style={styles.groupName}>{group.name}</Text>
-                      {!group.is_public && <Lock size={16} color="#666" style={styles.privacyIcon} />}
-                    </View>
-                    <Text style={styles.groupDescription} numberOfLines={2}>
-                      {group.description}
-                    </Text>
-                    
-                    {group.type === 'event' && group.event_date && (
-                      <View style={styles.eventInfo}>
-                        <CalendarDays size={14} color="#666" />
-                        <Text style={styles.eventDate}>
-                          {new Date(group.event_date).toLocaleDateString()}
-                        </Text>
-                        {group.event_location && (
-                          <>
-                            <Text style={styles.eventLocation}>at {group.event_location}</Text>
-                          </>
-                        )}
-                      </View>
+
+                {group.type === 'housing' && group.membership_status === 'pending' && (
+                  <View style={styles.pendingBadge}>
+                    <Text style={styles.pendingBadgeText}>Pending</Text>
+                  </View>
+                )}
+
+                <Image
+                  source={group.avatar_url ? { uri: group.avatar_url } : defaultGroupAvatar}
+                  style={styles.groupImage}
+                  resizeMode="cover"
+                />
+
+                <View style={styles.groupInfo}>
+                  <View style={styles.groupNameContainer}>
+                    <Text style={styles.groupName}>{group.name}</Text>
+                    {!group.is_public && group.type !== 'housing' && (
+                      <Lock size={14} color="#666" />
                     )}
                   </View>
-                </View>
+                  
+                  {group.type === 'housing' && group.listing_title ? (
+                     <Text style={styles.groupMeta}>Listing: {group.listing_title}</Text>
+                  ) : group.owner && group.owner.length > 0 ? (
+                     <Text style={styles.groupMeta}>Owner: {group.owner[0].full_name}</Text>
+                  ) : null }
 
-                <View style={styles.groupFooter}>
-                  <View style={styles.memberCount}>
-                    <Users size={16} color="#666" />
-                    <Text style={styles.memberCountText}>
-                      {group.member_count?.[0]?.count ?? 0} members
+                  {group.type !== 'housing' ? (
+                    <Text style={styles.groupMeta}>
+                      {group.member_count?.[0]?.count || 0} Members
                     </Text>
-                  </View>
+                   ) : (
+                     <Text style={styles.groupMeta}>Housing Group</Text>
+                   )}
 
-                  <View style={styles.owner}>
-                    <Image
-                      source={{ uri: group.owner?.[0]?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
-                      style={styles.ownerAvatar}
-                    />
-                    <Text style={styles.ownerName}>
-                      by {group.owner?.[0]?.full_name ?? 'Unknown Owner'}
-                    </Text>
-                  </View>
+                  {group.type === 'event' && group.event_date && (
+                      <View style={styles.eventDetails}>
+                          <CalendarDays size={14} color="#666" />
+                          <Text style={styles.eventText}>Event Date: {new Date(group.event_date).toLocaleDateString()}</Text>
+                      </View>
+                  )}
+                  {group.type === 'event' && group.event_location && (
+                       <View style={styles.eventDetails}>
+                           <Text style={styles.eventText}>Location: {group.event_location}</Text>
+                       </View>
+                  )}
                 </View>
               </TouchableOpacity>
             ))}
@@ -335,7 +425,7 @@ const styles = StyleSheet.create({
   },
   groupsGrid: {
     padding: 12,
-    gap: 8, // Reduced from 16 to 8
+    gap: 8,
   },
   groupCard: {
     backgroundColor: '#fff',
@@ -343,8 +433,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e1e1e1',
     padding: 16,
-    marginBottom: 8, // Added to decrease distance between cards
-    position: 'relative', // For absolute positioning of the type label
+    marginBottom: 8,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  pendingBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'orange',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    zIndex: 2,
+  },
+  pendingBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   typeLabel: {
     position: 'absolute',
@@ -362,80 +472,41 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 12,
     overflow: 'hidden',
   },
-  groupTouchable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  groupAvatar: {
+  groupImage: {
     width: 56,
     height: 56,
     borderRadius: 28,
     marginRight: 16,
     backgroundColor: '#e1f0ff',
   },
-  groupTextContent: {
+  groupInfo: {
     flex: 1,
+    alignItems: 'center',
+    marginRight: 4,
   },
-  groupHeader: {
+  groupNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
   },
   groupName: {
-    fontSize: 18, // Increased from 16 to 18
+    fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
     marginRight: 5,
   },
-  privacyIcon: {
-    marginLeft: 5,
-  },
-  groupDescription: {
-    fontSize: 14,
+  groupMeta: {
+    fontSize: 12,
     color: '#666',
+    marginTop: 4,
   },
-  eventInfo: {
+  eventDetails: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
     gap: 6,
   },
-  eventDate: {
+  eventText: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  eventLocation: {
-    fontSize: 12,
-    color: '#666',
-  },
-  groupFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  memberCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  memberCountText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  owner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ownerAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  ownerName: {
-    fontSize: 14,
     color: '#666',
   },
 });
