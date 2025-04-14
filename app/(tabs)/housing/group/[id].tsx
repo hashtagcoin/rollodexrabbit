@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  Share,
 } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
@@ -22,7 +23,8 @@ import {
   MapPin,
   Calendar,
   MessageSquare,
-  Heart
+  Heart,
+  Share as ShareIcon,
 } from 'lucide-react-native';
 import { HousingGroup, SupportLevel, GroupMember } from '../types/housing';
 
@@ -61,29 +63,32 @@ const supportLevelLabels: Record<SupportLevel, string> = {
   none: 'No Support',
   light: 'Light Support',
   moderate: 'Moderate Support',
-  high: 'High Support'
+  high: 'High Support',
 };
 
 const supportLevelColors: Record<SupportLevel, string> = {
   none: '#dddddd',
-  light: '#4caf50',  // Green
-  moderate: '#ff9800', // Orange
-  high: '#f44336'    // Red
+  light: '#a5d6a7', // Lighter Green
+  moderate: '#ffcc80', // Lighter Orange
+  high: '#ef9a9a', // Lighter Red
 };
 
 const ageRangeColors: Record<string, string> = {
   '18-24': '#8e44ad', // Purple
   '25-34': '#3498db', // Blue
   '35-44': '#2980b9', // Darker Blue
-  '45+': '#16a085'    // Teal
+  '45+': '#16a085', // Teal
 };
 
 const genderColors: Record<string, string> = {
   'Male': '#2c3e50',
   'Female': '#c0392b',
   'Non-binary': '#27ae60',
-  'Other': '#d35400'
+  'Other': '#d35400',
 };
+
+const lighterBlue = '#589AF0'; // Define lighter blue
+const lightBlueBackground = '#EAF2FF'; // Define light blue background
 
 export default function HousingGroupDetail() {
   const { id, action } = useLocalSearchParams<{ id: string; action: string }>();
@@ -108,17 +113,30 @@ export default function HousingGroupDetail() {
     router.back();
   };
 
+  // Handle sharing the group
+  const handleShare = async () => {
+    if (!group || !listing) return;
+    try {
+      await Share.share({
+        message: `Check out this Group Living Opportunity on Rollodex: ${listing.title} at ${listing.address}. More info: [Link to Group/Listing if available]`, // Replace with actual link if possible
+        title: `Group Opportunity: ${listing.title}`,
+      });
+    } catch (error: any) {
+      Alert.alert(error.message);
+    }
+  };
+
   // Load group details when the ID changes
   useEffect(() => {
     if (!id) return;
-    
+
     // Check if this is a test group ID
     if (typeof id === 'string' && id.startsWith('test-')) {
       console.log('Loading test group data');
       handleTestGroup(id as string);
       return;
     }
-    
+
     loadGroupDetails();
   }, [id, userId]);
 
@@ -133,12 +151,12 @@ export default function HousingGroupDetail() {
   const loadGroupDetails = async () => {
     try {
       setLoading(true);
-      
+
       // For test group IDs, use our test data handler
       if (typeof id === 'string' && id.startsWith('test-')) {
         return handleTestGroup(id as string);
       }
-      
+
       // Otherwise load real data from database (this section isn't needed for demo)
       console.log('Would load real group data here');
       setLoading(false);
@@ -159,12 +177,12 @@ export default function HousingGroupDetail() {
           'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8', // ryan_h@example.com
           'd5e1fa56-80b7-4e51-9012-3baac98f2b9e', // lily_w@example.com
           'fc178f8d-6b47-40be-beaf-462e1c7f31a3', // dhdhd@gfgf.com
-          '9e4fffdc-6dbc-40b0-8601-abcfdd9c4af4'  // bash@gmaikl.com
+          '9e4fffdc-6dbc-40b0-8601-abcfdd9c4af4', // bash@gmaikl.com
         ];
 
         // Extract listing ID part from test group ID
         const listingId = groupId.split('-')[1];
-        
+
         // Create test listing data
         const listingData = {
           id: `${listingId}`,
@@ -173,12 +191,12 @@ export default function HousingGroupDetail() {
           suburb: 'Richmond',
           weekly_rent: 420,
           available_from: '2025-05-01T00:00:00.000Z',
-          media_urls: ['https://images.unsplash.com/photo-1568605114967-8130f3a36994']
+          media_urls: ['https://images.unsplash.com/photo-1568605114967-8130f3a36994'],
         };
-        
+
         // Use current user ID or fall back to a test ID
         const currentUserId = userId || realUserIds[0];
-        
+
         // Create test group data
         const testGroup: ExtendedHousingGroup = {
           id: groupId,
@@ -208,8 +226,8 @@ export default function HousingGroupDetail() {
                 avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg',
                 age_range: '35-44',
                 bio: 'Loves gardening and quiet nights.',
-                gender: 'Female'
-              }
+                gender: 'Female',
+              },
             },
             {
               id: `${groupId}-member2`,
@@ -227,8 +245,8 @@ export default function HousingGroupDetail() {
                 avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg',
                 age_range: '45+',
                 bio: 'Friendly and active, enjoys sports and being outdoors.',
-                gender: 'Male'
-              }
+                gender: 'Male',
+              },
             },
             {
               id: `${groupId}-member3`,
@@ -246,23 +264,23 @@ export default function HousingGroupDetail() {
                 avatar_url: 'https://randomuser.me/api/portraits/women/68.jpg',
                 age_range: '25-34',
                 bio: 'Easygoing and loves animals.',
-                gender: 'Female'
-              }
-            }
-          ]
+                gender: 'Female',
+              },
+            },
+          ],
         };
-        
+
         setGroup(testGroup);
         setListing(listingData);
-        
+
         // Check if current user is a member
         if (userId) {
-          const memberRecord = testGroup.members.find(m => m.user_id === userId);
+          const memberRecord = testGroup.members.find((m) => m.user_id === userId);
           if (memberRecord) {
             setUserMembership(memberRecord);
           }
         }
-        
+
         setLoading(false);
         return testGroup;
       } catch (error) {
@@ -278,18 +296,18 @@ export default function HousingGroupDetail() {
   // Toggle favorite status
   const toggleFavorite = () => {
     setIsFavorite(!isFavorite);
-    
+
     // In a real implementation, we would save this to the database
     // For demo purposes, we'll just show an alert
     if (!isFavorite) {
       Alert.alert(
         'Added to Favorites',
-        'This housing group has been added to your favorites.'
+        'This housing group has been added to your favorites.',
       );
     } else {
       Alert.alert(
         'Removed from Favorites',
-        'This housing group has been removed from your favorites.'
+        'This housing group has been removed from your favorites.',
       );
     }
   };
@@ -302,11 +320,11 @@ export default function HousingGroupDetail() {
         'You need to sign in to join housing groups.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Sign In', 
-            onPress: () => router.replace('/') // Navigate to home screen instead
-          }
-        ]
+          {
+            text: 'Sign In',
+            onPress: () => router.replace('/'), // Navigate to home screen instead
+          },
+        ],
       );
       return;
     }
@@ -316,8 +334,8 @@ export default function HousingGroupDetail() {
       'Would you like to request to join this housing group?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Join', onPress: handleJoinGroup }
-      ]
+        { text: 'Join', onPress: handleJoinGroup },
+      ],
     );
   };
 
@@ -355,24 +373,24 @@ export default function HousingGroupDetail() {
             last_name: '',
             avatar_url: null,
             age_range: null,
-            bio: null
-          }
+            bio: null,
+          },
         };
-        
+
         // Update the group with the new member
         if (group) {
-          const updatedGroup = {...group};
+          const updatedGroup = { ...group };
           updatedGroup.members.push(newMembership);
           setGroup(updatedGroup);
           setUserMembership(newMembership);
         }
-        
+
         Alert.alert(
           'Request Sent',
           'Your request to join this group has been sent. You will be notified when the group admin approves your request.',
-          [{ text: 'OK' }]
+          [{ text: 'OK' }],
         );
-        
+
         setJoining(false);
         return;
       }
@@ -433,21 +451,19 @@ export default function HousingGroupDetail() {
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <ChevronLeft size={24} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group Living Opportunity</Text>
-        <View style={styles.headerRight} />
+        <Text style={styles.headerTitle}>{group?.name || 'Group Details'}</Text>
+        <TouchableOpacity onPress={handleShare} style={styles.headerRight}>
+          <ShareIcon size={22} color="#007AFF" />
+        </TouchableOpacity>
       </View>
-      
+
       {/* Fixed property info card */}
       <View style={styles.propertyCard}>
-        <Image 
-          source={{ uri: listing.media_urls[0] }} 
-          style={styles.propertyImage} 
-        />
+        <Image source={{ uri: listing.media_urls[0] }} style={styles.propertyImage} />
         <View style={styles.propertyInfo}>
           <View style={styles.propertyHeader}>
             <Text style={styles.propertyName}>{listing.title}</Text>
@@ -459,46 +475,42 @@ export default function HousingGroupDetail() {
           <Text style={styles.propertyPrice}>${listing.weekly_rent}/wk | Available from {formatMoveInDate(listing.available_from)}</Text>
         </View>
       </View>
-      
+
       {/* Scrollable members list */}
       <ScrollView style={styles.scrollContainer}>
         <View style={styles.membersList}>
           {group.members.map((member) => (
             <View key={member.id} style={styles.memberCard}>
-              <Image 
-                source={{ 
-                  uri: member.user_profile.avatar_url || 
-                  `https://randomuser.me/api/portraits/${member.user_profile.gender === 'Male' ? 'men' : 'women'}/44.jpg` 
-                }} 
-                style={styles.memberAvatar} 
+              <Image
+                source={{
+                  uri: member.user_profile.avatar_url ||
+                  `https://randomuser.me/api/portraits/${member.user_profile.gender === 'Male' ? 'men' : 'women'}/44.jpg`,
+                }}
+                style={styles.memberAvatar}
               />
               <View style={styles.memberInfo}>
                 <View style={styles.memberHeader}>
                   <Text style={styles.memberName}>{member.user_profile.first_name} {member.user_profile.last_name}</Text>
                   <View style={styles.memberDetails}>
                     <View style={[styles.labelContainer, styles.ageLabel]}>
-                      <Text style={styles.labelText}>
-                        {member.user_profile.age_range}
-                      </Text>
+                      <Text style={styles.labelText}>{member.user_profile.age_range}</Text>
                     </View>
                     {member.user_profile.gender && (
                       <View style={[styles.labelContainer, styles.genderLabel]}>
-                        <Text style={styles.labelText}>
-                          {member.user_profile.gender}
-                        </Text>
+                        <Text style={styles.labelText}>{member.user_profile.gender}</Text>
                       </View>
                     )}
                   </View>
                 </View>
                 <View style={styles.supportLevelContainer}>
-                  <View style={[
-                    styles.labelContainer, 
-                    styles.supportLabel,
-                    { backgroundColor: supportLevelColors[member.support_level] }
-                  ]}>
-                    <Text style={styles.supportLabelText}>
-                      {supportLevelLabels[member.support_level]}
-                    </Text>
+                  <View
+                    style={[
+                      styles.labelContainer,
+                      styles.supportLabel,
+                      { backgroundColor: supportLevelColors[member.support_level] },
+                    ]}
+                  >
+                    <Text style={[styles.supportLabelText, { paddingHorizontal: 4 }]}> {supportLevelLabels[member.support_level]}</Text>
                   </View>
                 </View>
                 <Text style={styles.memberBio}>{member.bio}</Text>
@@ -507,7 +519,7 @@ export default function HousingGroupDetail() {
           ))}
         </View>
       </ScrollView>
-      
+
       {/* Footer with looking for more section and join button */}
       <View style={styles.footer}>
         <View style={styles.lookingForMore}>
@@ -518,12 +530,13 @@ export default function HousingGroupDetail() {
             </View>
             <TouchableOpacity style={styles.chatButton}>
               <MessageSquare size={24} color="#007AFF" />
+              <Text style={styles.chatButtonText}>Group Chat</Text>
             </TouchableOpacity>
           </View>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.joinButton} 
+
+        <TouchableOpacity
+          style={styles.joinButton}
           onPress={confirmJoinGroup}
           disabled={joining || userMembership !== null}
         >
@@ -559,6 +572,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
+    width: 40, // Ensure consistent width for alignment
   },
   headerTitle: {
     fontSize: 18,
@@ -567,7 +581,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerRight: {
-    width: 40,
+    padding: 4,
+    width: 40, // Ensure consistent width for alignment
+    alignItems: 'flex-end', // Align icon to the right
   },
   propertyCard: {
     flexDirection: 'row',
@@ -652,27 +668,26 @@ const styles = StyleSheet.create({
   },
   labelContainer: {
     borderRadius: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    paddingVertical: 1,
+    paddingHorizontal: 0, 
+    backgroundColor: lightBlueBackground,
+    alignSelf: 'flex-start', 
   },
   labelText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
+    color: lighterBlue,
+    fontSize: 11,
+    fontWeight: '600',
   },
-  ageLabel: {
-    backgroundColor: '#007AFF',
-  },
-  genderLabel: {
-    backgroundColor: '#007AFF',
-  },
+  ageLabel: {},
+  genderLabel: {},
   supportLabel: {
     // Background color is set dynamically
   },
   supportLabelText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 4, 
   },
   supportLevelContainer: {
     marginBottom: 6,
@@ -701,7 +716,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chatButton: {
-    padding: 6,
+    alignItems: 'center',
+    padding: 4,
+  },
+  chatButtonText: {
+    fontSize: 10,
+    color: '#007AFF',
+    marginTop: 2,
   },
   lookingForText: {
     fontSize: 16,
@@ -756,5 +777,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
-  }
+  },
 });

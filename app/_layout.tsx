@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, useColorScheme, ColorSchemeName } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '../hooks/useFrameworkReady';
 import { AuthProvider } from '../providers/AuthProvider';
 import { AccessibilityProvider, useAccessibility, getHighContrastColors } from '../lib/accessibilityContext';
@@ -24,11 +25,13 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AccessibilityProvider>
-      <AuthProvider>
-        <RootLayoutContent colorScheme={colorScheme} />
-      </AuthProvider>
-    </AccessibilityProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AccessibilityProvider>
+        <AuthProvider>
+          <RootLayoutContent colorScheme={colorScheme} />
+        </AuthProvider>
+      </AccessibilityProvider>
+    </GestureHandlerRootView>
   );
 }
 

@@ -21,3 +21,7 @@ declare module 'react-native-shadow' {
 
   export class BoxShadow extends React.Component<BoxShadowProps> {}
 }
+
+// Add a dummy default export to satisfy Expo Router's requirements
+const DummyComponent = () => null;
+export default DummyComponent;

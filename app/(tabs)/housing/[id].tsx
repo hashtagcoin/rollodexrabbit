@@ -65,6 +65,9 @@ type HousingListing = {
   };
 };
 
+const lighterBlue = '#589AF0';
+const lightBlueBackground = '#EAF2FF';
+
 // Styles must be defined before the component that uses them
 const styles = StyleSheet.create({
   container: {
@@ -163,8 +166,8 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
   priceLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: lighterBlue,
   },
   sdaBadge: {
     flexDirection: 'row',
@@ -184,67 +187,67 @@ const styles = StyleSheet.create({
   },
   features: {
     flexDirection: 'row',
-    gap: 24,
-    marginBottom: 24,
+    gap: 20,
+    marginBottom: 20,
   },
   feature: {
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   featureText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: lighterBlue,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '500',
+    color: lighterBlue,
+    marginBottom: 8,
   },
   locationDetail: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   locationText: {
     flex: 1,
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: lighterBlue,
   },
   availabilityDetail: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   availabilityText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: lighterBlue,
   },
   description: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
+    fontSize: 15,
+    color: '#555',
+    lineHeight: 22,
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#e1f0ff',
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: lightBlueBackground,
+    borderRadius: 12,
   },
   tagText: {
-    fontSize: 14,
-    color: '#007AFF',
+    fontSize: 13,
+    color: lighterBlue,
   },
   virtualTourButton: {
     flexDirection: 'row',
@@ -266,17 +269,17 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#f8f9fa',
     borderRadius: 12,
-    marginBottom: 100,
+    marginBottom: 20,
   },
   providerTitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    fontSize: 13,
+    color: lighterBlue,
+    marginBottom: 2,
   },
   providerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
   },
   footer: {
     position: 'absolute',
@@ -286,7 +289,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e1e1e1',
-    padding: 24,
+    padding: 20,
   },
   footerContent: {
     flexDirection: 'row',
@@ -299,8 +302,8 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
   },
   footerBond: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: lighterBlue,
   },
   applyButton: {
     flexDirection: 'row',
@@ -317,8 +320,8 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   groupsSection: {
-    backgroundColor: '#f5f5f5', // Light grey background
-    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
     marginTop: 16,
     paddingVertical: 16,
   },
@@ -330,9 +333,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   groupsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: '500',
+    color: lighterBlue,
   },
   groupList: {
     paddingHorizontal: 16,

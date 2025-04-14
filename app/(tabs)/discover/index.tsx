@@ -33,7 +33,7 @@ import {
   PersonStanding
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
-import SwipeView from './components/SwipeView';
+import SwipeListView from './components/SwipeListView';
 import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
 import { ShadowCard } from './components/ShadowCard';
 
@@ -220,36 +220,68 @@ export default function DiscoverScreen() {
     }
   }
 
+  // Effect 1: Load listings when category or search changes, reset index
   useEffect(() => {
+    console.log('Effect: Loading listings due to category/search change');
+    setCurrentIndex(0); // Reset index when category/search changes
     loadListings();
-    
-    // Check if returning from detail view with a specific index
-    if (localParams?.returnIndex) {
-      const returnIndex = parseInt(localParams.returnIndex as string, 10);
-      if (!isNaN(returnIndex) && returnIndex >= 0 && returnIndex < listings.length) {
-        setCurrentIndex(returnIndex);
-      }
-    }
-  }, [selectedCategory, searchQuery, localParams?.returnIndex]);
+  }, [selectedCategory, searchQuery]); // Runs on mount and when these change
 
+  // Effect 2: Handle initialization from URL category param (run once or if param provided later)
   useEffect(() => {
-    if (returnViewMode) {
-      if (isViewMode(returnViewMode)) {
-        setViewMode(returnViewMode);
+    const { category: paramCategoryValue } = localParams; // Destructure for stable dependency
+    const paramCategory = Array.isArray(paramCategoryValue) ? paramCategoryValue[0] : paramCategoryValue; // Handle string[]
+
+    if (paramCategory && paramCategory !== selectedCategory) {
+      console.log(`Effect: Setting category from URL param: ${paramCategory}`);
+      setSelectedCategory(paramCategory); // paramCategory is now string | undefined
+      // No need to call loadListings here, Effect 1 will handle it when selectedCategory changes
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localParams?.category]); // Depend only on the relevant param. Disable lint warning as selectedCategory dependency would cause loop.
+
+  // Effect 3: Handle navigation return state (run only when return params change)
+  useEffect(() => {
+    const { returnIndex: paramReturnIndexValue, returnViewMode: paramReturnViewModeValue } = localParams; // Destructure
+    const paramReturnIndex = Array.isArray(paramReturnIndexValue) ? paramReturnIndexValue[0] : paramReturnIndexValue; // Handle string[]
+    const paramReturnViewMode = Array.isArray(paramReturnViewModeValue) ? paramReturnViewModeValue[0] : paramReturnViewModeValue; // Handle string[]
+
+    // Check if we actually have return parameters to process
+    if (paramReturnIndex === undefined && paramReturnViewMode === undefined) {
+      return; // Nothing to do if no return params
+    }
+    console.log('Effect: Handling navigation return params');
+
+    let needsUpdate = false;
+    let newViewMode = viewMode;
+    let newCurrentIndex = currentIndex;
+
+    if (paramReturnViewMode && isViewMode(paramReturnViewMode) && paramReturnViewMode !== viewMode) {
+      console.log(`  Setting view mode from return param: ${paramReturnViewMode}`);
+      newViewMode = paramReturnViewMode;
+      needsUpdate = true;
+    }
+
+    if (paramReturnIndex) {
+      const parsedIndex = parseInt(paramReturnIndex, 10); // paramReturnIndex is now string | undefined
+      // Validate against the CURRENT listings length
+      if (!isNaN(parsedIndex) && listings.length > 0 && parsedIndex >= 0 && parsedIndex < listings.length && parsedIndex !== currentIndex) {
+        console.log(`  Setting index from return param: ${parsedIndex}`);
+        newCurrentIndex = parsedIndex;
+        needsUpdate = true;
+      } else {
+        console.log(`  Ignoring invalid/unchanged returnIndex: ${paramReturnIndex}, current listings length: ${listings.length}`);
       }
     }
-    
-    if (returnIndex) {
-      setCurrentIndex(parseInt(returnIndex));
+
+    // Apply updates if needed
+    if (needsUpdate) {
+        console.log('Applying navigation return state updates');
+        setViewMode(newViewMode);
+        setCurrentIndex(newCurrentIndex);
     }
-    
-    // Set category from params if available
-    if (category) {
-      setSelectedCategory(category);
-    }
-    
-    loadListings();
-  }, [returnViewMode, returnIndex, category]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localParams?.returnIndex, localParams?.returnViewMode]); // Depend on return params AND listings.length for validation. Lint disabled as adding viewMode/currentIndex would cause loops.
 
   async function onRefresh() {
     setRefreshing(true);
@@ -324,11 +356,11 @@ export default function DiscoverScreen() {
   const renderServiceProvider = (item: ListingItem) => {
     // Ensure provider exists
     if (!item.provider) {
-      return <Text style={styles.serviceProvider}>Service Provider</Text>;
+      return <Text style={styles.serviceProvider} selectable={false}>Service Provider</Text>;
     }
     
     return (
-      <Text style={styles.serviceProvider}>
+      <Text style={styles.serviceProvider} selectable={false}>
         {item.provider.business_name || 'Service Provider'}
         {item.provider.verified && (
           <Text style={styles.verifiedBadge}> ✓</Text>
@@ -698,7 +730,7 @@ export default function DiscoverScreen() {
           {isMode(viewMode, 'grid') && renderGridView()}
           {isMode(viewMode, 'list') && renderListView()}
           {isMode(viewMode, 'swipe') && (
-            <SwipeView
+            <SwipeListView
               listings={listings}
               currentIndex={currentIndex}
               setCurrentIndex={setCurrentIndex}

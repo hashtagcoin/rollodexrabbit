@@ -31,3 +31,7 @@ export type HousingGroup = {
   is_active: boolean;
   members: GroupMember[];
 };
+
+// Add a dummy default export to satisfy Expo Router's requirements
+const DummyComponent = () => null;
+export default DummyComponent;

@@ -219,31 +219,31 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
         {isHousingListing(item) && hasGroup && (
           <View style={styles.groupMatchBadgeOverlay}>
             <Users size={14} color="#fff" />
-            <Text style={styles.groupMatchText}>Group Match</Text>
+            <Text style={styles.groupMatchText} selectable={false}>Group Match</Text>
           </View>
         )}
       </View>
       
       <View style={styles.swipeContent}>
-        <Text style={styles.swipeTitle}>{item.title || 'Untitled Listing'}</Text>
+        <Text style={styles.swipeTitle} selectable={false}>{item.title || 'Untitled Listing'}</Text>
         
         {isHousingListing(item) ? (
           <>
             <View style={styles.locationContainer}>
               <MapPin size={16} color="#666" />
-              <Text style={styles.locationText}>
+              <Text style={styles.locationText} selectable={false}>
                 {item.suburb || 'Unknown'}, {item.state || 'Unknown'}
               </Text>
             </View>
             
             <View style={styles.housingFeatures}>
               <View style={styles.featureItem}>
-                <Text style={styles.featureText}>
+                <Text style={styles.featureText} selectable={false}>
                   {item.bedrooms || 0} {item.bedrooms === 1 ? 'Bed' : 'Beds'}
                 </Text>
               </View>
               <View style={styles.featureItem}>
-                <Text style={styles.featureText}>
+                <Text style={styles.featureText} selectable={false}>
                   {item.bathrooms || 0} {item.bathrooms === 1 ? 'Bath' : 'Baths'}
                 </Text>
               </View>
@@ -256,22 +256,22 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
                 return renderServiceProvider(item);
               } catch (e) {
                 console.error('Error rendering service provider:', e);
-                return <Text>Provider information unavailable</Text>;
+                return <Text selectable={false}>Provider information unavailable</Text>;
               }
             })()}
           </View>
         )}
         
-        <Text style={styles.swipeDescription} numberOfLines={3}>
+        <Text style={styles.swipeDescription} numberOfLines={3} selectable={false}>
           {item.description || 'No description available'}
         </Text>
         
         <View style={styles.swipeMeta}>
           <View style={styles.serviceRating}>
             <Star size={16} color="#FFB800" fill="#FFB800" />
-            <Text style={styles.ratingText}>4.9</Text>
+            <Text style={styles.ratingText} selectable={false}>4.9</Text>
           </View>
-          <Text style={styles.swipePrice}>
+          <Text style={styles.swipePrice} selectable={false}>
             ${(() => {
               try {
                 return getItemPrice(item);

@@ -20,7 +20,7 @@ export function navigateToTab(tabName: TabName): void {
   // Handle navigation differently based on tab
   switch(tabName) {
     case 'index':
-      router.replace('/');
+      router.replace('/(tabs)'); // Navigate to the index route within the (tabs) group
       break;
     case 'discover':
       router.replace('/(tabs)/discover');

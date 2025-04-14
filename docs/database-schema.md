@@ -35,6 +35,82 @@ INSERT INTO claims (
 
 **Note:** This table does NOT have a `category` column either. Category information is used in wallet balances but not stored directly in the claims table.
 
+## Housing Module Tables
+
+### housing_listings
+```sql
+CREATE TABLE housing_listings (
+  id uuid PRIMARY KEY,
+  title varchar(255) NOT NULL,
+  description text,
+  weekly_rent numeric NOT NULL,
+  bond_amount numeric,
+  available_from timestamp NOT NULL,
+  bedrooms integer NOT NULL,
+  bathrooms integer NOT NULL,
+  parking_spaces integer NOT NULL,
+  property_type varchar(50) NOT NULL,
+  sda_category varchar(50) NOT NULL,
+  address varchar(255) NOT NULL,
+  suburb varchar(100) NOT NULL,
+  state varchar(50) NOT NULL,
+  postcode varchar(10) NOT NULL,
+  features text[] NOT NULL,
+  accessibility_features text[] NOT NULL,
+  media_urls text[] NOT NULL,
+  virtual_tour_url text,
+  pets_allowed boolean NOT NULL DEFAULT FALSE,
+  ndis_supported boolean NOT NULL DEFAULT TRUE,
+  provider_id uuid REFERENCES providers(id),
+  created_at timestamp DEFAULT NOW(),
+  updated_at timestamp DEFAULT NOW()
+);
+```
+
+### housing_groups
+```sql
+CREATE TABLE housing_groups (
+  id uuid PRIMARY KEY,
+  name varchar(255) NOT NULL,
+  description text,
+  listing_id uuid REFERENCES housing_listings(id),
+  max_members integer NOT NULL DEFAULT 4,
+  creator_id uuid REFERENCES user_profiles(user_id),
+  created_at timestamp DEFAULT NOW(),
+  move_in_date timestamp,
+  is_active boolean DEFAULT TRUE
+);
+```
+
+### housing_group_members
+```sql
+CREATE TABLE housing_group_members (
+  id uuid PRIMARY KEY,
+  group_id uuid REFERENCES housing_groups(id),
+  user_id uuid REFERENCES user_profiles(user_id),
+  join_date timestamp DEFAULT NOW(),
+  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  bio text,
+  support_level varchar(20) NOT NULL DEFAULT 'none' CHECK (support_level IN ('none', 'light', 'moderate', 'high')),
+  gender_preference varchar(20) DEFAULT 'Any',
+  move_in_timeline varchar(50),
+  is_admin boolean DEFAULT FALSE
+);
+```
+
+### housing_group_invites
+```sql
+CREATE TABLE housing_group_invites (
+  id uuid PRIMARY KEY,
+  group_id uuid REFERENCES housing_groups(id),
+  invite_link text,
+  created_by uuid REFERENCES user_profiles(user_id),
+  created_at timestamp DEFAULT NOW(),
+  expires_at timestamp,
+  is_used boolean DEFAULT FALSE
+);
+```
+
 ## Functions and Stored Procedures
 
 ### Booking Function
