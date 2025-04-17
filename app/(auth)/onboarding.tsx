@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ModernImagePicker from '../../components/ModernImagePicker';
 import {
   View,
   Text,
@@ -159,7 +160,7 @@ export default function Onboarding() {
     );
   };
 
-  // For demo purposes
+  // For demo purposes, using a placeholder for image upload
   const handleUploadLogo = () => {
     setLogoUrl('https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop');
   };

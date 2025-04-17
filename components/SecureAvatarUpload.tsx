@@ -8,7 +8,7 @@ import {
   Text,
   Alert,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import ModernImagePicker from './ModernImagePicker';
 import { Ionicons } from '@expo/vector-icons';
 import { uploadMedia, MediaError, MediaErrorType } from '../lib/mediaService';
 
@@ -30,33 +30,13 @@ export default function SecureAvatarUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pickImage = async () => {
-    try {
-      setError(null);
-      
-      // Request permission
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to make this work!');
-        return;
-      }
-
-      // Launch image picker
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        await uploadAvatar(result.assets[0].uri);
-      }
-    } catch (err: unknown) {
-      console.error('Error picking image:', err);
-      setError(err instanceof Error ? err.message : 'Failed to pick image');
+  // Use ModernImagePicker for image selection
+  const handleImagePicked = async (uri: string | null) => {
+    if (uri) {
+      await uploadAvatar(uri);
     }
   };
+
 
   const uploadAvatar = async (uri: string) => {
     try {
@@ -159,26 +139,14 @@ export default function SecureAvatarUpload({
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={pickImage} disabled={uploading}>
-        <View style={styles.avatarContainer}>
-          {currentAvatarUrl ? (
-            <Image source={{ uri: currentAvatarUrl }} style={styles.avatar} />
-          ) : (
-            <Ionicons name="person" size={size / 2} color="#888" />
-          )}
-          
-          {uploading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#fff" />
-            </View>
-          )}
-          
-          <View style={styles.uploadIcon}>
-            <Ionicons name="camera" size={20} color="#fff" />
-          </View>
-        </View>
-      </TouchableOpacity>
-      
+      <ModernImagePicker
+        imageUri={currentAvatarUrl}
+        onImagePicked={handleImagePicked}
+        size={size}
+        shape="circle"
+        label="Upload Avatar"
+        disabled={uploading}
+      />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );

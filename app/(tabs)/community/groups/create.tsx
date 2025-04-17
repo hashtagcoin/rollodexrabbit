@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
-import * as ImagePicker from 'expo-image-picker';
+import ModernImagePicker from '../../../../components/ModernImagePicker';
 import {
   Heart,
   Chrome as Home,
@@ -50,126 +50,16 @@ export default function CreateGroup() {
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [avatarUploading, setAvatarUploading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{coverUrl?: string, avatarUrl?: string}>({});
   const [eventDate, setEventDate] = useState<string | null>(null);
   const [eventLocation, setEventLocation] = useState('');
 
-  const handleImagePick = async (type: 'cover' | 'avatar', source: 'library' | 'camera' = 'library') => {
-    try {
-      // Set the appropriate loading state
-      if (type === 'cover') {
-        setCoverUploading(true);
-      } else {
-        setAvatarUploading(true);
-      }
-      
-      // Clear previous error
-      setError(null);
-      
-      // Request appropriate permissions based on source
-      let permissionResult;
-      
-      if (source === 'library') {
-        permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-          setError('Permission to access media library is required');
-          return;
-        }
-      } else {
-        permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permissionResult.granted) {
-          setError('Permission to access camera is required');
-          return;
-        }
-      }
-      
-      // Launch image picker or camera based on source
-      const pickerMethod = source === 'library' 
-        ? ImagePicker.launchImageLibraryAsync 
-        : ImagePicker.launchCameraAsync;
-      
-      // Configure options based on image type
-      const aspect: [number, number] = type === 'cover' ? [16, 9] : [1, 1];
-      
-      const result = await pickerMethod({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect,
-        quality: 0.8,
-        base64: true,
-        exif: false,
-      });
+  const handleCoverPicked = (uri: string | null) => {
+    setCoverImage(uri);
+  };
 
-      if (result.canceled) {
-        return;
-      }
-      
-      // Get the selected asset
-      const image = result.assets[0];
-      if (!image || !image.uri || !image.base64) {
-        throw new Error('No image or base64 data selected');
-      }
-      
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-      
-      // Determine file extension and content type
-      const fileExt = image.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const contentType = fileExt === 'jpg' ? 'image/jpeg' : `image/${fileExt}`;
-      
-      // Create a unique file path
-      const filePath = `${type}/${user.id}_${Date.now()}.${fileExt}`;
-      
-      // Process base64 data - ensure we don't have any prefixes
-      let base64Data = image.base64;
-      if (base64Data.includes('base64,')) {
-        base64Data = base64Data.split('base64,')[1];
-      }
-      
-      // Upload directly using base64 data
-      const { data, error } = await supabase.storage
-        .from(type === 'cover' ? 'group-posts' : 'group-avatars')
-        .upload(filePath, decode(base64Data), {
-          contentType,
-          upsert: true
-        });
-        
-      if (error) {
-        throw new Error(`Failed to upload file: ${error.message}`);
-      }
-      
-      // Get the public URL
-      const { data: urlData } = supabase.storage
-        .from(type === 'cover' ? 'group-posts' : 'group-avatars')
-        .getPublicUrl(filePath);
-        
-      const imageUrl = urlData.publicUrl;
-      
-      // Store debug info and update state
-      if (type === 'cover') {
-        setDebugInfo(prev => ({ ...prev, coverUrl: imageUrl }));
-        setCoverImage(imageUrl);
-      } else {
-        setDebugInfo(prev => ({ ...prev, avatarUrl: imageUrl }));
-        setAvatarImage(imageUrl);
-      }
-      
-      Alert.alert('Success', `${type === 'cover' ? 'Cover' : 'Avatar'} image uploaded successfully`);
-      
-    } catch (err: any) {
-      setError(err.message || 'Failed to pick or upload image');
-      Alert.alert('Error', err.message || 'Failed to pick or upload image');
-    } finally {
-      // Clear loading state
-      if (type === 'cover') {
-        setCoverUploading(false);
-      } else {
-        setAvatarUploading(false);
-      }
-    }
+  const handleAvatarPicked = (uri: string | null) => {
+    setAvatarImage(uri);
   };
 
   const handleAddTag = () => {
@@ -232,6 +122,29 @@ export default function CreateGroup() {
 
       if (memberError) throw memberError;
 
+      // --- Add random existing users as members ---
+      // Fetch up to 10 random user IDs from user_profiles, excluding the creator
+      const { data: randomUsers, error: usersError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .neq('id', user.id)
+        .order('random()')
+        .limit(10);
+
+      if (usersError) throw usersError;
+
+      if (randomUsers && randomUsers.length > 0) {
+        const memberRows = randomUsers.map((u: { id: string }) => ({
+          group_id: data.id,
+          user_id: u.id,
+          role: 'member',
+        }));
+        const { error: randomMemberError } = await supabase
+          .from('group_members')
+          .insert(memberRows);
+        if (randomMemberError) throw randomMemberError;
+      }
+
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'An error occurred while creating the group');
@@ -253,90 +166,32 @@ export default function CreateGroup() {
         )}
 
         <View style={styles.imageSection}>
-          {coverUploading ? (
-            <View style={styles.imageUpload}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.uploadingText}>Uploading cover image...</Text>
-            </View>
-          ) : coverImage ? (
-            <View style={styles.coverImageContainer}>
-              <Image 
-                source={{ uri: coverImage }} 
-                style={styles.coverPreview} 
-                onError={(e) => setError('Cover image loading error')}
+          <View style={styles.coverImageContainer}>
+            <ModernImagePicker
+              imageUri={coverImage}
+              onImagePicked={handleCoverPicked}
+              aspect={[16,9]}
+              crop={true}
+              size={undefined} // Let style control size
+              shape="rounded"
+              label={undefined}
+              style={styles.coverImage}
+              icon={<ImageIcon size={32} color="#fff" />} // Icon overlay
+            />
+            <View style={styles.avatarOverlayContainer}>
+              <ModernImagePicker
+                imageUri={avatarImage}
+                onImagePicked={handleAvatarPicked}
+                aspect={[1,1]}
+                crop={true}
+                size={80}
+                shape="circle"
+                label={undefined}
+                style={styles.avatarImage}
+                icon={<ImageIcon size={24} color="#007AFF" />} // Icon overlay
               />
-              <TouchableOpacity 
-                style={styles.changeImageBtn}
-                onPress={() => handleImagePick('cover', 'library')}
-              >
-                <Text style={styles.changeImageText}>Change Cover</Text>
-              </TouchableOpacity>
-              
-              {/* Avatar overlay on cover image */}
-              <View style={styles.avatarOverlayContainer}>
-                {avatarUploading ? (
-                  <View style={styles.avatarPlaceholder}>
-                    <ActivityIndicator size="small" color="#007AFF" />
-                  </View>
-                ) : avatarImage ? (
-                  <Image 
-                    source={{ uri: avatarImage }} 
-                    style={styles.avatarPreview} 
-                    onError={(e) => setError('Avatar image loading error')}
-                  />
-                ) : (
-                  <TouchableOpacity 
-                    style={styles.avatarPlaceholder}
-                    onPress={() => handleImagePick('avatar', 'library')}
-                  >
-                    <ImageIcon size={24} color="#666" />
-                  </TouchableOpacity>
-                )}
-              </View>
             </View>
-          ) : (
-            <TouchableOpacity 
-              style={styles.imageUpload}
-              onPress={() => handleImagePick('cover', 'library')}
-            >
-              <ImageIcon size={24} color="#666" />
-              <Text style={styles.imageUploadText}>Add Cover Image</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Only show the add/change avatar button if no cover image */}
-          {!coverImage && (
-            <View style={styles.avatarContainer}>
-              {avatarUploading ? (
-                <View style={styles.avatarPlaceholder}>
-                  <ActivityIndicator size="small" color="#007AFF" />
-                </View>
-              ) : avatarImage ? (
-                <Image 
-                  source={{ uri: avatarImage }} 
-                  style={styles.avatarPreview} 
-                  onError={(e) => setError('Avatar image loading error')}
-                />
-              ) : (
-                <TouchableOpacity 
-                  style={styles.avatarPlaceholder}
-                  onPress={() => handleImagePick('avatar', 'library')}
-                >
-                  <ImageIcon size={24} color="#666" />
-                </TouchableOpacity>
-              )}
-              
-              <TouchableOpacity 
-                style={styles.avatarUpload}
-                onPress={() => handleImagePick('avatar', 'library')}
-                disabled={avatarUploading}
-              >
-                <Text style={styles.avatarUploadText}>
-                  {avatarImage ? 'Change Icon' : 'Add Group Icon'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          </View>
         </View>
 
         <Text style={styles.label}>Name *</Text>
@@ -529,20 +384,39 @@ const styles = StyleSheet.create({
   },
   coverImageContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 32,
+    width: '100%',
+    alignSelf: 'center',
   },
-  coverPreview: {
-    height: 200,
-    borderRadius: 12,
+  coverImage: {
+    width: '100%',
+    aspectRatio: 16/9,
+    borderRadius: 16,
+    backgroundColor: '#e5e5e5',
+    overflow: 'hidden',
   },
   avatarOverlayContainer: {
     position: 'absolute',
-    bottom: -30,
-    left: 16,
+    left: '50%',
+    bottom: -40,
+    transform: [{ translateX: -40 }], // half avatar size
+    zIndex: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: '#fff',
+    backgroundColor: '#f5f5f5',
   },
   avatarContainer: {
-    alignItems: 'center',
-    marginTop: 16,
+    display: 'none', // Hide old avatar container
   },
   avatarPlaceholder: {
     width: 80,

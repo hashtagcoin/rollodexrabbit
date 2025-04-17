@@ -225,6 +225,7 @@ export default function GroupDetails() {
       }
 
       setGroup(groupData);
+      setMembers(groupData.members || []);
 
       // Check if current user is a member
       if (currentUser) {
@@ -818,7 +819,21 @@ export default function GroupDetails() {
       console.log('Using test events data only');
       
       // Create test events for the group
-      const testEvents = createTestGroupEvents(id as string);
+      const allowedStatuses = ['upcoming', 'ongoing', 'completed', 'cancelled'] as const;
+      type AllowedStatus = typeof allowedStatuses[number];
+      const testEvents = createTestGroupEvents(id as string).map(evt => ({
+        ...evt,
+        location: typeof evt.location === 'string' ? { address: evt.location } : evt.location,
+        created_by: typeof evt.created_by === 'object' && evt.created_by !== null ? evt.created_by.id : evt.created_by,
+        status: allowedStatuses.includes(evt.status as AllowedStatus) ? evt.status as AllowedStatus : 'upcoming',
+        organizer: Array.isArray(evt.organizer) ? evt.organizer : [evt.organizer],
+        participants: Array.isArray(evt.participants)
+          ? evt.participants.map(p => ({
+              user: p.user ? [p.user] : null,
+              status: ['going', 'maybe', 'not_going'].includes(p.status) ? p.status as 'going' | 'maybe' | 'not_going' : 'going'
+            }))
+          : []
+      }));
       
       // Set the events in state
       setEvents(testEvents);

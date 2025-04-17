@@ -59,15 +59,16 @@ export default function GroupsScreen() {
         `)
         .order('created_at', { ascending: false });
 
-      let filteredGroups = groupsData || [];
+      let filteredGroups = (groupsData || []).map(group => ({
+        ...group,
+        type: group.type || 'interest', // fallback for legacy/null types
+      }));
       if (filter !== 'all') {
         filteredGroups = filteredGroups.filter((group) => group.type === filter);
       }
-
       if (error) {
         console.error('Error loading groups:', error);
       }
-
       setGroups(filteredGroups);
     } catch (error) {
       console.error('Error loading groups:', error);
@@ -207,7 +208,14 @@ export default function GroupsScreen() {
                   />
                   <View style={styles.groupTextContent}>
                     <View style={styles.groupHeader}>
-                      <Text style={styles.groupName}>{group.name}</Text>
+                      <Text style={styles.groupName}>{group.name}
+            {group.type === 'housing' && (
+              <Text style={styles.housingTag}>  [Housing]</Text>
+            )}
+            {group.type === 'event' && (
+              <Text style={styles.eventTag}>  [Event]</Text>
+            )}
+          </Text>
                       {!group.is_public && <Lock size={16} color="#666" style={styles.privacyIcon} />}
                     </View>
                     <Text style={styles.groupDescription} numberOfLines={2}>
@@ -258,6 +266,18 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
+  housingTag: {
+    color: '#00B894',
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: 'bold',
+  },
+  eventTag: {
+    color: '#FF9F43',
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: 'bold',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
