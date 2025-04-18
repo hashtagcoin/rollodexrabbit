@@ -36,15 +36,16 @@ type ProfileBase = {
 type GroupMember = {
   role: 'admin' | 'member';
   joined_at: string;
-  user: ProfileBase[] | null; // Use ProfileBase
+  user: ProfileBase | null; // Use ProfileBase
 };
 
 type Subgroup = {
   id: string;
+  group_id: string;
   name: string;
   description: string | null;
   created_at: string;
-  created_by: ProfileBase[] | null;
+  created_by: ProfileBase | null;
 };
 
 type GroupPostReaction = {
@@ -53,7 +54,7 @@ type GroupPostReaction = {
   user_id: string;
   reaction_type: 'like' | 'love' | 'laugh' | 'sad' | 'angry';
   created_at: string;
-  user: ProfileBase[] | null;
+  user: ProfileBase | null;
 };
 
 type GroupPostComment = {
@@ -62,7 +63,7 @@ type GroupPostComment = {
   user_id: string;
   content: string;
   created_at: string;
-  user: ProfileBase[] | null;
+  user: ProfileBase | null;
 };
 
 type GroupPost = {
@@ -72,7 +73,7 @@ type GroupPost = {
   media_type: 'image' | 'video' | null;
   created_at: string;
   user_id: string;
-  author: ProfileBase[] | null;
+  author: ProfileBase | null;
   reactions?: GroupPostReaction[];
   comments?: GroupPostComment[];
   _count?: {
@@ -82,42 +83,38 @@ type GroupPost = {
   status: 'approved' | 'pending';
 };
 
+type GroupEventParticipant = {
+  user: ProfileBase | null;
+  status: 'going' | 'maybe' | 'not_going';
+}
+
 type GroupEvent = {
   id: string;
   group_id: string;
   title: string;
-  description: string;
+  description: string | null;
   start_time: string;
   end_time: string;
-  location: {
-    address?: string;
-    coordinates?: {
-      latitude: number;
-      longitude: number;
-    };
-    venue_name?: string;
-  } | null;
+  location: { address: string } | null;
+  cover_image_url: string | null;
   max_participants: number | null;
   created_by: string;
   created_at: string;
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
-  organizer: ProfileBase[] | null;
-  participants: {
-    user: ProfileBase[] | null;
-    status: 'going' | 'maybe' | 'not_going';
-  }[];
+  organizer: ProfileBase | null;
+  participants: GroupEventParticipant[];
 };
 
 type Group = {
   id: string;
   name: string;
-  type: 'interest' | 'housing';
+  type: 'interest' | 'housing' | 'event';
   description: string;
   created_at: string;
   avatar_url: string | null;
   cover_image_url: string | null;
   is_public: boolean;
-  owner: ProfileBase[] | null; // Use ProfileBase
+  owner: ProfileBase | null;
   rules: string | null;
   category: string | null;
   max_members: number | null;
@@ -127,8 +124,9 @@ type Group = {
     requireApproval: boolean;
     [key: string]: any;
   } | null;
-  posts: GroupPost[] | null;
-  events: GroupEvent[] | null;
+  posts?: GroupPost[] | null;
+  events?: GroupEvent[] | null;
+  members?: GroupMember[];
 };
 
 interface NewEventState {
@@ -136,14 +134,7 @@ interface NewEventState {
   description: string;
   startTime: Date;
   endTime: Date;
-  location: {
-    address?: string;
-    coordinates?: {
-      latitude: number;
-      longitude: number;
-    };
-    venue_name?: string;
-  } | null;
+  location: { address: string } | null;
   maxParticipants: string;
 }
 
@@ -230,14 +221,14 @@ export default function GroupDetails() {
       // Check if current user is a member
       if (currentUser) {
         const isMemberOfGroup = groupData.members?.some(
-          (member: GroupMember) => member.user?.[0]?.id === currentUser.id
+          (member: GroupMember) => member.user?.id === currentUser.id
         );
         setIsMember(!!isMemberOfGroup);
 
         // Check if current user is an admin
         const isAdmin = groupData.members?.some(
           (member: GroupMember) => 
-            member.user?.[0]?.id === currentUser.id && 
+            member.user?.id === currentUser.id && 
             member.role === 'admin'
         );
         setIsGroupAdmin(!!isAdmin);
@@ -823,13 +814,14 @@ export default function GroupDetails() {
       type AllowedStatus = typeof allowedStatuses[number];
       const testEvents = createTestGroupEvents(id as string).map(evt => ({
         ...evt,
+        cover_image_url: null, // Corrected: Assign null directly as test data lacks this field
         location: typeof evt.location === 'string' ? { address: evt.location } : evt.location,
         created_by: typeof evt.created_by === 'object' && evt.created_by !== null ? evt.created_by.id : evt.created_by,
         status: allowedStatuses.includes(evt.status as AllowedStatus) ? evt.status as AllowedStatus : 'upcoming',
-        organizer: Array.isArray(evt.organizer) ? evt.organizer : [evt.organizer],
+        organizer: evt.organizer || null, // Correct: Assign object or null, remove array wrap
         participants: Array.isArray(evt.participants)
           ? evt.participants.map(p => ({
-              user: p.user ? [p.user] : null,
+              user: p.user || null, // Correct: Assign object or null, remove array wrap
               status: ['going', 'maybe', 'not_going'].includes(p.status) ? p.status as 'going' | 'maybe' | 'not_going' : 'going'
             }))
           : []
@@ -928,7 +920,8 @@ export default function GroupDetails() {
   };
 
   const renderMember = ({ item }: { item: GroupMember }) => {
-    const memberProfile = item.user?.[0];
+    // Access profile directly as an object, not an array element
+    const memberProfile = item.user; 
     const avatarUrl = memberProfile?.avatar_url || 'https://placehold.co/100x100/e1f0ff/333333?text=Usr';
     const memberName = memberProfile?.full_name || 'Unknown Member';
     const memberId = memberProfile?.id;
@@ -953,7 +946,7 @@ export default function GroupDetails() {
   };
 
   const renderSubgroup = ({ item }: { item: Subgroup }) => {
-    const creatorProfile = item.created_by?.[0];
+    const creatorProfile = item.created_by; // Access profile directly as an object, not an array element
     const creatorName = creatorProfile?.full_name || 'Unknown';
 
     return (
@@ -976,11 +969,11 @@ export default function GroupDetails() {
       <View style={styles.postContainer} key={post.id}>
         <View style={styles.postHeader}>
           <Image
-            source={post.author?.[0]?.avatar_url ? { uri: post.author[0].avatar_url } : require('../../../../assets/images/default-avatar.png')}
+            source={post.author?.avatar_url ? { uri: post.author.avatar_url } : require('../../../../assets/images/default-avatar.png')}
             style={styles.postAuthorAvatar}
           />
           <View style={styles.postHeaderInfo}>
-            <Text style={styles.postAuthorName}>{post.author?.[0]?.full_name || 'Unknown'}</Text>
+            <Text style={styles.postAuthorName}>{post.author?.full_name || 'Unknown'}</Text>
             <Text style={styles.postTime}>{new Date(post.created_at).toLocaleDateString()}</Text>
           </View>
           {(post.user_id === currentUser?.id || isGroupAdmin) && (
@@ -1133,14 +1126,14 @@ export default function GroupDetails() {
             {postComments.map(comment => (
               <View key={comment.id} style={styles.commentItem}>
                 <Image
-                  source={comment.user?.[0]?.avatar_url
-                    ? { uri: comment.user[0].avatar_url }
+                  source={comment.user?.avatar_url
+                    ? { uri: comment.user.avatar_url }
                     : require('../../../../assets/images/default-avatar.png')}
                   style={styles.commentAuthorAvatar}
                 />
                 <View style={styles.commentContent}>
                   <Text style={styles.commentAuthorName}>
-                    {comment.user?.[0]?.full_name || 'Unknown'}
+                    {comment.user?.full_name || 'Unknown'}
                   </Text>
                   <Text style={styles.commentText}>{comment.content}</Text>
                 </View>
@@ -1169,7 +1162,7 @@ export default function GroupDetails() {
   };
 
   const renderEvent = (event: GroupEvent) => {
-    const userRSVP = event.participants?.find(p => p.user?.[0]?.id === currentUser?.id);
+    const userRSVP = event.participants?.find(p => p.user?.id === currentUser?.id);
     const goingCount = event.participants?.filter(p => p.status === 'going').length || 0;
     const isFull = event.max_participants !== null && goingCount >= event.max_participants;
 
@@ -1195,7 +1188,7 @@ export default function GroupDetails() {
           {event.location && (
             <View style={styles.eventDetailRow}>
               <Ionicons name="location-outline" size={16} color="#666" />
-              <Text style={styles.eventDetailText}>{event.location.address || event.location.venue_name}</Text>
+              <Text style={styles.eventDetailText}>{event.location.address}</Text>
             </View>
           )}
 
@@ -1210,7 +1203,7 @@ export default function GroupDetails() {
           <View style={styles.eventDetailRow}>
             <Ionicons name="person-outline" size={16} color="#666" />
             <Text style={styles.eventDetailText}>
-              Organized by {event.organizer?.[0]?.full_name || 'Unknown'}
+              Organized by {event.organizer?.full_name || 'Unknown'}
             </Text>
           </View>
         </View>
@@ -1360,7 +1353,7 @@ export default function GroupDetails() {
     );
   }
 
-  const ownerProfile = group.owner?.[0];
+  const ownerProfile = group.owner; // Access profile directly as an object, not an array element
   const ownerName = ownerProfile?.full_name || 'Unknown Owner';
   const ownerAvatar = ownerProfile?.avatar_url || 'https://placehold.co/100x100/e1f0ff/333333?text=Own';
   const ownerId = ownerProfile?.id;
@@ -1448,7 +1441,7 @@ export default function GroupDetails() {
                 <FlatList
                   data={members}
                   renderItem={renderMember}
-                  keyExtractor={(item, index) => item.user?.[0]?.id || `member-${index}`}
+                  keyExtractor={(item, index) => item.user?.id || `member-${index}`}
                   ListEmptyComponent={<Text style={styles.emptyText}>No members found.</Text>}
                   scrollEnabled={false}
                 />

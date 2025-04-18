@@ -25,7 +25,7 @@ type Group = {
   owner: {
     full_name: string;
     avatar_url: string;
-  }[] | null;
+  } | null;
   event_date?: string;
   event_location?: string;
 };
@@ -39,7 +39,7 @@ export default function GroupsScreen() {
   async function loadGroups() {
     try {
       setLoading(true);
-      const { data: groupsData, error } = await supabase
+      const { data, error } = await supabase
         .from('groups')
         .select(`
           id,
@@ -59,16 +59,27 @@ export default function GroupsScreen() {
         `)
         .order('created_at', { ascending: false });
 
-      let filteredGroups = (groupsData || []).map(group => ({
-        ...group,
-        type: group.type || 'interest', // fallback for legacy/null types
-      }));
-      if (filter !== 'all') {
-        filteredGroups = filteredGroups.filter((group) => group.type === filter);
-      }
+      console.log('Raw data from Supabase:', JSON.stringify(data, null, 2)); // Log raw data
+
+      const groupsData = data || [];
+
       if (error) {
         console.error('Error loading groups:', error);
       }
+
+      const transformedGroups: Group[] = groupsData.map((group: any) => ({
+        ...group,
+        type: group.type || 'interest', // fallback for legacy/null types
+        member_count: group.member_count || [], // Ensure member_count is always an array
+      }));
+
+      let filteredGroups = transformedGroups;
+      if (filter !== 'all') {
+        filteredGroups = transformedGroups.filter((group) => {
+          return group.type === filter;
+        });
+      }
+
       setGroups(filteredGroups);
     } catch (error) {
       console.error('Error loading groups:', error);
@@ -248,11 +259,11 @@ export default function GroupsScreen() {
 
                   <View style={styles.owner}>
                     <Image
-                      source={{ uri: group.owner?.[0]?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
+                      source={{ uri: group.owner?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
                       style={styles.ownerAvatar}
                     />
                     <Text style={styles.ownerName}>
-                      by {group.owner?.[0]?.full_name ?? 'Unknown Owner'}
+                      by {group.owner?.full_name ?? 'Unknown Owner'}
                     </Text>
                   </View>
                 </View>
