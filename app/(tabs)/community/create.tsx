@@ -15,6 +15,7 @@ import {
   Camera,
   CircleAlert as AlertCircle,
 } from 'lucide-react-native';
+import ModernImagePicker from '../../../components/ModernImagePicker';
 
 export default function CreatePost() {
   const [loading, setLoading] = useState(false);
@@ -54,11 +55,6 @@ export default function CreatePost() {
     }
   };
 
-  // For demo purposes, using a placeholder image
-  const handleAddImage = () => {
-    setMediaUrl('https://images.unsplash.com/photo-1518791841217-8f162f1e1131?q=80&w=2070&auto=format&fit=crop');
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -96,24 +92,14 @@ export default function CreatePost() {
         numberOfLines={4}
       />
 
-      {mediaUrl && (
-        <Image source={{ uri: mediaUrl }} style={styles.preview} />
-      )}
+      <ModernImagePicker
+        imageUri={mediaUrl}
+        onImagePicked={setMediaUrl}
+        label="Add Photo"
+        aspect={[4,3]}
+        crop={true}
+      />
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleAddImage}
-        >
-          <ImageIcon size={24} color="#007AFF" />
-          <Text style={styles.actionText}>Add Photo</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Camera size={24} color="#007AFF" />
-          <Text style={styles.actionText}>Take Photo</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

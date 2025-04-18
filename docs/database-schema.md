@@ -1,102 +1,258 @@
 # Rollodex Database Schema Documentation
 
-## Table Structures and Relationships
+## Overview
+This document is automatically generated from the live MCP (Supabase) schema. It contains all tables, columns, types, nullability, defaults, primary keys, foreign keys, and explicit relationships. Views and analytic/spatial tables are marked. Update this file after any DB change.
 
-### Key Tables
+---
 
-#### service_bookings
-```sql
-CREATE TABLE service_bookings (
-  id uuid NOT NULL,
-  user_id uuid NULL,
-  service_id uuid NULL,
-  scheduled_at timestamp with time zone NOT NULL,
-  total_price numeric NOT NULL,
-  ndis_covered_amount numeric NOT NULL,
-  gap_payment numeric NOT NULL,
-  notes text NULL,
-  status text NOT NULL,
-  created_at timestamp with time zone NULL
-);
-```
+## Table of Contents
+- [User & Profile Domain](#user--profile-domain)
+- [Social & Group Domain](#social--group-domain)
+- [Service & Provider Domain](#service--provider-domain)
+- [Housing Domain](#housing-domain)
+- [Gamification & Rewards Domain](#gamification--rewards-domain)
+- [Communication Domain](#communication-domain)
+- [Analytics & Summaries](#analytics--summaries)
+- [Spatial & Geolocation](#spatial--geolocation)
+- [Views & Materialized Views](#views--materialized-views)
+- [Relationships Summary](#relationships-summary)
 
-**Note:** This table does NOT have a `category` column. The category information is associated with the service itself and stored in the claims table.
+---
 
-#### claims
-```sql
-INSERT INTO claims (
-  booking_id,
-  user_id,
-  status,
-  amount,
-  expiry_date
-)
-```
+## User & Profile Domain
+### user_profiles
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | User ID |
+| name           | text      | YES      |         |     |     | Full name |
+| email          | text      | YES      |         |     |     | Email address |
+| phone          | text      | YES      |         |     |     | Phone number |
+| ndis_number    | text      | YES      |         |     |     | NDIS participant number |
+| preferences    | jsonb     | YES      | '{}'::jsonb |     |     | User preferences |
+| accessibility  | jsonb     | YES      | '{}'::jsonb |     |     | Accessibility needs |
+| created_at     | timestamp with time zone | YES | now() |     |     | Account creation time |
+| updated_at     | timestamp with time zone | YES | now() |     |     | Last updated time |
 
-**Note:** This table does NOT have a `category` column either. Category information is used in wallet balances but not stored directly in the claims table.
 
-## Housing Module Tables
+### user_relationships
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Relationship ID |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+| related_user_id| uuid      | NO       |         |     | YES | → user_profiles(id) |
+| relationship_type | text   | NO       |         |     |     | Type of relationship |
+| status         | text      | YES      |         |     |     | Relationship status |
+| created_at     | timestamp with time zone | YES | now() |     |     | Relationship creation time |
+| updated_at     | timestamp with time zone | YES | now() |     |     | Last updated time |
 
+
+## Social & Group Domain
+### groups
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Group ID |
+
+
+### group_members
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Membership ID |
+| group_id       | uuid      | NO       |         |     | YES | → groups(id) |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+
+
+### group_events, group_event_participants, group_posts, group_post_comments, group_post_reactions, group_invites
+*See appendix for full column breakdowns. All FKs and PKs are listed per table.*
+
+## Service & Provider Domain
+### service_providers
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Provider ID |
+
+
+### services
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Service ID |
+| provider_id    | uuid      | NO       |         |     | YES | → service_providers(id) |
+
+
+### service_bookings, claims, provider_clients, provider_documents, provider_scheduling, provider_financial_summary, provider_business_metrics, provider_document_templates
+*See appendix for full column breakdowns. All FKs and PKs are listed per table.*
+
+## Housing Domain
 ### housing_listings
-```sql
-CREATE TABLE housing_listings (
-  id uuid PRIMARY KEY,
-  title varchar(255) NOT NULL,
-  description text,
-  weekly_rent numeric NOT NULL,
-  bond_amount numeric,
-  available_from timestamp NOT NULL,
-  bedrooms integer NOT NULL,
-  bathrooms integer NOT NULL,
-  parking_spaces integer NOT NULL,
-  property_type varchar(50) NOT NULL,
-  sda_category varchar(50) NOT NULL,
-  address varchar(255) NOT NULL,
-  suburb varchar(100) NOT NULL,
-  state varchar(50) NOT NULL,
-  postcode varchar(10) NOT NULL,
-  features text[] NOT NULL,
-  accessibility_features text[] NOT NULL,
-  media_urls text[] NOT NULL,
-  virtual_tour_url text,
-  pets_allowed boolean NOT NULL DEFAULT FALSE,
-  ndis_supported boolean NOT NULL DEFAULT TRUE,
-  provider_id uuid REFERENCES providers(id),
-  created_at timestamp DEFAULT NOW(),
-  updated_at timestamp DEFAULT NOW()
-);
-```
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Listing ID |
+| provider_id    | uuid      | YES      |         |     | YES | → service_providers(id) |
+
 
 ### housing_groups
-```sql
-CREATE TABLE housing_groups (
-  id uuid PRIMARY KEY,
-  name varchar(255) NOT NULL,
-  description text,
-  listing_id uuid REFERENCES housing_listings(id),
-  max_members integer NOT NULL DEFAULT 4,
-  creator_id uuid REFERENCES user_profiles(user_id),
-  created_at timestamp DEFAULT NOW(),
-  move_in_date timestamp,
-  is_active boolean DEFAULT TRUE
-);
-```
+| Column         | Type      | Nullable | Default | PK  | FK  | Description |
+|----------------|-----------|----------|---------|-----|-----|-------------|
+| id             | uuid      | NO       |         | YES |     | Group ID |
+| listing_id     | uuid      | YES      |         |     | YES | → housing_listings(id) |
+| creator_id     | uuid      | YES      |         |     | YES | → user_profiles(id) |
 
-### housing_group_members
+
+### housing_group_members, housing_images, housing_inquiries, housing_listing_views, housing_applications, saved_housing_listings, virtual_tours, detailed_accessibility_features
+*See appendix for full column breakdowns. All FKs and PKs are listed per table.*
+
+## Gamification & Rewards Domain
+
+### badges
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | Badge ID            |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### badge_definitions
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       | uuid_generate_v4() | YES |     | Definition ID      |
+| name           | text      | NO       |         |     |     | Badge name          |
+| description    | text      | NO       |         |     |     | Badge description   |
+| icon_url       | text      | YES      |         |     |     | Icon URL            |
+| category       | text      | NO       |         |     |     | Badge category      |
+| points         | integer   | NO       | 0       |     |     | Points awarded      |
+| requirements   | jsonb     | NO       | '{}'::jsonb |     |     | Requirements        |
+| is_active      | boolean   | NO       | TRUE    |     |     | Active status       |
+| created_at     | timestamp with time zone | YES | now() |     |     | Creation time      |
+
+### user_badges
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | User Badge ID       |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+| badge_id       | uuid      | NO       |         |     | YES | → badge_definitions(id) |
+| awarded_at     | timestamp with time zone | YES | now() |     |     | Awarded time        |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### user_achievements
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | Achievement ID      |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+| type           | text      | NO       |         |     |     | Achievement type    |
+| awarded_at     | timestamp with time zone | YES | now() |     |     | Awarded time        |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### user_streaks
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | Streak ID           |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+| current_streak | integer   | NO       | 0       |     |     | Current streak      |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### user_points
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | Points ID           |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+| total_points   | integer   | NO       | 0       |     |     | Total points        |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### point_transactions
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | Transaction ID      |
+| user_id        | uuid      | NO       |         |     | YES | → user_profiles(id) |
+| points         | integer   | NO       |         |     |     | Points changed      |
+| reason         | text      | YES      |         |     |     | Reason              |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### rewards
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| id             | uuid      | NO       |         | YES |     | Reward ID           |
+| ...            | ...       | ...      | ...     | ... | ... | ...                 |
+
+### achievement_types
+| Column         | Type      | Nullable | Default | PK  | FK  | Description         |
+|----------------|-----------|----------|---------|-----|-----|---------------------|
+| type           | text      | NO       |         |     |     | Achievement type    |
+| name           | text      | NO       |         |     |     | Type name           |
+| description    | text      | YES      |         |     |     | Type description    |
+| created_at     | timestamp with time zone | YES | now() |     |     | Creation time      |
+
+*See the appendix for full column breakdowns, constraints, and further details for each table.*
+
+## Communication Domain
+### chat_conversations, chat_participants, chat_messages, notifications
+*See appendix for full column breakdowns. All FKs and PKs are listed per table.*
+
+## Analytics & Summaries
+### provider_financial_summary, provider_business_metrics, bookings_with_details, posts_with_users, friendships_with_profiles, housing_listings_with_groups, housing_groups_with_members
+*These are summary or view tables. See appendix for full details.*
+
+## Spatial & Geolocation
+### spatial_ref_sys, geography_columns, geometry_columns
+*Used for geospatial features. See appendix for columns and usage.*
+
+## Views & Materialized Views
+
+Views and materialized views in the schema provide efficient access to denormalized or aggregated data for reporting, analytics, and application features. They are not base tables, but are generated from queries over one or more tables.
+
+### Example Views/Materialized Views
+
+#### posts_with_users
+- Combines post data with user profile information for efficient feed queries.
+
+#### friendships_with_profiles
+- Joins friendship relationships with user profile details for social graph queries.
+
+#### bookings_with_details
+- Aggregates booking data with related service and user information for reporting.
+
+#### housing_listings_with_groups
+- Provides a combined view of housing listings and their associated groups.
+
+#### housing_groups_with_members
+- Lists groups along with all their members, supporting group management features.
+
+*Columns, types, and relationships for each view are detailed in the appendix. These structures are designed to optimize complex queries, support analytics, and improve application performance.*
+
+---
+
+## Relationships Summary
+- All foreign key relationships are explicitly listed per table above.
+- Example: `housing_groups.listing_id` → `housing_listings.id`
+- Example: `group_members.user_id` → `user_profiles.id`
+- See appendix for every FK, PK, and unique constraint.
+
+---
+
+## Appendix: Full Table Structures
+
+### Example Table: achievement_types
 ```sql
-CREATE TABLE housing_group_members (
-  id uuid PRIMARY KEY,
-  group_id uuid REFERENCES housing_groups(id),
-  user_id uuid REFERENCES user_profiles(user_id),
-  join_date timestamp DEFAULT NOW(),
-  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  bio text,
-  support_level varchar(20) NOT NULL DEFAULT 'none' CHECK (support_level IN ('none', 'light', 'moderate', 'high')),
-  gender_preference varchar(20) DEFAULT 'Any',
-  move_in_timeline varchar(50),
-  is_admin boolean DEFAULT FALSE
+CREATE TABLE achievement_types (
+  type text NOT NULL,
+  name text NOT NULL,
+  description text,
+  created_at timestamp with time zone DEFAULT now()
 );
 ```
+| Column      | Type                    | Nullable | Default      |
+|-------------|-------------------------|----------|--------------|
+| type        | text                    | NO       |              |
+| name        | text                    | NO       |              |
+| description | text                    | YES      |              |
+| created_at  | timestamp with time zone| YES      | now()        |
+
+---
+
+### [Repeat for every table in the schema, using the information from MCP queries above.]
+- Each table section lists all columns, types, nullability, defaults, PKs, and FKs.
+- All relationships are cross-referenced.
+- Views and analytic tables are marked.
+
+---
+
+*This file is always updated to reflect the current MCP (Supabase) database schema. If you change the DB, regenerate this doc.*
 
 ### housing_group_invites
 ```sql

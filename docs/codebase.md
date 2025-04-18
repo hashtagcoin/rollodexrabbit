@@ -25,6 +25,66 @@ rollodex/
 The `app` directory follows Expo Router's file-system based routing:
 
 ```
+
+### Community Module Codebase Diagram
+
+Below is a diagram showing the key files in `app/(tabs)/community/` and their relationships, including navigation (router links), imports, and shared component usage. This helps developers understand how screens connect, where navigation occurs, and what shared logic or UI is reused.
+
+```mermaid
+flowchart TD
+  A[community/index.tsx\nCommunityFeed] -->|router.push| B[community/post.tsx\nPostDetails]
+  A -->|router.push| C[community/create.tsx\nCreatePost]
+  A -->|router.push| D[community/find-friends.tsx\nFindFriendsScreen]
+  A -->|router.push| E[community/groups/index.tsx\nGroupsScreen]
+  E -->|router.push| F[community/groups/create.tsx\nCreateGroup]
+  E -->|router.push| G[community/groups/[id].tsx\nGroupDetails]
+  
+  subgraph Shared
+    H[components/AppHeader.tsx]
+    I[lib/supabase.ts]
+    J[expo-router]
+    K[lucide-react-native]
+  end
+
+  A -- imports --> H
+  B -- imports --> H
+  C -- imports --> H
+  D -- imports --> H
+  E -- imports --> H
+  F -- imports --> H
+  G -- imports --> H
+
+  A -- imports --> I
+  B -- imports --> I
+  C -- imports --> I
+  D -- imports --> I
+  E -- imports --> I
+  F -- imports --> I
+  G -- imports --> I
+
+  A -- imports --> J
+  B -- imports --> J
+  C -- imports --> J
+  D -- imports --> J
+  E -- imports --> J
+  F -- imports --> J
+  G -- imports --> J
+
+  A -- imports --> K
+  B -- imports --> K
+  C -- imports --> K
+  D -- imports --> K
+  E -- imports --> K
+  F -- imports --> K
+  G -- imports --> K
+```
+
+**How to read this diagram:**
+- **Solid arrows** (`-->`) show navigation (e.g., `router.push`) or explicit imports between files.
+- **Shared** block lists core components and libraries used across all screens.
+- Each box represents a file or component, with its main exported component in italics.
+- This diagram is kept up to date as the codebase evolves. For changes, update this section.
+
 app/
 ├── (agreements)/      # Service agreement screens
 ├── (auth)/            # Authentication screens

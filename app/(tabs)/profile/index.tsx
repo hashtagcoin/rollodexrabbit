@@ -62,6 +62,12 @@ export default function ProfileScreen() {
     loadProfile();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadPosts();
+    }, [])
+  );
+
   // Reset scroll position when component mounts
   useEffect(() => {
     resetScrollPosition();
@@ -104,8 +110,8 @@ export default function ProfileScreen() {
       const { data: postsData } = await supabase
         .from('posts_with_users')
         .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .eq('author_profile_id', user.id)
+        .order('post_created_at', { ascending: false });
       
       setPosts(postsData || []);
       return postsData;
@@ -362,7 +368,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
                 {posts.map((post: any) => (
                   <TouchableOpacity 
-                    key={post.id} 
+                    key={post.post_id} 
                     style={styles.gridPostCard}
                     onPress={() => router.push({
                       pathname: '/(tabs)/community/post' as any,
@@ -508,7 +514,7 @@ export default function ProfileScreen() {
                 </Text>
                 <TouchableOpacity
                   style={styles.emptyStateButton}
-                  onPress={() => router.push('/profile/friends/find')}
+                  onPress={() => router.push('/profile/friends')}
                 >
                   <Text style={styles.emptyStateButtonText}>Find Friends</Text>
                 </TouchableOpacity>

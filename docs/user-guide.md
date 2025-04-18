@@ -155,6 +155,12 @@ Welcome to Rollodex, your all-in-one platform for NDIS services, accessible hous
 ### Getting Help
 - In-app support: Profile > Help & Support
 - Email: support@rollodex.com
+
+---
+
+## Recent Changes (2025-04-18)
+- The 'Find Friends' feature is now integrated directly into the Friends List. There is no longer a separate Find Friends screen.
+- Navigation has been improved and the experience is more streamlined for adding and managing friends.
 - Phone: 1800-ROLLODEX
 - Live chat: Available weekdays 9am-5pm
 
@@ -184,3 +190,41 @@ For the latest features and improvements, check the "What's New" section in the 
 ---
 
 Thank you for choosing Rollodex! We're committed to providing an accessible, intuitive platform that empowers NDIS participants to connect with services and community.
+
+---
+
+## Appendix: Technical Architecture & Codebase Overview
+
+### Technology Stack & Architecture
+- **Frontend:** React Native (Expo), TypeScript
+- **Backend/Data:** Supabase (PostgreSQL, Auth, Storage)
+- **Testing:** Jest, robust mocks and setup
+- **Project Structure:** Modular, domain-driven, strong separation of concerns
+
+### Directory & Module Overview
+- `/app/`: Main screens, navigation, feature domains (auth, housing, chat, rewards, etc.)
+- `/components/`: Shared UI components
+- `/lib/`: Core business logic (accessibility, media, notifications, rewards, supabase integration)
+- `/providers/`: Context providers (auth, accessibility)
+- `/types/`: TypeScript type definitions
+- `/docs/`: Documentation (schema, user guide)
+- `/supabase/`: Migrations, backend config
+- `/assets/`: Static assets and images
+
+### Key Features
+- Authentication, onboarding, NDIS plan linking
+- Service discovery, booking, provider profiles
+- Accessible housing search, virtual tours, applications
+- Community groups, posts, chat
+- Wallet integration for NDIS funds
+- Gamification: points, badges, rewards
+- In-app messaging, notifications
+- Accessibility-first design
+
+### Documentation
+- `database-schema.md`: Query-backed, live schema reference
+- `user-guide.md`: Comprehensive onboarding, features, accessibility, troubleshooting
+
+### Summary
+The codebase is a modern, scalable, accessibility-first platform for NDIS users, built for rapid feature development and robust user experience.
+

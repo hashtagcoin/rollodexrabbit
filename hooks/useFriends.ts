@@ -31,24 +31,24 @@ export const useFriends = (category: FriendCategory = 'all') => {
       setError(null);
 
       // Query the friendships_with_profiles view to get all friends with their profile info
-      const { data, error } = await supabase
+      const { data: friendshipsData, error: friendshipError } = await supabase
         .from('friendships_with_profiles')
         .select('*')
-        .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
 
-      if (error) {
-        console.error('Error fetching friends:', error.message);
-        throw error;
+      if (friendshipError) {
+        console.error('Error fetching friends:', friendshipError.message);
+        throw friendshipError;
       }
 
-      console.log('fetchFriends: Raw data from database:', data?.length || 0, 'records');
+      console.log('fetchFriends: Raw data from database:', friendshipsData?.length || 0, 'records');
 
       // Process the returned data
       const acceptedFriends: FriendWithProfile[] = [];
       const pendingFriendRequests: FriendWithProfile[] = [];
 
       // Normalize data to always have the current user as user_id and the friend as friend_id
-      const processedData = data?.map(item => {
+      const processedData = friendshipsData?.map((item: any) => {
         if (item.user_id === userId) {
           return item; // Already in the correct format
         } else {
@@ -69,7 +69,7 @@ export const useFriends = (category: FriendCategory = 'all') => {
       console.log('fetchFriends: Processed data:', processedData.length, 'records');
       
       // Split into accepted friends and pending requests
-      processedData.forEach(friend => {
+      processedData.forEach((friend: any) => {
         if (friend.status === 'accepted') {
           acceptedFriends.push(friend);
         } else if (friend.status === 'pending') {

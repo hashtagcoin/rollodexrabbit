@@ -21,7 +21,8 @@ import {
   Plus,
   Smile,
   Users,
-  CalendarHeart
+  CalendarHeart,
+  UserPlus
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 
@@ -30,10 +31,10 @@ const APP_HEADER_HEIGHT = 100; // Further increased app header height to prevent
 const NAV_HEADER_HEIGHT = 70; // Navigation header height
 
 type Post = {
-  id: string;
+  post_id: string;
   caption: string;
   media_urls: string[];
-  created_at: string;
+  post_created_at: string;
   full_name: string;
   avatar_url: string;
   likes_count: number;
@@ -86,7 +87,7 @@ export default function CommunityFeed() {
       const { data, error } = await supabase
         .from('posts_with_users')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('post_created_at', { ascending: false });
 
       if (error) throw error;
       setPosts(data || []);
@@ -144,6 +145,14 @@ export default function CommunityFeed() {
             <Users size={24} color="#000" />
             <Text style={styles.buttonLabel}>Groups</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+             style={styles.iconButton}
+             onPress={() => router.push('/profile/friends')}
+           >
+             <UserPlus size={24} color="#007AFF" />
+             <Text style={styles.buttonLabel}>Friends</Text>
+           </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.iconButton}
@@ -200,7 +209,7 @@ export default function CommunityFeed() {
           </View>
         ) : (
           posts.map((post) => (
-            <View key={post.id} style={styles.postCard}>
+            <View key={post.post_id} style={styles.postCard}>
               <View style={styles.postHeader}>
                 <Image
                   source={{ uri: post.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
@@ -209,7 +218,7 @@ export default function CommunityFeed() {
                 <View style={styles.postHeaderInfo}>
                   <Text style={styles.userName}>{post.full_name}</Text>
                   <Text style={styles.postTime}>
-                    {new Date(post.created_at).toLocaleDateString()}
+                    {new Date(post.post_created_at).toLocaleDateString()}
                   </Text>
                 </View>
               </View>
@@ -226,7 +235,7 @@ export default function CommunityFeed() {
               <View style={styles.postActions}>
                 <TouchableOpacity
                   style={styles.postActionButton}
-                  onPress={() => handleLike(post.id)}
+                  onPress={() => handleLike(post.post_id)}
                 >
                   <Heart size={24} color="#666" />
                   <Text style={styles.actionText}>{post.likes_count}</Text>
@@ -236,7 +245,7 @@ export default function CommunityFeed() {
                   style={styles.postActionButton}
                   onPress={() => router.push({
                     pathname: '/community/post',
-                    params: { id: post.id }
+                    params: { id: post.post_id }
                   })}
                 >
                   <MessageCircle size={24} color="#666" />
@@ -261,6 +270,28 @@ export default function CommunityFeed() {
 }
 
 const styles = StyleSheet.create({
+  addButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    marginHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+    minHeight: 36,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',

@@ -14,11 +14,14 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFriends, FriendCategory } from '../../../hooks/useFriends';
 import { User, ChevronRight, UserPlus, AlertCircle } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../providers/AuthProvider';
 
 interface FriendsScreenProps {}
 
 export default function FriendsScreen({}: FriendsScreenProps) {
   const [activeCategory, setActiveCategory] = useState<FriendCategory>('all');
+  const { user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
   
@@ -58,9 +61,47 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     router.push(`/profile/friends/${friendId}`);
   };
 
-  // Navigate to find friends screen
-  const goToFindFriends = () => {
-    router.push('/profile/friends/find');
+  // Inline Find Friends panel state
+  const [showFindFriends, setShowFindFriends] = useState(false);
+  const [findFriendsLoading, setFindFriendsLoading] = useState(false);
+  const [findFriendsError, setFindFriendsError] = useState<string|null>(null);
+  const [findFriendsResults, setFindFriendsResults] = useState<any[]>([]);
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+
+  const handleShowFindFriends = async () => {
+    setShowFindFriends(true);
+    setFindFriendsLoading(true);
+    setFindFriendsError(null);
+    try {
+      // Fetch all users except current user and existing friends
+      const { data: users, error } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, username, avatar_url, role')
+        .neq('id', user?.id || 'no-user-id');
+      if (error) throw error;
+      // Filter out already-friends
+      const friendIds = friends.map(f => f.friend_id);
+      const filtered = (users || []).filter((u: {id: string}) => !friendIds.includes(u.id));
+      setFindFriendsResults(filtered);
+    } catch (e: any) {
+      setFindFriendsError(e.message || 'Failed to load users');
+    } finally {
+      setFindFriendsLoading(false);
+    }
+  };
+
+  const handleSendRequest = async (friendId: string) => {
+    const result = await respondToFriendRequest(friendId, true);
+    if (result.error) {
+      Alert.alert('Error', result.error);
+    } else {
+      setPendingIds(prev => [...prev, friendId]);
+      Alert.alert('Success', 'Friend request sent!');
+    }
+  };
+
+  const handleChat = (friendId: string, fullName: string) => {
+    router.push(`/chat/new?friendId=${friendId}&name=${encodeURIComponent(fullName)}`);
   };
 
   // Handle responding to friend requests
@@ -248,7 +289,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       </Text>
       <TouchableOpacity
         style={styles.findFriendsButton}
-        onPress={goToFindFriends}
+        onPress={handleShowFindFriends}
       >
         <UserPlus size={20} color="#ffffff" />
         <Text style={styles.findFriendsButtonText}>Find People</Text>
@@ -256,25 +297,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     </View>
   );
 
-  // Render error state
-  const renderErrorState = () => (
-    <View style={styles.errorState}>
-      <AlertCircle size={48} color="#EF4444" />
-      <Text style={styles.errorStateTitle}>Something went wrong</Text>
-      <Text style={styles.errorStateText}>{error}</Text>
-      <TouchableOpacity
-        style={styles.retryButton}
-        onPress={() => onRefresh()}
-      >
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  console.log('FriendsScreen render - Friends count:', friends?.length || 0);
-  console.log('FriendsScreen render - Pending requests:', pendingRequests?.length || 0);
-  console.log('FriendsScreen render - Active category:', activeCategory);
-
+  // Main render
   return (
     <View style={styles.container}>
       <AppHeader 
@@ -283,15 +306,54 @@ export default function FriendsScreen({}: FriendsScreenProps) {
         onBackPress={() => router.push('/(tabs)/profile' as any)} 
       />
 
-      {/* Add Find Friends Button */}
-      <View style={styles.headerButtonContainer}>
+      {/* Find Friends Button and Inline Panel */}
+      <View style={{padding:16, backgroundColor:'#fff'}}>
         <TouchableOpacity 
-          style={styles.addFriendButton}
-          onPress={goToFindFriends}
+          style={styles.findFriendsButton}
+          onPress={handleShowFindFriends}
         >
           <UserPlus size={20} color="#ffffff" />
-          <Text style={styles.addFriendButtonText}>Find Friends</Text>
+          <Text style={styles.findFriendsButtonText}>Find People</Text>
         </TouchableOpacity>
+        {showFindFriends && (
+          <View style={{marginTop:16, backgroundColor:'#fff', borderRadius:8, padding:8, elevation:2}}>
+            {findFriendsLoading ? (
+              <ActivityIndicator size="small" color="#4F46E5" />
+            ) : findFriendsError ? (
+              <Text style={{color:'#EF4444'}}>{findFriendsError}</Text>
+            ) : (
+              <FlatList
+                data={findFriendsResults}
+                keyExtractor={item => item.id}
+                renderItem={({item}) => (
+                  <View style={{flexDirection:'row',alignItems:'center',paddingVertical:6}}>
+                    {item.avatar_url ? (
+                      <Image source={{ uri: item.avatar_url }} style={{width:32,height:32,borderRadius:16,backgroundColor:'#eee',marginRight:8}} />
+                    ) : (
+                      <View style={{width:32,height:32,borderRadius:16,backgroundColor:'#9CA3AF',justifyContent:'center',alignItems:'center',marginRight:8}}>
+                        <User size={16} color="#fff" />
+                      </View>
+                    )}
+                    <Text style={{flex:1,fontSize:15,color:'#222'}} numberOfLines={1}>{item.full_name}</Text>
+                    <TouchableOpacity
+                      disabled={pendingIds.includes(item.id)}
+                      style={{backgroundColor:pendingIds.includes(item.id)?'#D1D5DB':'#4F46E5',borderRadius:6,paddingVertical:4,paddingHorizontal:10,marginRight:6}}
+                      onPress={()=>handleSendRequest(item.id)}
+                    >
+                      <UserPlus size={14} color="#fff" />
+                      <Text style={{color:'#fff',fontSize:13,marginLeft:4}}>{pendingIds.includes(item.id)?'Pending':'Add'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={()=>handleChat(item.id, item.full_name)} style={{padding:4}}>
+                      <ChevronRight size={16} color="#4F46E5" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                ItemSeparatorComponent={()=> <View style={{height:1,backgroundColor:'#F3F4F6'}} />}
+                style={{maxHeight:260}}
+              />
+            )}
+          </View>
+        )}
       </View>
 
       {/* Category Filter */}
@@ -303,7 +365,17 @@ export default function FriendsScreen({}: FriendsScreenProps) {
           <Text style={styles.loadingText}>Loading friends...</Text>
         </View>
       ) : error ? (
-        renderErrorState()
+        <View style={styles.errorState}>
+          <AlertCircle size={48} color="#EF4444" />
+          <Text style={styles.errorStateTitle}>Something went wrong</Text>
+          <Text style={styles.errorStateText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => onRefresh()}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           data={filteredFriends}
