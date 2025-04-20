@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Image,
   ScrollView,
+  Pressable,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -18,24 +19,42 @@ import {
   Grid2x2 as Grid, 
   List, 
   Heart, 
-  FileSliders as Sliders,
-  MapPin,
-  Star,
   House,
   Car,
   Laptop,
+  FileSliders as Sliders,
+  MapPin,
+  Star,
   X,
   FilePlus as Helping,
   Filter,
   Users,
   ArrowDownUp,
   MessageCircleHeart,
-  PersonStanding
-} from 'lucide-react-native';
+  PersonStanding,
+  BadgeCheck,
+  Clock
+ } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import SwipeListView from './components/SwipeListView';
 import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
 import { ShadowCard } from './components/ShadowCard';
+
+// --- Configuration ---
+// TODO: Replace with your actual Supabase project reference
+const SUPABASE_PROJECT_REF = 'smtckdlpdfvdycocwoip'; 
+const SUPABASE_STORAGE_BASE_URL = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/providerimages`;
+const DEFAULT_IMAGE = 'https://via.placeholder.com/400x300?text=No+Image';
+
+// Image counts per category provided by user
+const categoryImageCounts: { [key: string]: number } = {
+  Therapy: 16,
+  Personal: 4,
+  Social: 4,
+  Support: 19,
+  Tech: 6,
+  Transport: 4,
+};
 
 // Define categories with proper icon rendering
 const CATEGORIES = [
@@ -65,6 +84,7 @@ export default function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Therapy');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set()); // Store favorited listing IDs
   
   // For swipe view
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -174,7 +194,7 @@ export default function DiscoverScreen() {
           await fetchHousingGroups(listingIds);
         }
       } else {
-        // Load services with specific category
+        // Load services with specific category, including media_urls
         const { data, error } = await supabase
           .from('services')
           .select(`
@@ -184,6 +204,7 @@ export default function DiscoverScreen() {
             category,
             format,
             price,
+            media_urls,
             provider:service_providers (
               business_name,
               verified
@@ -292,18 +313,69 @@ export default function DiscoverScreen() {
   // Helper function to safely check view mode
   const isMode = (current: ViewMode, target: ViewMode): boolean => current === target;
 
-  // Determine if item is a housing listing
-  const isHousingListing = (item: ListingItem): item is HousingListing => {
-    return 'weekly_rent' in item;
+  // Type guard for Service
+  const isServiceListing = (item: ListingItem): item is Service => {
+    return 'category' in item && 'format' in item; // Check for properties unique to Service
   };
 
-  // Helper to get item price (different property names in services vs housing)
-  const getItemPrice = (item: ListingItem) => {
+  // Type guard for HousingListing
+  const isHousingListing = (item: ListingItem): item is HousingListing => {
+    return 'weekly_rent' in item; // Check for a property unique to HousingListing
+  };
+
+  // Helper to get item price (uses property from specific type)
+  const getItemPrice = (item: ListingItem): number => {
     if (isHousingListing(item)) {
-      return item.weekly_rent;
-    } else {
-      return item.price;
+      return item.weekly_rent ?? 0;
+    } else if (isServiceListing(item)) {
+      return item.price ?? 0;
     }
+    return 0;
+  };
+
+  // Helper to get item image URL
+  const getItemImage = (item: ListingItem): string => {
+    if (isServiceListing(item)) {
+      // Use the first media URL if available from the database
+      if (item.media_urls && item.media_urls.length > 0 && item.media_urls[0]) {
+        return item.media_urls[0];
+      } else {
+        // Fallback if media_urls is empty or not present
+        console.warn(`No media_urls found for service ID: ${item.id}`);
+        return DEFAULT_IMAGE;
+      }
+    } else if (isHousingListing(item)) {
+      // Use the first media URL if available
+      return (item.media_urls && item.media_urls.length > 0)
+        ? item.media_urls[0]
+        : DEFAULT_IMAGE;
+    }
+    // Fallback for any other case
+    return DEFAULT_IMAGE;
+  };
+
+  // Helper function to render provider info (business name)
+  const renderServiceProvider = (item: ListingItem) => {
+    if (item.provider) {
+      return (
+        <View style={styles.providerContainer}>
+          <Text style={styles.providerName} numberOfLines={1}>
+            {item.provider.business_name || 'Provider Name Unavailable'}
+          </Text>
+        </View>
+      );
+    }
+    return <></>; // Return empty fragment instead of null
+  };
+
+  // Helper to get item price with unit
+  const getItemPriceWithUnit = (item: ListingItem) => {
+    if (isHousingListing(item)) {
+      return `${getItemPrice(item)}/week`;
+    } else if (isServiceListing(item)) {
+      return `${getItemPrice(item)}/hour`;
+    }
+    return '';
   };
 
   // Helper to check if a housing listing has a group
@@ -312,17 +384,6 @@ export default function DiscoverScreen() {
       return housingGroupsMap[item.id] || false;
     }
     return false;
-  };
-
-  // Helper to get item image
-  const getItemImage = (item: ListingItem) => {
-    if (isHousingListing(item)) {
-      return item.media_urls && item.media_urls.length > 0 
-        ? item.media_urls[0] 
-        : 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop';
-    } else {
-      return 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?q=80&w=2070&auto=format&fit=crop';
-    }
   };
 
   // Helper to navigate to details screen
@@ -352,42 +413,6 @@ export default function DiscoverScreen() {
     }
   };
 
-  // Helper function to safely render provider information
-  const renderServiceProvider = (item: ListingItem) => {
-    // Ensure provider exists
-    if (!item.provider) {
-      return <Text style={styles.serviceProvider} selectable={false}>Service Provider</Text>;
-    }
-    
-    return (
-      <Text style={styles.serviceProvider} selectable={false}>
-        {item.provider.business_name || 'Service Provider'}
-        {item.provider.verified && (
-          <Text style={styles.verifiedBadge}> ✓</Text>
-        )}
-      </Text>
-    );
-  };
-
-  // Handle tap on swipe card
-  const handleCardTap = (item: ListingItem) => {
-    const now = Date.now();
-    const DOUBLE_PRESS_DELAY = 300;
-    
-    if (lastTapItem === item.id && now - lastTap < DOUBLE_PRESS_DELAY) {
-      // Double tap detected
-      navigateToDetails(item);
-      
-      // Reset after navigation
-      setLastTap(0);
-      setLastTapItem(null);
-    } else {
-      // First tap
-      setLastTap(now);
-      setLastTapItem(item.id);
-    }
-  };
-
   // Render Group Match badge for grid and list view
   const renderGroupMatchBadge = (item: ListingItem) => {
     if (isHousingListing(item) && housingGroupsMap[item.id]) {
@@ -399,6 +424,57 @@ export default function DiscoverScreen() {
       );
     }
     return null;
+  };
+
+  const handleCardTap = useCallback((item: ListingItem) => {
+    console.log('Card tapped:', item.id);
+    // Navigate to detail screen (adjust path and params as needed)
+    // Example navigation:
+    // router.push(`/listing/${item.id}`);
+  }, [router]);
+
+  // Favorite Logic (Placeholders)
+  const fetchFavorites = async () => {
+    // TODO: Replace with actual Supabase query and user ID retrieval
+    console.log("Fetching user favorites...");
+    // const { data, error } = await supabase
+    //   .from('user_favorites')
+    //   .select('listing_id')
+    //   .eq('user_id', userId); 
+    // if (data) {
+    //   setFavorites(new Set(data.map(fav => fav.listing_id)));
+    // }
+    // Mock data for now:
+    // setFavorites(new Set(['service-1', 'housing-3'])); 
+  };
+
+  const toggleFavorite = async (item: ListingItem) => {
+    const currentFavorites = new Set(favorites);
+    const listingId = item.id;
+    // TODO: Get actual userId
+    const userId = 'user-placeholder-id'; 
+
+    if (currentFavorites.has(listingId)) {
+      // --- Remove from Favorites ---
+      currentFavorites.delete(listingId);
+      // TODO: Supabase delete
+      // const { error } = await supabase
+      //   .from('user_favorites')
+      //   .delete()
+      //   .match({ user_id: userId, listing_id: listingId });
+      console.log(`Removing favorite: ${listingId}`);
+      // if (error) console.error("Error removing favorite:", error);
+    } else {
+      // --- Add to Favorites ---
+      currentFavorites.add(listingId);
+      // TODO: Supabase insert
+      // const { error } = await supabase
+      //   .from('user_favorites')
+      //   .insert({ user_id: userId, listing_id: listingId, listing_type: isHousingListing(item) ? 'housing' : 'service' });
+      console.log(`Adding favorite: ${listingId}`);
+      // if (error) console.error("Error adding favorite:", error);
+    }
+    setFavorites(currentFavorites);
   };
 
   const renderGridView = () => {
@@ -441,19 +517,34 @@ export default function DiscoverScreen() {
                   style={styles.serviceImage}
                 />
                 {renderGroupMatchBadge(item)}
+                {isServiceListing(item) && item.provider?.verified && (
+                  <View style={styles.ndisBadgeGrid}>
+                    <BadgeCheck size={14} color="#fff" />
+                    <Text style={styles.ndisBadgeText}>NDIS</Text>
+                  </View>
+                )}
+                <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
+                  <Heart 
+                    size={20} 
+                    color={favorites.has(item.id) ? "#ff4081" : "#ccc"} 
+                    fill={favorites.has(item.id) ? "#ff4081" : "none"} 
+                  />
+                </Pressable>
               </View>
               
               <View style={styles.serviceDetails}>
-                <Text style={styles.serviceTitle} numberOfLines={2}>
+                <Text style={styles.serviceTitle} numberOfLines={3}>
                   {item.title}
                 </Text>
                 {renderServiceProvider(item)}
-
                 <View style={styles.serviceFooter}>
-                  <Text style={styles.servicePrice}>
-                    ${getItemPrice(item)}
-                    {isHousingListing(item) ? '/week' : ''}
-                  </Text>
+                  <View style={styles.priceContainer}>
+                    {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIcon}/>}
+                    <Text style={styles.servicePrice}>
+                      ${getItemPrice(item)}
+                      {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </ShadowCard>
@@ -497,39 +588,46 @@ export default function DiscoverScreen() {
             >
               <View style={styles.listItemInner}>
                 <View style={styles.listImageContainer}>
-                  <Image
-                    source={{ uri: getItemImage(item) }}
-                    style={styles.serviceListImage}
-                  />
+                  <Image source={{ uri: getItemImage(item) }} style={styles.listImage} />
                   {renderGroupMatchBadge(item)}
+                  {isServiceListing(item) && item.provider?.verified && (
+                    <View style={styles.ndisBadgeList}>
+                      <BadgeCheck size={12} color="#fff" />
+                      <Text style={styles.ndisBadgeText}>NDIS</Text>
+                    </View>
+                  )}
+                  <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
+                    <Heart 
+                      size={20} 
+                      color={favorites.has(item.id) ? "#ff4081" : "#ccc"} 
+                      fill={favorites.has(item.id) ? "#ff4081" : "none"} 
+                    />
+                  </Pressable>
                 </View>
-                
-                <View style={styles.serviceListDetails}>
-                  <View>
-                    <Text style={styles.serviceTitle} numberOfLines={1}>
+                <View style={styles.serviceDetails}> 
+                  <View> 
+                    <Text style={styles.serviceTitle} numberOfLines={3}>
                       {item.title}
                     </Text>
                     {renderServiceProvider(item)}
+                    {/* Add location back if needed, using appropriate styles */}
                     {isHousingListing(item) ? (
-                      <View style={styles.locationContainer}>
-                        <MapPin size={12} color="#666" />
-                        <Text style={styles.locationText}>
-                          {item.suburb || 'Unknown'}, {item.state || 'Unknown'}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text 
-                        style={styles.serviceDescription} 
-                        numberOfLines={2}
-                      >
-                        {item.description}
-                      </Text>
-                    )}
+                       <Text style={styles.serviceDescription} numberOfLines={2}>
+                         {item.bedrooms} bed • {item.bathrooms} bath • {item.suburb}
+                       </Text>
+                     ) : (
+                       <Text style={styles.serviceDescription} numberOfLines={2}>
+                         {isServiceListing(item) ? item.description : ''} {/* Show description only for services */}
+                       </Text>
+                     )}
                   </View>
-                  <Text style={styles.servicePrice}>
-                    ${getItemPrice(item)}
-                    {isHousingListing(item) ? '/week' : ''}
-                  </Text>
+                  <View style={styles.priceContainerList}>
+                     {isServiceListing(item) && <Clock size={16} color="#666" style={styles.priceIcon}/>}
+                     <Text style={styles.servicePrice}> 
+                       ${getItemPrice(item)}
+                       {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
+                     </Text>
+                  </View>
                 </View>
               </View>
             </ShadowCard>
@@ -645,10 +743,6 @@ export default function DiscoverScreen() {
                 ]}
                 onPress={() => setSelectedCategory(cat.id)}
               >
-                {cat.icon({ 
-                  size: 16, 
-                  color: selectedCategory === cat.id ? '#FFF' : '#333' 
-                })}
                 <Text
                   style={[
                     styles.categoryText,
@@ -734,12 +828,13 @@ export default function DiscoverScreen() {
               listings={listings}
               currentIndex={currentIndex}
               setCurrentIndex={setCurrentIndex}
-              onCardTap={handleCardTap}
               getItemImage={getItemImage}
               getItemPrice={getItemPrice}
               isHousingListing={isHousingListing}
+              isServiceListing={isServiceListing} // Pass the type guard prop
               renderServiceProvider={renderServiceProvider}
               hasHousingGroup={hasHousingGroup}
+              onCardTap={handleCardTap} // Pass the tap handler
             />
           )}
         </View>
@@ -880,10 +975,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   servicesGrid: {
-    padding: 8,
+    padding: 15, // Increased padding
   },
   servicesList: {
-    paddingVertical: 8,
+    paddingVertical: 15, // Increased padding
   },
   gridColumnWrapper: {
     justifyContent: 'space-between',
@@ -908,7 +1003,7 @@ const styles = StyleSheet.create({
   },
   listItemInner: {
     flexDirection: 'row',
-    padding: 12,
+    padding: 15, // Increased padding
     gap: 12,
   },
   imageContainer: {
@@ -916,16 +1011,23 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   serviceImage: {
-    width: '100%',
+    width: '80%', // Reduced width
     height: 140,
+    resizeMode: 'contain', // Scale image to fit within the area
+    borderRadius: 20, // More rounded corners
+    alignSelf: 'center', // Center the image
   },
-  serviceListImage: {
-    width: 100,
+  listImage: {
+    width: 80, // Reduced width (100 * 0.8)
     height: 100,
-    borderRadius: 8,
+    resizeMode: 'contain', // Scale image to fit within the area
+    borderRadius: 16, // More rounded corners
+  },
+  listImageContainer: {
+    position: 'relative',
   },
   serviceDetails: {
-    padding: 12,
+    padding: 15, // Increased padding
   },
   serviceTitle: {
     fontSize: 16,
@@ -941,54 +1043,72 @@ const styles = StyleSheet.create({
     color: '#4CD964',
   },
   serviceDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4, // Add space below title/provider
+  },
+  providerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    flexShrink: 1, // Prevent provider name from pushing badge out
+  },
+  providerName: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 8,
+    marginRight: 4, // Space between name and badge
+    flexShrink: 1, // Allow name to shrink if needed
   },
   serviceFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
-  servicePrice: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  serviceListDetails: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  listImageContainer: {
-    position: 'relative',
-    width: 100,
-    height: 100,
-  },
-  locationContainer: {
+  priceContainer: { // Container for price and icon (Grid)
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  locationText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
+  priceContainerList: { // Container for price and icon (List)
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    marginTop: 8, // Add spacing in list view
   },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
+  priceIcon: {
+    marginRight: 4,
   },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  ndisBadgeGrid: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.8)', // App blue
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  ndisBadgeList: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.8)', // App blue
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  ndisBadgeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#fff',
+  },
+  favButton: { 
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 6,
+    borderRadius: 20,
   },
   groupMatchBadge: {
     position: 'absolute',
@@ -1006,5 +1126,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#fff',
     fontWeight: '500',
+  },
+  servicePrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  categoryIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4, // Add some space above
+    marginBottom: 2, // Add space below
+  },
+  categoryTextGridList: {
+    fontSize: 12,
+    color: '#666',
   },
 });

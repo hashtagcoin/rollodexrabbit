@@ -67,8 +67,9 @@ export default function TabLayout() {
         tabBarInactiveTintColor: '#666',
       }}
     >
+      {/* Home Tab */}
       <Tabs.Screen
-        name="index"
+        name="index" // Point Home tab to dashboard screen
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => <House size={size} color={color} />,
@@ -117,8 +118,9 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Profile Tab */}
       <Tabs.Screen
-        name="profile"
+        name="profile" // User Profile screen
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,

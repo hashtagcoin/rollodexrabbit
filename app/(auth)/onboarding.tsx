@@ -416,11 +416,10 @@ export default function Onboarding() {
                 <View style={styles.addressInput}>
                   <MapPin size={20} color="#666" style={styles.addressIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.addressTextInputOnly]}
                     value={address}
                     onChangeText={setAddress}
                     placeholder="Enter your address"
-                    multiline
                   />
                 </View>
               </View>
@@ -582,11 +581,10 @@ export default function Onboarding() {
                 <View style={styles.addressInput}>
                   <MapPin size={20} color="#666" style={styles.inputIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.addressTextInputOnly]}
                     value={businessAddress}
                     onChangeText={setBusinessAddress}
                     placeholder="Enter business address"
-                    multiline
                   />
                 </View>
               </View>
@@ -943,6 +941,7 @@ const styles = StyleSheet.create({
     borderColor: '#e1e1e1',
     borderRadius: 12,
     paddingHorizontal: 16,
+    height: 56,
   },
   addressIcon: {
     marginRight: 12,
@@ -1198,5 +1197,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '500',
+  },
+  addressTextInputOnly: {
+    flex: 1,
+    height: undefined,
+    borderWidth: 0,
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 10,
   },
 });

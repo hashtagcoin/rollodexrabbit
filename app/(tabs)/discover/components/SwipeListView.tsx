@@ -12,8 +12,8 @@ import {
   PanResponderGestureState, 
   GestureResponderEvent 
 } from 'react-native'; 
-import { MapPin, Star, Users, Heart, X } from 'lucide-react-native';
-import { ListingItem, HousingListing } from '../types';
+import { MapPin, Star, Users, Heart, X, BadgeCheck, Clock } from 'lucide-react-native';
+import { ListingItem, HousingListing, Service } from '../types';
 import { ShadowCard } from './ShadowCard';
 
 // Using Animated instead of Reanimated for compatibility
@@ -29,8 +29,11 @@ interface SwipeListViewProps {
   getItemImage: (item: ListingItem) => string;
   getItemPrice: (item: ListingItem) => number;
   isHousingListing: (item: ListingItem) => item is HousingListing;
+  isServiceListing: (item: ListingItem) => item is Service;
   renderServiceProvider: (item: ListingItem) => JSX.Element;
   hasHousingGroup?: (item: ListingItem) => boolean;
+  onSwipe?: (direction: string) => void;
+  onCardLeftScreen?: (direction: string) => void;
 }
 
 const SwipeListView: React.FC<SwipeListViewProps> = ({
@@ -41,8 +44,11 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
   getItemImage,
   getItemPrice,
   isHousingListing,
+  isServiceListing,
   renderServiceProvider,
   hasHousingGroup,
+  onSwipe,
+  onCardLeftScreen,
 }) => {
   // Add a state to track if the current card is being swiped
   const [isCardSwiping, setIsCardSwiping] = useState(false);
@@ -350,7 +356,7 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
           </View>
           
           <View style={styles.swipeContent}>
-            <Text style={styles.swipeTitle}>{item.title || 'Untitled Listing'}</Text>
+            <Text style={styles.swipeTitle} numberOfLines={2}>{item.title || 'Untitled Listing'}</Text>
             
             {isHousingListing(item) ? (
               <>
@@ -375,8 +381,14 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
                 </View>
               </>
             ) : (
-              <View style={styles.serviceProviderContainer}>
+              <View style={styles.providerContainerSwipe}>
                 {renderServiceProvider(item)}
+                {item.provider?.verified && (
+                  <View style={styles.verifiedBadgeSwipe}>
+                    <BadgeCheck size={16} color="#007AFF" />
+                    <Text style={styles.verifiedTextSwipe}>NDIS Certified</Text>
+                  </View>
+                )}
               </View>
             )}
             
@@ -389,10 +401,13 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
                 <Star size={16} color="#FFB800" fill="#FFB800" />
                 <Text style={styles.ratingText}>4.9</Text>
               </View>
-              <Text style={styles.swipePrice}>
-                ${getItemPrice(item)}
-                {isHousingListing(item) ? '/week' : ''}
-              </Text>
+              <View style={styles.priceContainerSwipe}>
+                {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIconSwipe}/>}
+                <Text style={styles.priceTextSwipe}>
+                  ${getItemPrice(item)}
+                  {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -441,7 +456,7 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
           </View>
           
           <View style={styles.swipeContent}>
-            <Text style={styles.swipeTitle}>{item.title || 'Untitled Listing'}</Text>
+            <Text style={styles.swipeTitle} numberOfLines={2}>{item.title || 'Untitled Listing'}</Text>
             
             {isHousingListing(item) ? (
               <>
@@ -466,8 +481,14 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
                 </View>
               </>
             ) : (
-              <View style={styles.serviceProviderContainer}>
+              <View style={styles.providerContainerSwipe}>
                 {renderServiceProvider(item)}
+                {item.provider?.verified && (
+                  <View style={styles.verifiedBadgeSwipe}>
+                    <BadgeCheck size={16} color="#007AFF" />
+                    <Text style={styles.verifiedTextSwipe}>NDIS Certified</Text>
+                  </View>
+                )}
               </View>
             )}
             
@@ -480,10 +501,13 @@ const SwipeListView: React.FC<SwipeListViewProps> = ({
                 <Star size={16} color="#FFB800" fill="#FFB800" />
                 <Text style={styles.ratingText}>4.9</Text>
               </View>
-              <Text style={styles.swipePrice}>
-                ${getItemPrice(item)}
-                {isHousingListing(item) ? '/week' : ''}
-              </Text>
+              <View style={styles.priceContainerSwipe}>
+                {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIconSwipe}/>}
+                <Text style={styles.priceTextSwipe}>
+                  ${getItemPrice(item)}
+                  {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
+                </Text>
+              </View>
             </View>
           </View>
           
@@ -737,10 +761,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
   },
-  swipePrice: {
+  priceContainerSwipe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  priceIconSwipe: {
+    marginRight: 4,
+  },
+  priceTextSwipe: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#007AFF',
+    fontWeight: 'bold',
+    color: '#1a1a1a',
   },
   emptyContainer: {
     flex: 1,
@@ -752,8 +783,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
   },
-  serviceProviderContainer: {
+  providerContainerSwipe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
     marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  verifiedBadgeSwipe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(230, 230, 230, 0.9)', // Slightly darker background for contrast
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  verifiedTextSwipe: {
+    marginLeft: 4,
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   actionButtonsContainer: {
     position: 'absolute',

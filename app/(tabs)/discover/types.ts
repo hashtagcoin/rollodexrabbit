@@ -9,6 +9,7 @@ export type Service = {
     business_name: string;
     verified: boolean;
   };
+  media_urls?: string[] | null;
 };
 
 export type HousingListing = {
