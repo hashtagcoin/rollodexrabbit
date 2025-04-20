@@ -359,7 +359,7 @@ export default function DiscoverScreen() {
     if (item.provider) {
       return (
         <View style={styles.providerContainer}>
-          <Text style={styles.providerName} numberOfLines={1}>
+          <Text style={styles.providerName} numberOfLines={1} selectable={false}>
             {item.provider.business_name || 'Provider Name Unavailable'}
           </Text>
         </View>
@@ -428,10 +428,9 @@ export default function DiscoverScreen() {
 
   const handleCardTap = useCallback((item: ListingItem) => {
     console.log('Card tapped:', item.id);
-    // Navigate to detail screen (adjust path and params as needed)
-    // Example navigation:
-    // router.push(`/listing/${item.id}`);
-  }, [router]);
+    // Navigate to detail screen using the existing helper function
+    navigateToDetails(item); 
+  }, [router, navigateToDetails]); // Add navigateToDetails to dependency array
 
   // Favorite Logic (Placeholders)
   const fetchFavorites = async () => {
@@ -835,6 +834,7 @@ export default function DiscoverScreen() {
               renderServiceProvider={renderServiceProvider}
               hasHousingGroup={hasHousingGroup}
               onCardTap={handleCardTap} // Pass the tap handler
+              favorites={favorites} // Pass favorites set
             />
           )}
         </View>
@@ -1055,7 +1055,7 @@ const styles = StyleSheet.create({
   },
   providerName: {
     fontSize: 12,
-    color: '#666',
+    color: 'white', // <--- Add this line
     marginRight: 4, // Space between name and badge
     flexShrink: 1, // Allow name to shrink if needed
   },

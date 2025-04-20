@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Animated, PanResponder, Pressable } from 'react-native';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Dimensions, Animated, PanResponder, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Star, Users, Heart, X, BadgeCheck, Clock } from 'lucide-react-native';
 import { ListingItem, HousingListing, Service } from '../types';
 import { supabase } from '../../../../lib/supabase';
@@ -9,27 +10,32 @@ const { width } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
 const DEFAULT_IMAGE = 'https://via.placeholder.com/400x300?text=No+Image';
 
-interface SwipeCardProps {
+// FIX: Export the interface
+export interface SwipeCardProps {
   item: ListingItem;
   isNext?: boolean;
-  onTap?: () => void;
-  onSwipe?: (direction: string) => void;
-  onCardLeftScreen?: (direction: string) => void;
-  onSwipeProgress?: (progress: number, direction: string) => void;
+  // FIX: Add missing utility function props needed for rendering
   getItemImage: (item: ListingItem) => string;
   getItemPrice: (item: ListingItem) => number;
   isHousingListing: (item: ListingItem) => item is HousingListing;
   isServiceListing: (item: ListingItem) => item is Service;
-  renderServiceProvider: (item: ListingItem) => JSX.Element;
+  renderServiceProvider: (item: ListingItem) => React.ReactElement | null;
+  isTopCard: boolean; // FIX: Add missing property
+  onTap?: () => void;
+  onSwipe?: (direction: string) => void;
+  onCardLeftScreen?: (direction: string) => void;
+  onSwipeProgress?: (progress: number, direction: string) => void;
   hasHousingGroup?: (item: ListingItem) => boolean;
   showActionButtons?: boolean;
-  isFavorite: (itemId: string) => boolean;
+  // FIX: Correct the type for isFavorite
+  isFavorite: boolean; // Check if the item is favorited
   onToggleFavorite?: (item: ListingItem) => void;
 }
 
-const SwipeCard: React.FC<SwipeCardProps> = ({
+const SwipeCardComponent: React.FC<SwipeCardProps> = ({ 
   item,
-  isNext,
+  isNext = false,
+  isTopCard,
   onTap,
   onSwipe,
   onCardLeftScreen,
@@ -44,8 +50,12 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   isFavorite,
   onToggleFavorite,
 }) => {
+  // DEBUG: Log incoming item data
+  console.log(`[SwipeCard Render] Rendering card for ID: ${item?.id}, Title: ${item?.title}, Type: ${isHousingListing(item) ? 'Housing' : 'Service'}, isTopCard: ${isTopCard}`);
+
   const [hasGroup, setHasGroup] = useState(false);
   const [isCheckingGroups, setIsCheckingGroups] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false); // <-- Add state for image load error
   
   // Animation values
   const position = useRef(new Animated.ValueXY()).current;
@@ -130,6 +140,7 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
     // Reset position when item changes
     position.setValue({ x: 0, y: 0 });
     rotate.setValue(0);
+    setImageLoadError(false); // <-- Reset error state
   }, [item, hasHousingGroup]);
 
   const checkForHousingGroups = async (listingId: string) => {
@@ -172,7 +183,7 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   if (!item) {
     return (
       <View style={styles.swipeCard}>
-        <View style={styles.placeholderContainer}>
+        <View style={styles.placeholderBackground}>
           <Text style={styles.placeholderText}>No listing available</Text>
         </View>
       </View>
@@ -180,31 +191,29 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   }
 
   // Action buttons component
-  const ActionButtons = () => {
-    if (!showActionButtons || isNext) return null;
-    
-    return (
-      <View style={styles.actionButtonsContainer}>
-        <ShadowCard width={60} height={60} radius={30} style={styles.actionShadow}>
-          <TouchableOpacity 
-            style={styles.swipeActionLeft}
+  const ActionButtons = () => (
+    <>
+      {/* Action Buttons - only shown for top card if enabled */} 
+      {isTopCard && showActionButtons && (
+        <Animated.View style={[styles.buttonContainer]}>
+          <TouchableOpacity
+            style={[styles.button, styles.dislikeButton]}
             onPress={() => onSwipe && onSwipe('left')}
           >
             <X size={36} color="#ff3b30" />
           </TouchableOpacity>
-        </ShadowCard>
-        
-        <ShadowCard width={60} height={60} radius={30} style={styles.actionShadow}>
-          <TouchableOpacity 
-            style={styles.swipeActionRight}
+          
+          <TouchableOpacity
+            style={[styles.button, styles.likeButton]}
             onPress={() => onSwipe && onSwipe('right')}
+            disabled={!onToggleFavorite} // Disable if handler not provided
           >
-            <Heart size={36} color="#4cd964" fill="#4cd964" />
+            <Heart size={36} color={isFavorite ? '#4CAF50' : '#4CAF50'} fill={isFavorite ? '#4CAF50' : 'none'} />
           </TouchableOpacity>
-        </ShadowCard>
-      </View>
-    );
-  };
+        </Animated.View>
+      )}
+    </>
+  );
 
   // Determine if the item is a service (using the passed prop)
   const isService = isServiceListing(item);
@@ -212,50 +221,6 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
   // Card Content Component
   const CardContent = () => (
     <>
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: (() => {
-            try {
-              return getItemImage(item);
-            } catch (e) {
-              console.error('Error getting image:', e);
-              return DEFAULT_IMAGE;
-            }
-          })() }}
-          style={styles.swipeImage}
-        />
-        {/* Group Match Badge */}
-        {isHousingListing(item) && hasGroup && (
-          <View style={styles.groupMatchBadgeOverlay}>
-            <Users size={14} color="#fff" />
-            <Text style={styles.groupMatchText} selectable={false}>Group Match</Text>
-          </View>
-        )}
-        {/* NDIS Badge for Service Listings */}
-        {isService && item.provider?.verified && (
-          <View style={styles.ndisBadgeSwipe}>
-            <BadgeCheck size={14} color="#fff" />
-            <Text style={styles.ndisBadgeTextSwipe}>NDIS</Text>
-          </View>
-        )}
-        {/* Favorite Button Overlay */}
-        {onToggleFavorite && (
-          <Pressable 
-            style={styles.favButtonSwipe} 
-            onPress={(e) => {
-              e.stopPropagation(); // Prevent card tap if tapping button
-              onToggleFavorite(item);
-            }}
-          >
-            <Heart 
-              size={24} 
-              color={isFavorite(item.id) ? "#ff4081" : "#ccc"} 
-              fill={isFavorite(item.id) ? "#ff4081" : "none"} 
-            />
-          </Pressable>
-        )}
-      </View>
-      
       <View style={styles.swipeContent}>
         <View style={styles.swipeDetails}>
           <Text style={styles.swipeTitle} numberOfLines={2} selectable={false}>{item.title}</Text>
@@ -264,8 +229,8 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
             {renderServiceProvider(item)} 
             {item.provider?.verified && (
               <View style={styles.verifiedBadgeSwipe}>
-                <BadgeCheck size={16} color="#007AFF" />
-                <Text style={styles.verifiedTextSwipe}>NDIS Certified</Text>
+                <BadgeCheck size={16} color="white" />
+                <Text style={styles.verifiedTextSwipe} selectable={false}>NDIS Certified</Text>
               </View>
             )}
           </View>
@@ -294,9 +259,7 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
               </View>
             </>
           ) : (
-            <View style={styles.serviceProviderContainer}>
-              {renderServiceProvider(item)}
-            </View>
+            <View style={styles.serviceProviderContainer} /> // Render empty view or adjust layout if needed
           )}
           
           <Text style={styles.swipeDescription} numberOfLines={3} selectable={false}>
@@ -310,8 +273,8 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
             </View>
             {/* Price with unit and icon */}
             <View style={styles.priceContainerSwipe}>
-              {isService && <Clock size={14} color="#666" style={styles.priceIconSwipe}/>}
-              <Text style={styles.priceTextSwipe}>
+              {isService && <Clock size={14} color="white" style={styles.priceIconSwipe}/>}
+              <Text style={styles.priceTextSwipe} selectable={false}>
                 ${getItemPrice(item)}
                 {isHousingListing(item) ? '/week' : (isService ? '/ hour' : '')}
               </Text>
@@ -325,79 +288,113 @@ const SwipeCard: React.FC<SwipeCardProps> = ({
     </>
   );
 
-  // For the next card, use a standard View without animation
-  if (isNext) {
-    return <CardContent />;
+  // --- Render Logic --- 
+  // FIX: Use 'media_urls' instead of 'images' based on type definition
+  console.log(`[SwipeCard ${item.id}] Is Housing? ${isHousingListing(item)}`);
+  if (isHousingListing(item)) {
+    console.log(`[SwipeCard ${item.id}] Media URLs:`, item.media_urls);
   }
+  // FIX: Show image if media_urls exist, regardless of item type
+  const shouldShowImage = !!(item.media_urls && item.media_urls.length > 0);
+  console.log(`[SwipeCard ${item.id}] Should Show Image? ${shouldShowImage}`);
+  const imageUri = shouldShowImage ? item.media_urls![0] : null; // Use non-null assertion since shouldShowImage checks
 
-  // For the current card, use an Animated.View with pan gestures
+  // Determine if we should render the image or the placeholder
+  const renderImage = shouldShowImage && imageUri && !imageLoadError; // <-- Check error state here
+
   return (
-    <Animated.View
-      style={[
-        styles.swipeCard,
-        {
-          transform: [
-            { translateX: position.x },
-            { translateY: position.y },
-            { rotate: rotateCard }
-          ]
-        }
-      ]}
-      {...panResponder.panHandlers}
-    >
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onTap}
-        style={styles.cardTouchable}
-      >
-        <CardContent />
-      </TouchableOpacity>
-    </Animated.View>
+    <Pressable onPress={onTap} style={styles.cardTouchable}>
+      <Animated.View style={[styles.swipeCard, { opacity: 1 }]}>
+        {renderImage ? ( // <-- Use the new renderImage flag
+          <ImageBackground
+            source={{ uri: imageUri }} // Safely use imageUri which handles null
+            style={styles.imageBackground} // Keep existing style
+            resizeMode="cover" // Move resizeMode here
+            onError={(e) => {
+              console.error(`[SwipeCard] Image load error for ${item.id}:`, e.nativeEvent.error);
+              setImageLoadError(true); // <-- Set error state on failure
+            }}
+          >
+            {/* Group Match Badge - Positioned relative to ImageBackground */}
+            {isHousingListing(item) && hasGroup && (
+              // FIX: Ensure this style is defined and referenced correctly
+              <View style={styles.groupMatchBadgeOverlay}>
+                <Users size={14} color="white" />
+                <Text style={styles.groupMatchText}>Group Match</Text>
+              </View>
+            )}
+            <View style={styles.overlay}>
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.9)']} // Intensified Gradient
+                style={styles.gradient}
+              >
+                <CardContent />
+              </LinearGradient>
+            </View>
+          </ImageBackground>
+        ) : (
+          // Placeholder for Services or Housing without images OR if image failed to load
+          <View style={[styles.imageBackground, styles.placeholderBackground]}>
+            <CardContent /> 
+            {/* Optional: Add a placeholder text if needed */}
+            {/* <Text style={styles.placeholderText}>Details Below</Text> */} 
+          </View>
+        )}
+        {/* Action Buttons are outside the Image/Placeholder but inside the Animated.View */}
+        <ActionButtons /> 
+      </Animated.View>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   swipeCard: {
-    width: '100%',
+    width: '100%', // Use full width of the container
     height: '100%',
     backgroundColor: '#fff',
     borderRadius: 16,
     overflow: 'hidden',
+    justifyContent: 'flex-end', // Align content (gradient/text) to the bottom
   },
   cardTouchable: {
     flex: 1,
     width: '100%',
   },
-  imageContainer: {
-    position: 'relative',
-    width: '80%', // Reduced width
-    height: 300, // Keep height consistent
-    overflow: 'hidden', // Keep overflow hidden
-    padding: 10, // Add padding around the image area
-    alignSelf: 'center', // Center the container
-  },
-  swipeImage: {
+  imageBackground: {
     width: '100%',
-    height: '100%',
-    resizeMode: 'contain', // Zoom to fit entire image
-    borderRadius: 25,
+    aspectRatio: 3 / 4, // Maintain aspect ratio
+    borderRadius: 15,
+    overflow: 'hidden',
+    justifyContent: 'flex-end', // Align content (gradient/text) to the bottom
   },
-  groupMatchBadgeOverlay: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    flexDirection: 'row',
+  placeholderBackground: {
+    backgroundColor: '#e0e0e0', 
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(76, 217, 100, 0.8)', // 80% opacity
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    zIndex: 10,
+    justifyContent: 'center', 
+  },
+  placeholderText: {
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  gradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%', // Adjust height as needed
+    justifyContent: 'flex-end',
+    padding: 15,
+    borderBottomLeftRadius: 15, // Match card radius
+    borderBottomRightRadius: 15,
   },
   swipeContent: {
     padding: 16,
-    flex: 1,
+    backgroundColor: 'transparent', // Content itself shouldn't have a background
   },
   swipeDetails: {
     flex: 1,
@@ -405,6 +402,7 @@ const styles = StyleSheet.create({
   swipeTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: 'white', // White text
     marginBottom: 4,
   },
   locationContainer: {
@@ -416,12 +414,12 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 12,
-    color: '#666',
+    color: 'white', // White text
   },
   groupMatchText: {
     fontSize: 12,
-    color: '#fff',
-    fontWeight: '500',
+    color: 'white',
+    fontWeight: 'bold',
   },
   housingFeatures: {
     flexDirection: 'row',
@@ -435,11 +433,11 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 12,
-    color: '#666',
+    color: 'white', // White text
   },
   swipeDescription: {
     fontSize: 14,
-    color: '#333',
+    color: 'white', // White text
     marginBottom: 12,
     lineHeight: 20,
     flex: 1,
@@ -453,12 +451,12 @@ const styles = StyleSheet.create({
   serviceRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginRight: 16, // Add space between rating and price
   },
   ratingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: 'white', // White text
   },
   providerContainerSwipe: {
     flexDirection: 'row',
@@ -471,17 +469,17 @@ const styles = StyleSheet.create({
   verifiedBadgeSwipe: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: '#007AFF', // Blue background
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8, // Space from provider name
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginLeft: 8, // Space between provider name and badge
   },
   verifiedTextSwipe: {
     marginLeft: 4,
     fontSize: 10,
     fontWeight: '600',
-    color: '#007AFF',
+    color: 'white', // White text
   },
   priceContainerSwipe: {
     flexDirection: 'row',
@@ -493,89 +491,57 @@ const styles = StyleSheet.create({
   priceTextSwipe: { // Need a text style for the price itself if nested
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: 'white', // White text
   },
-  placeholderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: '#666',
-  },
+
+
   serviceProviderContainer: {
-    marginBottom: 8,
+    marginBottom: 8, 
   },
-  actionButtonsContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
+  buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
-    width: '100%',
-    zIndex: 20,
+    position: 'absolute', // Position buttons over the card content
+    bottom: 15,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 40,
+    // backgroundColor: 'rgba(0,0,0,0.1)', // Optional background for visibility
   },
-  actionShadow: {
-    backgroundColor: 'transparent',
-  },
-  swipeActionLeft: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  button: {
     backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 50, // Make them circular
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 3, // Android shadow
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: 2,
   },
-  swipeActionRight: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+  likeButton: {
+    // Specific styles if needed
   },
-  ndisBadgeSwipe: {
+  dislikeButton: {
+    // Specific styles if needed
+  },
+  groupMatchBadgeOverlay: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 122, 255, 0.8)', // App blue
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4, // Add gap for spacing instead of margin
+    top: 15,
+    left: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
   },
-  ndisBadgeTextSwipe: {
-    fontSize: 10,
-    fontWeight: '500', // Match grid view
-    color: '#fff',
-  },
-  favButtonSwipe: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    // No background
-    padding: 6, 
-    borderRadius: 20, // Maintain touch area
-    zIndex: 10, // Ensure it's above image but below other potential overlays if needed
+  providerNameText: {
+    color: 'white', 
+    // Add other existing styles if any
+    fontWeight: '600', // Example style
+    fontSize: 16, // Example style
   },
 });
 
-// Export the component as both a named export and a default export
-export { SwipeCard };
-export default SwipeCard;
+export default React.memo(SwipeCardComponent); // Export the memoized component

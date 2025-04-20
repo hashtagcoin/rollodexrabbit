@@ -12,10 +12,35 @@ import { supabase } from '../../../lib/supabase';
 import { ArrowLeft, MapPin, Star, Calendar, Clock, ChevronRight } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 
+// Assume or import more specific types based on your actual schema
+// This is a placeholder structure based on the query
+type FetchedServiceData = {
+  id: string;
+  title: string;
+  description: string;
+  media_urls: string[];
+  address_line_1?: string; // Assuming address parts are in listings
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+  provider: {
+    business_name: string;
+    verified: boolean;
+  } | null;
+  service_details: {
+    hourly_rate?: number; // Optional fields based on service_listings
+    duration?: string; // e.g., '60 min'
+  } | null;
+  // Add other fields from 'listings' table as needed
+  // e.g., rating, reviews_count - These might need separate queries or be part of listings
+};
+
 export default function ServiceDetails() {
-  const { id, returnIndex, returnViewMode } = useLocalSearchParams();
+  const { id, returnIndex, returnViewMode } = useLocalSearchParams<{ id: string; returnIndex?: string; returnViewMode?: string }>();
   const navigation = useNavigation();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start loading initially
+  const [serviceData, setServiceData] = useState<FetchedServiceData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Custom back handler to return to discover screen
   const handleBackPress = () => {
@@ -29,74 +54,134 @@ export default function ServiceDetails() {
     });
   };
 
-  // This would normally be fetched from the API
-  const service = {
-    id: 1,
-    name: 'HealthBridge Therapy',
-    image: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?q=80&w=2068&auto=format&fit=crop',
-    category: 'Physiotherapy',
-    rating: 4.9,
-    reviews: 128,
-    distance: '2.5 km',
-    price: 120,
-    description: 'Expert physiotherapy services tailored to your needs. Our experienced therapists use evidence-based techniques to help you achieve your mobility and recovery goals.',
-    address: '123 Health Street, Melbourne VIC 3000',
-    duration: '60 min',
-    availableTimes: [
-      '9:00 AM',
-      '10:00 AM',
-      '2:00 PM',
-      '3:00 PM',
-      '4:00 PM',
-    ],
-  };
+  useEffect(() => {
+    const fetchServiceDetails = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Query based on confirmed schema
+        const { data, error: dbError } = await supabase
+          .from('listings')
+          .select(`
+            *,
+            provider:providers (business_name, verified),
+            service_details:service_listings (hourly_rate, duration)
+          `)
+          .eq('id', id)
+          .eq('listing_type', 'service') // Ensure it's a service
+          .single();
+
+        if (dbError) {
+          throw dbError;
+        }
+
+        if (data) {
+          setServiceData(data as FetchedServiceData);
+        } else {
+          setError('Service not found.');
+        }
+      } catch (err: any) {
+        console.error('Error fetching service details:', err);
+        setError(err.message || 'Failed to fetch service details.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchServiceDetails();
+  }, [id]);
 
   const handleBooking = () => {
+    if (!serviceData) return; 
     router.push({
-      pathname: '/discover/booking',
-      params: { serviceId: id },
+      pathname: '/(tabs)/discover/booking', // Adjust path if needed
+      params: { serviceId: serviceData.id }, 
     });
   };
+
+  // Loading State
+  if (loading) {
+    return (
+      <View style={styles.containerCentered}>
+        <AppHeader title="Loading..." showBackButton={true} onBackPress={handleBackPress} />
+        {/* Consider adding an ActivityIndicator here */}
+        <Text style={styles.messageText}>Loading service details...</Text>
+      </View>
+    );
+  }
+
+  // Error State
+  if (error || !serviceData) {
+    return (
+      <View style={styles.containerCentered}>
+        <AppHeader title="Error" showBackButton={true} onBackPress={handleBackPress} />
+        <Text style={styles.messageText}>{error || 'Service data could not be loaded.'}</Text>
+      </View>
+    );
+  }
+
+  // --- Data Rendering --- 
+  // Use serviceData instead of hardcoded 'service'
+  const imageUrl = serviceData.media_urls && serviceData.media_urls.length > 0 
+                   ? serviceData.media_urls[0] 
+                   : 'https://placehold.co/600x400?text=No+Image'; // Fallback image
+
+  const fullAddress = [
+    serviceData.address_line_1,
+    serviceData.suburb,
+    serviceData.state,
+    serviceData.postcode
+  ].filter(Boolean).join(', '); // Construct address safely
 
   return (
     <View style={styles.container}>
       <AppHeader title="Service Details" showBackButton={true} onBackPress={handleBackPress} />
       <ScrollView>
         <View style={styles.imageContainer}>
-          <Image source={{ uri: service.image }} style={styles.image} />
+          {/* Use fetched image URL with fallback */}
+          <Image source={{ uri: imageUrl }} style={styles.image} />
         </View>
 
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>{service.name}</Text>
-            <View style={styles.ratingContainer}>
+            {/* Use fetched data */}
+            <Text style={styles.title}>{serviceData.title || 'Service Name Unavailable'}</Text>
+            {/* TODO: Fetch/Display Rating and Reviews if available in schema */}
+            {/* <View style={styles.ratingContainer}>
               <Star size={20} color="#FFB800" fill="#FFB800" />
-              <Text style={styles.rating}>{service.rating}</Text>
-              <Text style={styles.reviews}>({service.reviews} reviews)</Text>
-            </View>
+              <Text style={styles.rating}>{serviceData.rating}</Text> 
+              <Text style={styles.reviews}>({serviceData.reviews} reviews)</Text> 
+            </View> */}
           </View>
 
           <View style={styles.metaInfo}>
             <View style={styles.metaItem}>
               <MapPin size={20} color="#666" />
-              <Text style={styles.metaText}>{service.address}</Text>
+              {/* Use constructed address */}
+              <Text style={styles.metaText}>{fullAddress || 'Address not available'}</Text>
             </View>
-            <View style={styles.metaItem}>
-              <Clock size={20} color="#666" />
-              <Text style={styles.metaText}>{service.duration}</Text>
-            </View>
-            <View style={styles.metaItem}>
+            {serviceData.service_details?.duration && (
+              <View style={styles.metaItem}>
+                <Clock size={20} color="#666" />
+                {/* Use fetched duration */}
+                <Text style={styles.metaText}>{serviceData.service_details.duration}</Text>
+              </View>
+            )}
+            {/* TODO: Implement availability logic */}
+            {/* <View style={styles.metaItem}>
               <Calendar size={20} color="#666" />
-              <Text style={styles.metaText}>Available Today</Text>
-            </View>
+              <Text style={styles.metaText}>Available Today</Text> 
+            </View> */}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.description}>{service.description}</Text>
+            <Text style={styles.sectionTitle}>About {serviceData.provider?.business_name || ''}</Text>
+            {/* Use fetched description */}
+            <Text style={styles.description}>{serviceData.description || 'No description provided.'}</Text>
           </View>
 
-          <View style={styles.section}>
+          {/* TODO: Implement Available Times fetching/display */}
+          {/* <View style={styles.section}>
             <Text style={styles.sectionTitle}>Available Times</Text>
             <ScrollView 
               horizontal 
@@ -109,17 +194,20 @@ export default function ServiceDetails() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </View>
+          </View> */}
 
           <View style={styles.priceSection}>
-            <View>
-              <Text style={styles.priceLabel}>Price per session</Text>
-              <Text style={styles.price}>${service.price}</Text>
-            </View>
+            {serviceData.service_details?.hourly_rate && (
+              <View>
+                <Text style={styles.priceLabel}>Price per session</Text>
+                {/* Use fetched price */}
+                <Text style={styles.price}>${serviceData.service_details.hourly_rate}</Text>
+              </View>
+            )}
             <TouchableOpacity 
-              style={[styles.bookButton, loading && styles.bookButtonDisabled]}
+              style={[styles.bookButton, loading && styles.bookButtonDisabled]} // Loading state check might be redundant here
               onPress={handleBooking}
-              disabled={loading}
+              disabled={loading || !serviceData} // Disable if loading or no data
             >
               <Text style={styles.bookButtonText}>Book Now</Text>
               <ChevronRight size={20} color="#fff" />
@@ -135,6 +223,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  containerCentered: { // Added style for loading/error states
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  messageText: { // Added style for loading/error text
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   imageContainer: {
     position: 'relative',

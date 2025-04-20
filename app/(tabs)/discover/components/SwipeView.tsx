@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, Animated } from 'react-native';
-import { ListingItem, HousingListing } from '../types';
+import { ListingItem, HousingListing, Service } from '../types';
 import SwipeCard from './SwipeCard';
 import { ErrorBoundary } from './ErrorBoundary';
 import { Heart, X } from 'lucide-react-native';
@@ -17,6 +17,8 @@ interface SwipeViewProps {
   isHousingListing: (item: ListingItem) => item is HousingListing;
   renderServiceProvider: (item: ListingItem) => JSX.Element;
   hasHousingGroup?: (item: ListingItem) => boolean;
+  isServiceListing: (item: ListingItem) => item is Service;
+  isFavorite?: (itemId: string) => boolean;
 }
 
 const SwipeView: React.FC<SwipeViewProps> = ({
@@ -29,6 +31,8 @@ const SwipeView: React.FC<SwipeViewProps> = ({
   isHousingListing,
   renderServiceProvider,
   hasHousingGroup,
+  isServiceListing = (item: ListingItem): item is Service => false,
+  isFavorite = () => false,
 }) => {
   // Add a state to track if the current card is being swiped
   const [isCardSwiping, setIsCardSwiping] = useState(false);
@@ -237,6 +241,9 @@ const SwipeView: React.FC<SwipeViewProps> = ({
                 <SwipeCard
                   item={getThirdItem()!}
                   isNext={true}
+                  isServiceListing={(item: ListingItem): item is Service => false}
+                  isTopCard={false} // Placeholder (Third card is not top)
+                  isFavorite={false} // Placeholder
                   getItemImage={getItemImage}
                   getItemPrice={getItemPrice}
                   isHousingListing={isHousingListing}
@@ -269,6 +276,9 @@ const SwipeView: React.FC<SwipeViewProps> = ({
               <SwipeCard
                 item={getNextItem()!}
                 isNext={true}
+                isServiceListing={(item: ListingItem): item is Service => false}
+                isTopCard={false} // Placeholder (Next card is not top)
+                isFavorite={false} // Placeholder
                 getItemImage={getItemImage}
                 getItemPrice={getItemPrice}
                 isHousingListing={isHousingListing}
@@ -286,6 +296,9 @@ const SwipeView: React.FC<SwipeViewProps> = ({
               onSwipe={handleSwipe}
               onCardLeftScreen={handleSwipe}
               onSwipeProgress={handleSwipeProgress}
+              isServiceListing={isServiceListing}
+              isTopCard={true} // This is the top card
+              isFavorite={isFavorite(getCurrentItem()!.id)}
               getItemImage={getItemImage}
               getItemPrice={getItemPrice}
               isHousingListing={isHousingListing}
