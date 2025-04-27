@@ -3,6 +3,7 @@ import { Stack, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, useColorScheme, ColorSchemeName } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useFrameworkReady } from '../hooks/useFrameworkReady';
 import { AuthProvider } from '../providers/AuthProvider';
 import { AccessibilityProvider, useAccessibility, getHighContrastColors } from '../lib/accessibilityContext';
@@ -27,9 +28,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AccessibilityProvider>
-        <AuthProvider>
-          <RootLayoutContent colorScheme={colorScheme} />
-        </AuthProvider>
+        <BottomSheetModalProvider>
+          <AuthProvider>
+            <RootLayoutContent colorScheme={colorScheme} />
+          </AuthProvider>
+        </BottomSheetModalProvider>
       </AccessibilityProvider>
     </GestureHandlerRootView>
   );
@@ -53,11 +56,7 @@ function RootLayoutContent({ colorScheme }: { colorScheme: ColorSchemeName }) {
 
   return (
     <>
-      <Stack screenOptions={screenOptions}>
-        <Stack.Screen name="+not-found" />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="ndis-plan" />
-      </Stack>
+      <Stack screenOptions={screenOptions} />
       <StatusBar style={isDarkMode || settings.highContrast ? "light" : "dark"} />
     </>
   );

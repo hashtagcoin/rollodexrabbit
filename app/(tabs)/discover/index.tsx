@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,8 @@ import AppHeader from '../../../components/AppHeader';
 import SwipeListView from './components/SwipeListView';
 import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
 import { ShadowCard } from './components/ShadowCard';
+// Import Bottom Sheet components
+import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 
 // --- Configuration ---
 // TODO: Replace with your actual Supabase project reference
@@ -175,7 +177,8 @@ export default function DiscoverScreen() {
             state,
             sda_category,
             media_urls
-          `);
+          `)
+          .order(sortOption.field, { ascending: sortOption.direction === 'asc' }); // Add sorting
           
         if (error) throw error;
         
@@ -210,7 +213,8 @@ export default function DiscoverScreen() {
               verified
             )
           `)
-          .eq('category', selectedCategory);
+          .eq('category', selectedCategory)
+          .order(sortOption.field, { ascending: sortOption.direction === 'asc' }); // Add sorting
           
         if (error) throw error;
         
@@ -241,12 +245,38 @@ export default function DiscoverScreen() {
     }
   }
 
+  // ---> START Sort State & Refs <---
+  const [sortOption, setSortOption] = useState<{ field: string; direction: 'asc' | 'desc' }>({ 
+    field: 'created_at', // Default sort: Newest first
+    direction: 'desc' 
+  });
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const snapPoints = useMemo(() => ['35%'], []); // Adjust height as needed
+
+  // Callback to open the bottom sheet
+  const handlePresentModalPress = useCallback(() => {
+    bottomSheetModalRef.current?.present();
+  }, []);
+
+  // Callback for when sheet changes (e.g., dismissed)
+  const handleSheetChanges = useCallback((index: number) => {
+    console.log('handleSheetChanges', index);
+    // You can add logic here if needed when the sheet opens/closes
+  }, []);
+
+  // Function to update sort option and close sheet
+  const selectSortOption = (field: string, direction: 'asc' | 'desc') => {
+    setSortOption({ field, direction });
+    bottomSheetModalRef.current?.dismiss();
+  };
+  // ---> END Sort State & Refs <---
+
   // Effect 1: Load listings when category or search changes, reset index
   useEffect(() => {
     console.log('Effect: Loading listings due to category/search change');
     setCurrentIndex(0); // Reset index when category/search changes
     loadListings();
-  }, [selectedCategory, searchQuery]); // Runs on mount and when these change
+  }, [selectedCategory, searchQuery, sortOption]); // Runs on mount and when these change
 
   // Effect 2: Handle initialization from URL category param (run once or if param provided later)
   useEffect(() => {
@@ -802,9 +832,7 @@ export default function DiscoverScreen() {
           
           <TouchableOpacity 
             style={styles.sortButton}
-            onPress={() => {
-              // Add filtering functionality here in the future
-            }}
+            onPress={handlePresentModalPress}
           >
             <ArrowDownUp size={20} color="#333" />
           </TouchableOpacity>
@@ -839,6 +867,39 @@ export default function DiscoverScreen() {
           )}
         </View>
       )}
+      
+      {/* Bottom Sheet Modal for Sorting */} 
+      <BottomSheetModal
+        ref={bottomSheetModalRef}
+        index={0} // Initial position index
+        snapPoints={snapPoints}
+        onChange={handleSheetChanges}
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+        )}
+        handleIndicatorStyle={{ backgroundColor: '#ccc' }} // Style the grab handle
+        backgroundStyle={{ backgroundColor: '#fff' }} // Style the sheet background
+      >
+        <BottomSheetView style={styles.bottomSheetContent}>
+          <Text style={styles.bottomSheetTitle}>Sort By</Text>
+          {/* Add Sorting Options Here */} 
+          {/* Example: */}
+          <TouchableOpacity style={styles.sortOptionButton} onPress={() => selectSortOption('title', 'asc')}> 
+             <Text>Name (A-Z)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sortOptionButton} onPress={() => selectSortOption('title', 'desc')}> 
+             <Text>Name (Z-A)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sortOptionButton} onPress={() => selectSortOption('created_at', 'desc')}> 
+             <Text>Date Added (Newest)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sortOptionButton} onPress={() => selectSortOption('created_at', 'asc')}> 
+             <Text>Date Added (Oldest)</Text>
+          </TouchableOpacity>
+          {/* TODO: Add Price options if applicable/consistent */}
+        </BottomSheetView>
+      </BottomSheetModal>
+
     </View>
   );
 }
@@ -1158,5 +1219,23 @@ const styles = StyleSheet.create({
   categoryTextGridList: {
     fontSize: 12,
     color: '#666',
+  },
+  bottomSheetContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    // alignItems: 'center', // Uncomment if you want centered items
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  sortOptionButton: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
 });

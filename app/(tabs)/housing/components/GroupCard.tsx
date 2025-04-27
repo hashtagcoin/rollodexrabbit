@@ -56,12 +56,6 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
     ]).start();
   }, [fadeAnim, scaleAnim, translateYAnim, index]);
 
-  const handleViewGroup = () => {
-    // Navigate to the housing group detail screen for all groups
-    const isTestGroup = group.id.startsWith('test-');
-    router.push(`/housing/group/${group.id}${isTestGroup ? '?action=view' : ''}`);
-  };
-
   const formatJoinDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString();
@@ -82,11 +76,11 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
     >
       <TouchableOpacity
         style={styles.card}
-        onPress={handleViewGroup}
+        onPress={() => onJoinGroup?.(group.id)}
         activeOpacity={0.9}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>We are looking for an Awesome flatmate who loves Spaghetti! 😊</Text>
+          <Text style={styles.title}>{group.description}</Text>
         </View>
         
         <View style={styles.statsContainer}>
@@ -130,7 +124,7 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
 
         <TouchableOpacity 
           style={styles.viewButton}
-          onPress={handleViewGroup}
+          onPress={() => onJoinGroup?.(group.id)}
         >
           <Text style={styles.viewButtonText}>View Group</Text>
         </TouchableOpacity>

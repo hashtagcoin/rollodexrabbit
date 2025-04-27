@@ -379,6 +379,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
+    flexDirection: 'row', 
+    alignItems: 'center'  
+  },
+  bookButtonDisabled: {
+    opacity: 0.6, 
   },
   bookButtonText: {
     color: '#fff',

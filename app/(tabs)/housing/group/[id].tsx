@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,42 +9,48 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
-  Share,
 } from 'react-native';
-import { Stack, useLocalSearchParams, router } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
 import { useAuth } from '../../../../providers/AuthProvider';
-import { handleApiError } from '../../../../lib/errorUtils';
+import { handleApiError } from '../../../../lib/errorUtils'; // Reverted path
 import {
   ChevronLeft,
-  Users,
+  Filter,
+  Heart,
   User,
+  Users,
   HeartHandshake,
   MapPin,
   Calendar,
-  MessageSquare,
-  Heart,
-  Share as ShareIcon,
 } from 'lucide-react-native';
-import { HousingGroup, SupportLevel, GroupMember } from '../types/housing';
+import AppHeader from '../../../../components/AppHeader';
+import { HousingGroup, GroupMember } from '../types/housing';
+import { type Database } from '../types/database.types'; // Adjusted path
+
+// Define Tables type from Supabase generated types
+type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
+type Enums<T extends keyof Database['public']['Enums']> = Database['public']['Enums'][T];
+type UserProfileType = Tables<'user_profiles'>; // Define UserProfileType
 
 // Extend the GroupMember and related user profile types to include additional fields
-interface ExtendedUserProfile {
+interface ExtendedUserProfile { 
   id: string;
-  first_name: string;
-  last_name: string;
-  avatar_url: string | null;
-  age_range?: string | null;
-  bio?: string | null;
-  gender?: string | null;
+  full_name: string | null; 
+  avatar_url: string | null; 
+  sex: string | null; 
+  bio?: string | null; 
 }
 
-interface ExtendedGroupMember extends Omit<GroupMember, 'user_profile'> {
-  user_profile: ExtendedUserProfile;
+interface ExtendedGroupMember extends Omit<Tables<'housing_group_members'>, 'user_profile' | 'bio' | 'support_level'> { 
+  user_profile: ExtendedUserProfile; 
+  support_level: string | null; 
+  bio?: string | null; 
 }
 
 interface ExtendedHousingGroup extends Omit<HousingGroup, 'members'> {
   members: ExtendedGroupMember[];
+  description: string; 
 }
 
 // Define type for the housing listing summary
@@ -58,49 +64,19 @@ type HousingListingSummary = {
   media_urls: string[];
 };
 
-// Support level utilities
-const supportLevelLabels: Record<SupportLevel, string> = {
-  none: 'No Support',
-  light: 'Light Support',
-  moderate: 'Moderate Support',
-  high: 'High Support',
-};
-
-const supportLevelColors: Record<SupportLevel, string> = {
-  none: '#dddddd',
-  light: '#a5d6a7', // Lighter Green
-  moderate: '#ffcc80', // Lighter Orange
-  high: '#ef9a9a', // Lighter Red
-};
-
-const ageRangeColors: Record<string, string> = {
-  '18-24': '#8e44ad', // Purple
-  '25-34': '#3498db', // Blue
-  '35-44': '#2980b9', // Darker Blue
-  '45+': '#16a085', // Teal
-};
-
-const genderColors: Record<string, string> = {
-  'Male': '#2c3e50',
-  'Female': '#c0392b',
-  'Non-binary': '#27ae60',
-  'Other': '#d35400',
-};
-
-const lighterBlue = '#589AF0'; // Define lighter blue
-const lightBlueBackground = '#EAF2FF'; // Define light blue background
-
 export default function HousingGroupDetail() {
-  const { id, action } = useLocalSearchParams<{ id: string; action: string }>();
+  const { id, action } = useLocalSearchParams<{ id: string; action?: string }>(); 
+  console.log('GroupDetail: received id param:', id);
+  const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user.id;
 
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [group, setGroup] = useState<ExtendedHousingGroup | null>(null);
-  const [listing, setListing] = useState<HousingListingSummary | null>(null);
-  const [userMembership, setUserMembership] = useState<ExtendedGroupMember | null>(null);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [listing, setListing] = useState<HousingListingSummary | null>(null); 
+  const [userMembership, setUserMembership] = useState<ExtendedGroupMember | null>(null); 
+  const [error, setError] = useState<string | null>(null);
 
   // Format date as Month Day
   const formatMoveInDate = (dateString: string) => {
@@ -108,674 +84,526 @@ export default function HousingGroupDetail() {
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
   };
 
-  // Handle navigation back
-  const handleBack = () => {
-    router.back();
-  };
+  // Load group details from database (only for real UUIDs)
+  // Use useCallback to prevent unnecessary re-renders if passed as prop
+  const loadGroupDetails = async () => {
+    if (!id || !userId) return;
 
-  // Handle sharing the group
-  const handleShare = async () => {
-    if (!group || !listing) return;
+    setLoading(true);
+    setError(null);
+
+    console.log(`Querying details for Housing Group ID: ${id}`);
+
+    // Define the fields needed from user_profiles
+    const profileSelect = `
+      id,
+      full_name,
+      avatar_url,
+      sex,
+      bio
+    `;
+
     try {
-      await Share.share({
-        message: `Check out this Group Living Opportunity on Rollodex: ${listing.title} at ${listing.address}. More info: [Link to Group/Listing if available]`, // Replace with actual link if possible
-        title: `Group Opportunity: ${listing.title}`,
+      // Step 1: Fetch group, listing, members (base data), and user's membership (base data)
+      const { data: groupData, error: groupError } = await supabase
+        .from('housing_groups')
+        .select(`
+          id,
+          name,
+          description,
+          listing_id,
+          max_members,
+          current_members,
+          creator_id,
+          created_at,
+          move_in_date,
+          is_active
+        `)
+        .eq('id', id)
+        .single();
+
+      if (groupError) throw groupError;
+      if (!groupData) throw new Error('Housing group not found.');
+
+      console.log(`Querying details for Housing Group ID: ${id}, Listing ID: ${groupData.listing_id}`);
+
+      const [listingResult, membersResult, userMembershipResult] = await Promise.all([
+        supabase.from('housing_listings').select('*').eq('id', groupData.listing_id).single(),
+        // Fetch members (approved)
+        supabase
+          .from('housing_group_members')
+          .select(`
+            id,
+            user_id,
+            group_id,
+            join_date,
+            status,
+            support_level,
+            is_admin,
+            bio
+          `)
+          .eq('group_id', id)
+          .eq('status', 'approved'), 
+        // Fetch user's specific membership status (maybeSingle)
+        supabase
+          .from('housing_group_members')
+          .select(`
+            id,
+            user_id,
+            group_id,
+            join_date,
+            status,
+            support_level,
+            is_admin,
+            bio
+          `)
+          .eq('group_id', id)
+          .eq('user_id', userId)
+          .maybeSingle()
+      ]);
+
+      if (userMembershipResult.error) throw userMembershipResult.error;
+
+      const fetchedListing = listingResult.data;
+      const fetchedMembersData = membersResult.data || [];
+      const fetchedUserMembershipData = userMembershipResult.data;
+
+      // Step 2: Collect all unique user IDs
+      const userIds = new Set<string>();
+      fetchedMembersData.forEach(m => userIds.add(m.user_id));
+      if (fetchedUserMembershipData) {
+        userIds.add(fetchedUserMembershipData.user_id);
+      }
+
+      // Step 3: Fetch user profiles for all unique IDs if any exist
+      let userProfilesMap = new Map<string, ExtendedUserProfile>();
+      if (userIds.size > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select(profileSelect)
+          .in('id', Array.from(userIds));
+
+        if (profilesError) throw profilesError;
+
+        // Create a map for easy lookup
+        profilesData?.forEach(profile => {
+          // Ensure the profile matches the structure expected by ExtendedUserProfile
+          // If not, provide default values or handle appropriately.
+          const mappedProfile: ExtendedUserProfile = {
+            id: profile.id,
+            full_name: profile.full_name || 'Unknown User', 
+            avatar_url: profile.avatar_url || null,
+            sex: profile.sex || null, 
+            bio: profile.bio || null 
+          };
+          userProfilesMap.set(profile.id, mappedProfile);
+        });
+      }
+
+      // Step 4: Process members and combine with profiles
+      const processedMembers: ExtendedGroupMember[] = fetchedMembersData
+        ? fetchedMembersData.map((m) => {
+          const userProfile = userProfilesMap.get(m.user_id) || {
+            // Fallback profile if not found in map (should ideally not happen if fetched correctly)
+            id: m.user_id,
+            full_name: 'Unknown User',
+            avatar_url: null,
+            sex: null,
+            bio: null
+          };
+          return {
+            id: m.id,
+            user_id: m.user_id,
+            group_id: m.group_id,
+            join_date: m.join_date,
+            status: m.status,
+            is_admin: m.is_admin, 
+            support_level: m.support_level || 'none', 
+            user_profile: userProfile, 
+            bio: m.bio ?? userProfile.bio ?? null, 
+          };
+        })
+        : [];
+
+      // Process user's specific membership
+      let fetchedUserMembership: ExtendedGroupMember | null = null;
+      if (fetchedUserMembershipData) {
+        const userProfile = userProfilesMap.get(fetchedUserMembershipData.user_id) || {
+          id: fetchedUserMembershipData.user_id,
+          full_name: 'You',
+          avatar_url: null,
+          sex: null,
+          bio: null
+        };
+        fetchedUserMembership = {
+          id: fetchedUserMembershipData.id,
+          user_id: fetchedUserMembershipData.user_id,
+          group_id: fetchedUserMembershipData.group_id,
+          join_date: fetchedUserMembershipData.join_date,
+          status: fetchedUserMembershipData.status,
+          is_admin: fetchedUserMembershipData.is_admin,
+          user_profile: userProfile,
+          support_level: fetchedUserMembershipData.support_level || 'none',
+          bio: fetchedUserMembershipData.bio ?? userProfile.bio ?? null, 
+        };
+      }
+
+      setListing(fetchedListing);
+      setGroup({
+        ...groupData,
+        description: groupData.description || 'No description provided.', 
+        current_members: processedMembers.length, 
+        members: processedMembers, 
       });
+      setUserMembership(fetchedUserMembership); 
+
+      console.log('Successfully loaded group details, listing, members, and user status.');
     } catch (error: any) {
-      Alert.alert(error.message);
+      console.error('Error in loadGroupDetails:', error?.message || 'An unexpected error occurred');
+      handleApiError(error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Load group details when the ID changes
+  // Effect to load details when id or userId changes
   useEffect(() => {
-    if (!id) return;
-
-    // Check if this is a test group ID
-    if (typeof id === 'string' && id.startsWith('test-')) {
-      console.log('Loading test group data');
-      handleTestGroup(id as string);
-      return;
-    }
-
     loadGroupDetails();
   }, [id, userId]);
 
-  // Handle join action if provided
-  useEffect(() => {
-    if (action === 'join' && group && !userMembership) {
-      confirmJoinGroup();
-    }
-  }, [action, group, userMembership]);
-
-  // Load group details from the database
-  const loadGroupDetails = async () => {
-    try {
-      setLoading(true);
-
-      // For test group IDs, use our test data handler
-      if (typeof id === 'string' && id.startsWith('test-')) {
-        return handleTestGroup(id as string);
-      }
-
-      // Otherwise load real data from database (this section isn't needed for demo)
-      console.log('Would load real group data here');
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading group details:', error);
-      Alert.alert('Error', 'Failed to load group details. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  // Handle test group data
-  const handleTestGroup = async (groupId: string) => {
-    if (groupId.startsWith('test-')) {
-      try {
-        // Real user IDs from our database for testing
-        const realUserIds = [
-          '7a9ed413-a880-43d1-aeb0-33805d00a3c8', // support_coordinator@example.com
-          'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8', // ryan_h@example.com
-          'd5e1fa56-80b7-4e51-9012-3baac98f2b9e', // lily_w@example.com
-          'fc178f8d-6b47-40be-beaf-462e1c7f31a3', // dhdhd@gfgf.com
-          '9e4fffdc-6dbc-40b0-8601-abcfdd9c4af4', // bash@gmaikl.com
-        ];
-
-        // Extract listing ID part from test group ID
-        const listingId = groupId.split('-')[1];
-
-        // Create test listing data
-        const listingData = {
-          id: `${listingId}`,
-          title: 'Greenwood House',
-          address: '26 Maple St',
-          suburb: 'Richmond',
-          weekly_rent: 420,
-          available_from: '2025-05-01T00:00:00.000Z',
-          media_urls: ['https://images.unsplash.com/photo-1568605114967-8130f3a36994'],
-        };
-
-        // Use current user ID or fall back to a test ID
-        const currentUserId = userId || realUserIds[0];
-
-        // Create test group data
-        const testGroup: ExtendedHousingGroup = {
-          id: groupId,
-          name: 'Group Living Opportunity',
-          description: 'A shared living opportunity',
-          listing_id: listingData.id,
-          max_members: 4,
-          current_members: 3,
-          creator_id: currentUserId,
-          created_at: new Date().toISOString(),
-          move_in_date: new Date('2025-05-01').toISOString(),
-          is_active: true,
-          members: [
-            {
-              id: `${groupId}-member1`,
-              user_id: realUserIds[0],
-              group_id: groupId,
-              join_date: new Date().toISOString(),
-              status: 'approved',
-              bio: 'Loves gardening and quiet nights. Needs part-time support.',
-              support_level: 'light' as SupportLevel,
-              is_admin: true,
-              user_profile: {
-                id: realUserIds[0],
-                first_name: 'Sarah',
-                last_name: 'M.',
-                avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg',
-                age_range: '35-44',
-                bio: 'Loves gardening and quiet nights.',
-                gender: 'Female',
-              },
-            },
-            {
-              id: `${groupId}-member2`,
-              user_id: realUserIds[1],
-              group_id: groupId,
-              join_date: new Date().toISOString(),
-              status: 'approved',
-              bio: 'Friendly and active, enjoys sports and being outdoors.',
-              support_level: 'high' as SupportLevel,
-              is_admin: false,
-              user_profile: {
-                id: realUserIds[1],
-                first_name: 'David',
-                last_name: 'K.',
-                avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg',
-                age_range: '45+',
-                bio: 'Friendly and active, enjoys sports and being outdoors.',
-                gender: 'Male',
-              },
-            },
-            {
-              id: `${groupId}-member3`,
-              user_id: realUserIds[2],
-              group_id: groupId,
-              join_date: new Date().toISOString(),
-              status: 'approved',
-              bio: 'Easygoing and loves animals.',
-              support_level: 'moderate' as SupportLevel,
-              is_admin: false,
-              user_profile: {
-                id: realUserIds[2],
-                first_name: 'Jess',
-                last_name: 'B.',
-                avatar_url: 'https://randomuser.me/api/portraits/women/68.jpg',
-                age_range: '25-34',
-                bio: 'Easygoing and loves animals.',
-                gender: 'Female',
-              },
-            },
-          ],
-        };
-
-        setGroup(testGroup);
-        setListing(listingData);
-
-        // Check if current user is a member
-        if (userId) {
-          const memberRecord = testGroup.members.find((m) => m.user_id === userId);
-          if (memberRecord) {
-            setUserMembership(memberRecord);
-          }
-        }
-
-        setLoading(false);
-        return testGroup;
-      } catch (error) {
-        console.error('Error creating test group:', error);
-        setLoading(false);
-        return null;
-      }
-    }
-    setLoading(false);
-    return null;
-  };
-
-  // Toggle favorite status
-  const toggleFavorite = () => {
-    setIsFavorite(!isFavorite);
-
-    // In a real implementation, we would save this to the database
-    // For demo purposes, we'll just show an alert
-    if (!isFavorite) {
-      Alert.alert(
-        'Added to Favorites',
-        'This housing group has been added to your favorites.',
-      );
-    } else {
-      Alert.alert(
-        'Removed from Favorites',
-        'This housing group has been removed from your favorites.',
-      );
-    }
-  };
-
-  // Show join confirmation dialog
-  const confirmJoinGroup = () => {
-    if (!userId) {
-      Alert.alert(
-        'Sign In Required',
-        'You need to sign in to join housing groups.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Sign In',
-            onPress: () => router.replace('/'), // Navigate to home screen instead
-          },
-        ],
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Join Group',
-      'Would you like to request to join this housing group?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Join', onPress: handleJoinGroup },
-      ],
-    );
-  };
-
-  // Handle joining the group
-  const handleJoinGroup = async () => {
-    if (!userId) {
-      confirmJoinGroup();
-      return;
-    }
-
-    try {
-      setJoining(true);
-
-      // Check if user is already a member
-      if (userMembership) {
-        Alert.alert('Already in group', 'You are already a member or have a pending request to join this group.');
-        setJoining(false);
-        return;
-      }
-
-      // For test groups, just update the local state
-      if (typeof id === 'string' && id.startsWith('test-')) {
-        const newMembership: ExtendedGroupMember = {
-          id: `${id}-member-${Date.now()}`,
-          user_id: userId,
-          group_id: id,
-          join_date: new Date().toISOString(),
-          status: 'pending',
-          bio: '',
-          support_level: 'none',
-          is_admin: false,
-          user_profile: {
-            id: userId,
-            first_name: 'You',
-            last_name: '',
-            avatar_url: null,
-            age_range: null,
-            bio: null,
-          },
-        };
-
-        // Update the group with the new member
-        if (group) {
-          const updatedGroup = { ...group };
-          updatedGroup.members.push(newMembership);
-          setGroup(updatedGroup);
-          setUserMembership(newMembership);
-        }
-
-        Alert.alert(
-          'Request Sent',
-          'Your request to join this group has been sent. You will be notified when the group admin approves your request.',
-          [{ text: 'OK' }],
-        );
-
-        setJoining(false);
-        return;
-      }
-
-      // For real groups, we would handle database operations here
-      setJoining(false);
-      Alert.alert('Success', 'Your request to join this group has been sent.');
-    } catch (error) {
-      console.error('Error joining group:', error);
-      Alert.alert('Error', 'Failed to join group. Please try again.');
-      setJoining(false);
-    }
-  };
-
-  // Loading state
-  if (loading) {
+  // --- RENDER ACTUAL CONTENT --- 
+  // Check if group and listing data are loaded before rendering the main UI
+  if (!group) {
+    // This covers the case where loading is false but group is still null (e.g., not found or error)
     return (
-      <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ChevronLeft size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Group Living Opportunity</Text>
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading group details...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.centered}> 
+        <Text style={styles.errorText}>{error || 'Group not found.'}</Text>
+        <TouchableOpacity onPress={loadGroupDetails} style={styles.retryButton}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
-  // No group found state
-  if (!group || !listing) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ChevronLeft size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Group Living Opportunity</Text>
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.noGroupContainer}>
-          <Text style={styles.noGroupText}>This housing group couldn't be found.</Text>
-          <TouchableOpacity onPress={handleBack} style={styles.backToListingButton}>
-            <Text style={styles.backToListingText}>Back to Listing</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Main render
+  // If group exists, render the detailed view
   return (
-    <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <ChevronLeft size={24} color="#000" />
+    <SafeAreaView style={styles.safeArea}>
+      {/* Scrollable content area */}
+      <ScrollView contentContainerStyle={styles.container}>
+        {/* Back Button */}
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ChevronLeft size={24} color="#333" />
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{group?.name || 'Group Details'}</Text>
-        <TouchableOpacity onPress={handleShare} style={styles.headerRight}>
-          <ShareIcon size={22} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Fixed property info card */}
-      <View style={styles.propertyCard}>
-        <Image source={{ uri: listing.media_urls[0] }} style={styles.propertyImage} />
-        <View style={styles.propertyInfo}>
-          <View style={styles.propertyHeader}>
-            <Text style={styles.propertyName}>{listing.title}</Text>
-            <TouchableOpacity style={styles.favoriteButton} onPress={toggleFavorite}>
-              <Heart size={24} color={isFavorite ? "#ff4757" : "#666"} fill={isFavorite ? "#ff4757" : "none"} />
-            </TouchableOpacity>
+        {/* Group Header */}
+        <View style={styles.listingCard}>
+          <Image source={{ uri: listing?.media_urls[0] || '' }} style={styles.listingImage} />
+          <View style={styles.listingInfo}>
+            <Text style={styles.listingTitle}>{listing?.title}</Text>
+            <Text style={styles.listingAddress}>{listing?.address}</Text>
+            <Text style={styles.listingPrice}>${listing?.weekly_rent}/week</Text>
           </View>
-          <Text style={styles.propertyAddress}>{listing.address}</Text>
-          <Text style={styles.propertyPrice}>${listing.weekly_rent}/wk | Available from {formatMoveInDate(listing.available_from)}</Text>
         </View>
-      </View>
-
-      {/* Scrollable members list */}
-      <ScrollView style={styles.scrollContainer}>
-        <View style={styles.membersList}>
-          {group.members.map((member) => (
+        {/* Group Details */}
+        <View style={styles.listingCard}>
+          <Text style={styles.listingTitle}>{group?.name}</Text>
+          <Text style={styles.listingSubtitle}>{group?.description}</Text>
+          <View style={styles.separator} />
+          <Text style={styles.sectionTitle}>About the Group</Text>
+          <Text style={styles.listingSubtitle}>{group?.description}</Text>
+          <View style={styles.separator} />
+          <Text style={styles.sectionTitle}>Move-in Date</Text>
+          <Text style={styles.listingSubtitle}>{formatMoveInDate(group?.move_in_date || '')}</Text>
+        </View>
+        {/* Members */}
+        <View style={styles.listingCard}>
+          <Text style={styles.sectionTitle}>Members ({group?.current_members || 0}/{group?.max_members || 0})</Text>
+          {group?.members.map((member, index) => (
             <View key={member.id} style={styles.memberCard}>
               <Image
-                source={{
-                  uri: member.user_profile.avatar_url ||
-                  `https://randomuser.me/api/portraits/${member.user_profile.gender === 'Male' ? 'men' : 'women'}/44.jpg`,
-                }}
-                style={styles.memberAvatar}
-              />
+  source={{
+    uri: member.user_profile.avatar_url
+      ? `https://smtckdlpdfvdycocwoip.supabase.co/storage/v1/object/public/avatars/${member.user_profile.avatar_url}`
+      : 'https://ui-avatars.com/api/?name=User&background=random'
+  }}
+  style={styles.memberAvatar}
+/>
               <View style={styles.memberInfo}>
-                <View style={styles.memberHeader}>
-                  <Text style={styles.memberName}>{member.user_profile.first_name} {member.user_profile.last_name}</Text>
-                  <View style={styles.memberDetails}>
-                    <View style={[styles.labelContainer, styles.ageLabel]}>
-                      <Text style={styles.labelText}>{member.user_profile.age_range}</Text>
-                    </View>
-                    {member.user_profile.gender && (
-                      <View style={[styles.labelContainer, styles.genderLabel]}>
-                        <Text style={styles.labelText}>{member.user_profile.gender}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-                <View style={styles.supportLevelContainer}>
-                  <View
-                    style={[
-                      styles.labelContainer,
-                      styles.supportLabel,
-                      { backgroundColor: supportLevelColors[member.support_level] },
-                    ]}
-                  >
-                    <Text style={[styles.supportLabelText, { paddingHorizontal: 4 }]}> {supportLevelLabels[member.support_level]}</Text>
-                  </View>
+                <Text style={styles.memberName}>{member.user_profile.full_name}</Text>
+                <View style={styles.memberTags}>
+                  {member.support_level && (
+                    <Text style={[styles.tag, styles.supportTag]}>{member.support_level}</Text>
+                  )}
+                  {member.is_admin && <Text style={styles.tag}>Admin</Text>}
                 </View>
                 <Text style={styles.memberBio}>{member.bio}</Text>
               </View>
             </View>
           ))}
-        </View>
-      </ScrollView>
-
-      {/* Footer with looking for more section and join button */}
-      <View style={styles.footer}>
-        <View style={styles.lookingForMore}>
-          <View style={styles.lookingForContent}>
-            <View>
-              <Text style={styles.lookingForText}>Looking for 1 more person</Text>
-              <Text style={styles.moveInDate}>Hoping to move in by {group.move_in_date ? formatMoveInDate(group.move_in_date) : 'May 1'}</Text>
-            </View>
-            <TouchableOpacity style={styles.chatButton}>
-              <MessageSquare size={24} color="#007AFF" />
-              <Text style={styles.chatButtonText}>Group Chat</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.joinButton}
-          onPress={confirmJoinGroup}
-          disabled={joining || userMembership !== null}
-        >
-          {joining ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.joinButtonText}>
-              {userMembership ? 'Already a Member' : 'Request to Join Group'}
-            </Text>
+          {group?.members.length === 0 && (
+            <Text style={styles.noMembersText}>No members yet.</Text>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
+        {/* Looking For */}
+        <View style={styles.lookingForSection}>
+          <Text style={styles.lookingForTitle}>Looking for:</Text>
+          <Text style={styles.lookingForSubtitle}>{group?.description}</Text>
+        </View>
+        {/* Action Button */}
+        {userMembership && (
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              userMembership.status === 'pending' ? styles.pendingButton : styles.alreadyMemberButton,
+            ]}
+            onPress={() => console.log('Pressed action button')}
+          >
+            <Text style={styles.actionButtonText}>
+              {userMembership.status === 'pending' ? 'Pending' : 'Already a member'}
+            </Text>
+          </TouchableOpacity>
+        )}
+        {!userMembership && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.joinButton]}
+            onPress={() => console.log('Pressed join button')}
+          >
+            <Text style={styles.actionButtonText}>Join Group</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F9FA', 
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
-    backgroundColor: '#fff',
-    zIndex: 10,
+  container: {
+    padding: 16,
+    paddingBottom: 40, 
   },
   backButton: {
-    padding: 4,
-    width: 40, // Ensure consistent width for alignment
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-  },
-  headerRight: {
-    padding: 4,
-    width: 40, // Ensure consistent width for alignment
-    alignItems: 'flex-end', // Align icon to the right
-  },
-  propertyCard: {
     flexDirection: 'row',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
-    backgroundColor: '#fff',
-    zIndex: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  propertyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 16,
   },
-  favoriteButton: {
-    padding: 2,
-  },
-  propertyImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  propertyInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  propertyName: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  propertyAddress: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  propertyPrice: {
-    fontSize: 14,
+  backButtonText: {
+    marginLeft: 4,
+    fontSize: 16,
     color: '#333',
   },
-  scrollContainer: {
-    flex: 1,
+  mainTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111',
+    marginBottom: 20,
+    textAlign: 'center',
   },
-  membersList: {
-    paddingBottom: 16,
+  // Listing Card Styles
+  listingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    overflow: 'hidden', 
   },
+  listingImage: {
+    width: '100%',
+    height: 180,
+    resizeMode: 'cover',
+  },
+  listingInfo: {
+    padding: 16,
+  },
+  listingTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 4,
+  },
+  listingSubtitle: {
+    fontSize: 15,       // Slightly smaller than title
+    color: '#555',      // Grey color for subtitle
+    marginBottom: 12,   // Spacing below subtitle
+  },
+  listingAddress: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 8,
+  },
+  listingPrice: {
+    fontSize: 14,
+    color: '#007AFF', 
+    fontWeight: '500',
+  },
+  placeholderCard: {
+    backgroundColor: '#eee',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 100, 
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#E0E0E0', 
+    marginVertical: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111',
+    marginBottom: 16,
+  },
+  // Member Card Styles
   memberCard: {
     flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
+    marginBottom: 16,
+    alignItems: 'flex-start', 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   memberAvatar: {
-    width: 60,
+    width: 60, 
     height: 60,
-    borderRadius: 30,
+    borderRadius: 30, 
     marginRight: 16,
   },
   memberInfo: {
-    flex: 1,
-  },
-  memberHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    flex: 1, 
   },
   memberName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-  },
-  memberDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  labelContainer: {
-    borderRadius: 4,
-    paddingVertical: 1,
-    paddingHorizontal: 0, 
-    backgroundColor: lightBlueBackground,
-    alignSelf: 'flex-start', 
-  },
-  labelText: {
-    color: lighterBlue,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  ageLabel: {},
-  genderLabel: {},
-  supportLabel: {
-    // Background color is set dynamically
-  },
-  supportLabelText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-    paddingHorizontal: 4, 
-  },
-  supportLevelContainer: {
+    color: '#222',
     marginBottom: 6,
+  },
+  memberTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', 
+    marginBottom: 8,
+  },
+  tag: {
+    backgroundColor: '#E8E8E8', 
+    color: '#555',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    marginRight: 6,
+    marginBottom: 6, 
+    overflow: 'hidden', 
+  },
+  supportTag: {
+    backgroundColor: '#D0EFFF', 
+    color: '#005A9C',
   },
   memberBio: {
     fontSize: 14,
-    color: '#666',
+    color: '#444',
     lineHeight: 20,
   },
-  footer: {
-    padding: 16,
-    paddingBottom: 24,
+  noMembersText: {
+    textAlign: 'center',
+    color: '#777',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  // Looking For Section Styles
+  lookingForSection: {
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e1e1e1',
-  },
-  lookingForMore: {
+    borderRadius: 12,
     padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    marginBottom: 16,
-  },
-  lookingForContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginBottom: 24,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  chatButton: {
-    alignItems: 'center',
-    padding: 4,
-  },
-  chatButtonText: {
-    fontSize: 10,
-    color: '#007AFF',
-    marginTop: 2,
-  },
-  lookingForText: {
-    fontSize: 16,
+  lookingForTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#222',
     marginBottom: 4,
   },
-  moveInDate: {
+  lookingForSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#555',
   },
-  joinButton: {
-    backgroundColor: '#007AFF',
+  // Action Button Styles
+  actionButton: {
+    backgroundColor: '#007AFF', 
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 10,
+    minHeight: 50, 
   },
-  joinButtonText: {
+  joinButton: {
+    backgroundColor: '#28a745', 
+  },
+  alreadyMemberButton: {
+    backgroundColor: '#6c757d', 
+  },
+  pendingButton: {
+    backgroundColor: '#ffc107', 
+  },
+  actionButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
+  // Loading and Error Styles
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F8F9FA',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  noGroupContainer: {
+  centered: { 
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 20,
   },
-  noGroupText: {
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#F8F9FA',
+  },
+  errorText: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
+    color: 'red',
     textAlign: 'center',
+    marginBottom: 16,
   },
-  backToListingButton: {
+  retryButton: {
     backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
   },
-  backToListingText: {
+  retryButtonText: {
     color: '#fff',
-    fontWeight: '600',
     fontSize: 16,
   },
 });

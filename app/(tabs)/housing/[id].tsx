@@ -544,12 +544,16 @@ function HousingDetail() {
     console.log('Handling join group request for:', groupId);
     
     try {
-      // For all groups, navigate to the housing group detail screen
-      // Include action=join as a query parameter to indicate the intent
-      router.push(`/housing/group/${groupId}?action=join`);
+      console.log(`Attempting to navigate using object format for ID: ${groupId}`);
+      // For all groups, navigate to the housing group detail screen using the object format
+      router.push({
+        pathname: '/(tabs)/housing/group/[id]', // Literal path pattern
+        params: { id: groupId },         // Dynamic parameter
+      });
+      console.log(`Navigation to /(tabs)/housing/group/${groupId} initiated via object format.`);
     } catch (error) {
-      console.error('Error processing join group:', error);
-      Alert.alert('Error', 'Could not process your request');
+      console.error('Error during navigation attempt:', error);
+      Alert.alert('Error', 'Could not navigate to group details.');
     }
   };
 
@@ -557,83 +561,6 @@ function HousingDetail() {
     setShowingTestGroupDetail(false);
     setSelectedTestGroup(null);
   };
-
-  const createTestHousingGroup = (listingId: string): HousingGroup => {
-    console.log('Creating a test housing group with real user IDs');
-    
-    // Use real user IDs from our database for better testing
-    const realUserIds = [
-      '7a9ed413-a880-43d1-aeb0-33805d00a3c8', // support_coordinator@example.com
-      'e68f752a-2d85-4dfb-9743-cbf3fb6bf8e8', // ryan_h@example.com
-      'd5e1fa56-80b7-4e51-9012-3baac98f2b9e', // lily_w@example.com
-      'fc178f8d-6b47-40be-beaf-462e1c7f31a3', // dhdhd@gfgf.com
-      '9e4fffdc-6dbc-40b0-8601-abcfdd9c4af4'  // bash@gmaikl.com
-    ];
-    
-    // For testing purposes: use a marker that clearly identifies this as a test group
-    const testGroupId = `test-${listingId.substring(0, 8)}`;
-    
-    // Find or use current user ID
-    const currentUserId = userId || realUserIds[0];
-    
-    // Create a test housing group with real user IDs
-    return {
-      id: testGroupId,
-      name: 'Test Housing Group',
-      description: 'This is a test housing group for demonstration purposes',
-      listing_id: listingId,
-      max_members: 4,
-      current_members: 2,
-      creator_id: currentUserId,
-      created_at: new Date().toISOString(),
-      is_active: true,
-      members: [
-        {
-          id: `${testGroupId}-member1`,
-          user_id: currentUserId, // Current user or first real user
-          group_id: testGroupId,
-          join_date: new Date().toISOString(),
-          status: 'approved',
-          bio: 'I like quiet spaces and am tidy',
-          support_level: 'light' as SupportLevel,
-          is_admin: true,
-          user_profile: {
-            first_name: 'Jane',
-            last_name: 'Doe',
-            avatar_url: 'https://randomuser.me/api/portraits/women/44.jpg'
-          }
-        },
-        {
-          id: `${testGroupId}-member2`,
-          user_id: realUserIds[1], // Another real user ID
-          group_id: testGroupId,
-          join_date: new Date().toISOString(),
-          status: 'approved',
-          bio: 'Looking for a supportive environment',
-          support_level: 'moderate' as SupportLevel,
-          is_admin: false,
-          user_profile: {
-            first_name: 'John',
-            last_name: 'Smith',
-            avatar_url: 'https://randomuser.me/api/portraits/men/32.jpg'
-          }
-        }
-      ]
-    };
-  };
-
-  useEffect(() => {
-    if (listing && housingGroups.length === 0) {
-      // Create test group with real user IDs using our helper function
-      const testGroup = createTestHousingGroup(id as string);
-      
-      // Add the test group to the local state to display it
-      setHousingGroups([testGroup]);
-      
-      // For test groups, completely skip real database creation
-      console.log('Added test group to local state only, ID:', testGroup.id);
-    }
-  }, [listing, housingGroups.length, userId]);
 
   async function loadListing() {
     try {
@@ -659,136 +586,49 @@ function HousingDetail() {
   }
 
   async function loadHousingGroups() {
+    if (!id) return; // Don't run if listing ID is not available
     try {
       setLoadingGroups(true);
-      console.log('Loading housing groups for listing:', id);
-      
-      // Skip real database queries entirely for this demo build
-      // Instead, always create a test group
-      console.log('Using test housing groups only');
-      
-      // Create test group with real user IDs using our helper function
-      const testGroup = createTestHousingGroup(id as string);
-      
-      // Add the test group to the local state to display it
-      setHousingGroups([testGroup]);
-      
-      // For test groups, completely skip real database creation
-      console.log('Added test group to local state only, ID:', testGroup.id);
-      
-      /* Commenting out real database queries for now
-      // Fetch housing groups with their members
-      const { data, error } = await supabase
+      console.log('Loading REAL housing groups for listing:', id);
+
+      // Fetch housing groups associated with this listing_id
+      // Also fetch the count of *approved* members for each group
+      const { data, error: groupsError } = await supabase
         .from('housing_groups')
         .select(`
           id,
           name,
           description,
-          listing_id,
           max_members,
           creator_id,
           created_at,
-          move_in_date,
           is_active,
-          members: housing_group_members!group_id(
-            id,
-            user_id,
-            group_id,
-            join_date,
-            status,
-            bio,
-            support_level,
-            is_admin,
-            profiles:user_id(
-              first_name,
-              last_name,
-              avatar_url
-            )
-          )
+          housing_group_members!inner(count) 
         `)
-        .eq('listing_id', id);
+        .eq('listing_id', id)
+        .eq('is_active', true)
+        .eq('housing_group_members.status', 'approved'); // Count only approved members
 
-      if (error) {
-        console.error('Error fetching housing groups:', error);
-        throw handleApiError(error);
-      }
-      
-      console.log('Raw housing groups data:', JSON.stringify(data));
-      console.log('Number of housing groups found:', data?.length || 0);
+      if (groupsError) throw handleApiError(groupsError);
 
-      // Transform the data to calculate current_members from actual members array
-      // and ensure all support levels are valid enum values
-      const transformedGroups: HousingGroup[] = [];
-      
-      if (data) {
-        for (const group of data) {
-          console.log('Processing group:', group.id, group.name);
-          
-          // Calculate current members (only approved ones)
-          const currentMembers = group.members?.filter(m => m.status === 'approved').length || 0;
-          console.log('Members count:', group.members?.length || 0, 'Approved members:', currentMembers);
-          
-          // Transform members with proper support level handling
-          const transformedMembers = group.members?.map(member => {
-            // Safely extract user profile data
-            let firstName = 'User';
-            let lastName = '';
-            let avatarUrl = null;
-            
-            if (member.profiles && Array.isArray(member.profiles) && member.profiles.length > 0) {
-              // Get the first profile from the array
-              const profile = member.profiles[0];
-              firstName = profile.first_name || 'User';
-              lastName = profile.last_name || '';
-              avatarUrl = profile.avatar_url || null;
-            }
-            
-            return {
-              id: member.id,
-              user_id: member.user_id,
-              group_id: member.group_id,
-              join_date: member.join_date,
-              status: member.status,
-              bio: member.bio || '',
-              support_level: (member.support_level || 'none') as SupportLevel,
-              is_admin: member.is_admin,
-              user_profile: {
-                first_name: firstName,
-                last_name: lastName,
-                avatar_url: avatarUrl
-              }
-            };
-          }) || [];
+      // Process data to format it as HousingGroup[] with current_members count
+      const processedData: HousingGroup[] = (data || []).map((group: any) => ({
+        ...group,
+        // Extract the count, default to 0 if no approved members found
+        current_members: group.housing_group_members[0]?.count || 0,
+        // Remove the nested count structure as it's not part of HousingGroup type
+        housing_group_members: undefined,
+        members: [] // Add empty members array as placeholder if needed by GroupCard
+      }));
 
-          transformedGroups.push({
-            id: group.id,
-            name: group.name,
-            description: group.description || '',
-            listing_id: group.listing_id,
-            max_members: group.max_members || 4,
-            current_members: currentMembers,
-            creator_id: group.creator_id,
-            created_at: group.created_at,
-            move_in_date: group.move_in_date,
-            is_active: group.is_active !== false, // default to true if undefined
-            members: transformedMembers
-          });
-        }
-        
-        setHousingGroups(transformedGroups);
-      }
-      */
-    } catch (error) {
+      console.log(`Fetched ${processedData.length} active groups for listing ${id}`);
+      setHousingGroups(processedData);
+
+    } catch (e: unknown) {
+      const error = handleApiError(e);
       console.error('Error loading housing groups:', error);
-      
-      // Fallback to test data if real data fails to load
-      console.log('Falling back to test data');
-      
-      // Create test group with real user IDs using our helper function
-      const testGroup = createTestHousingGroup(id as string);
-      
-      // Add the test group to the local state to display it
-      setHousingGroups([testGroup]);
+      // Decide if you want to show an error to the user for groups failing to load
+      // showErrorAlert(error, 'Could not load housing groups');
     } finally {
       setLoadingGroups(false);
     }
@@ -905,14 +745,24 @@ function HousingDetail() {
   };
 
   useEffect(() => {
-    loadListing();
+    console.log('--- Housing Detail Screen ---');
+    console.log('Current Listing ID being viewed:', id);
+    if (id) {
+      loadListing();
+      loadHousingGroups();
+    } else {
+      setError('No listing ID provided.');
+      setLoading(false);
+      setLoadingGroups(false);
+    }
   }, [id]);
 
+  // Set current user ID from session
   useEffect(() => {
-    if (listing) {
-      loadHousingGroups();
+    if (session?.user) {
+      setUserId(session.user.id);
     }
-  }, [listing]);
+  }, [session]);
 
   if (loading) {
     return (
