@@ -345,6 +345,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  groupCardContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  groupDescription: {
+    fontSize: 15,
+    color: '#333',
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  avatarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginLeft: 0, // Align to left edge
+  },
+  smallAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    backgroundColor: '#e0e0e0',
+  },
+  groupStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  statText: {
+    fontSize: 14,
+    color: '#555',
+    marginLeft: 6,
+  },
   groupLoadingText: {
     marginTop: 8,
     color: '#666',
@@ -592,34 +633,35 @@ function HousingDetail() {
       console.log('Loading REAL housing groups for listing:', id);
 
       // Fetch housing groups associated with this listing_id
-      // Also fetch the count of *approved* members for each group
+      // Also fetch all approved members and their avatars for each group
       const { data, error: groupsError } = await supabase
         .from('housing_groups')
         .select(`
           id,
-          name,
-          description,
-          max_members,
-          creator_id,
-          created_at,
-          is_active,
-          housing_group_members!inner(count) 
+          name
         `)
         .eq('listing_id', id)
         .eq('is_active', true)
-        .eq('housing_group_members.status', 'approved'); // Count only approved members
+        
 
       if (groupsError) throw handleApiError(groupsError);
 
-      // Process data to format it as HousingGroup[] with current_members count
-      const processedData: HousingGroup[] = (data || []).map((group: any) => ({
-        ...group,
-        // Extract the count, default to 0 if no approved members found
-        current_members: group.housing_group_members[0]?.count || 0,
-        // Remove the nested count structure as it's not part of HousingGroup type
-        housing_group_members: undefined,
-        members: [] // Add empty members array as placeholder if needed by GroupCard
-      }));
+      // Process data to format it as HousingGroup[] with members array
+      const processedData: HousingGroup[] = (data || []).map((group: any) => {
+        // Only include approved members
+        const members = (group.housing_group_members || [])
+          .filter((m: any) => m.status === 'approved' && m.user_profile && m.user_profile.avatar_url)
+          .map((m: any) => ({
+            ...m,
+            user_profile: m.user_profile
+          }));
+        return {
+          ...group,
+          current_members: members.length,
+          housing_group_members: undefined,
+          members
+        };
+      });
 
       console.log(`Fetched ${processedData.length} active groups for listing ${id}`);
       setHousingGroups(processedData);
@@ -672,13 +714,25 @@ function HousingDetail() {
     
     return (
       <View style={styles.groupList}>
-        {housingGroups.map((group, index) => (
-          <GroupCard 
-            key={group.id} 
-            group={group} 
-            onJoinGroup={handleJoinGroup}
-            index={index} // Pass index for staggered animations
-          />
+        {housingGroups.map((group) => (
+          <View key={group.id} style={styles.groupCardContainer}>
+            <Text style={styles.groupDescription}>{group.description}</Text>
+            {/* Avatars Row */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.avatarsRow}>
+              {group.members && group.members.length > 0 && group.members.map((m, idx) => (
+                <Image
+                  key={m.id}
+                  source={m.user_profile.avatar_url ? { uri: m.user_profile.avatar_url } : undefined}
+                  style={[styles.smallAvatar, { marginLeft: idx === 0 ? 0 : -12 }]}
+                />
+              ))}
+            </ScrollView>
+            {/* Group count icon and other info can go here */}
+            <View style={styles.groupStatsRow}>
+              <Users size={16} color="#555" />
+              <Text style={styles.statText}>{group.current_members}/{group.max_members} members</Text>
+            </View>
+          </View>
         ))}
       </View>
     );

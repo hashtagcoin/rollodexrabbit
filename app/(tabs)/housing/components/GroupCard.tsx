@@ -98,28 +98,30 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
           </View>
         </View>
 
+        {/* Overlapping Avatars Row */}
         <View style={styles.membersRow}>
-          <View style={styles.membersScrollView}>
-            {group.members
-              .filter(member => member.status === 'approved')
-              .map((member, i) => (
-                <View key={member.id} style={styles.avatarContainer}>
-                  <Image
-                    source={{ uri: member.user_profile.avatar_url || `https://randomuser.me/api/portraits/${i % 2 === 0 ? 'women' : 'men'}/${10 + i}.jpg` }}
-                    style={styles.avatar}
-                  />
-                  <Text style={styles.memberName} numberOfLines={1}>
-                    {member.is_admin ? (
-                      <Text style={styles.adminName}>
-                        {member.user_profile.first_name}
-                      </Text>
-                    ) : (
-                      member.user_profile.first_name
-                    )}
-                  </Text>
-                </View>
-              ))}
-          </View>
+          {group.members
+            // Filter for approved members WITH an avatar_url
+            .filter(member => member.status === 'approved' && member.user_profile.avatar_url)
+            .slice(0, 5) // Limit to first 5 members
+            .map((member, i) => (
+              <Image
+                key={member.id}
+                // Explicitly handle null case for TypeScript, even though filter prevents it
+                source={member.user_profile.avatar_url ? { uri: member.user_profile.avatar_url } : undefined}
+                // Add a simple fallback mechanism or placeholder source if needed
+                // onError={(e) => console.log('Avatar load error:', e.nativeEvent.error)}
+                style={[styles.smallAvatar, { marginLeft: i === 0 ? 0 : -12 }]} // Overlap effect
+              />
+            ))}
+          {/* Adjust the count for the '+N' indicator based on the same filter */}
+          {group.members.filter(m => m.status === 'approved' && m.user_profile.avatar_url).length > 5 && (
+            <View style={[styles.smallAvatar, styles.moreMembersIndicator, { marginLeft: -12 }]}>
+              <Text style={styles.moreMembersText}>
+                +{group.members.filter(m => m.status === 'approved' && m.user_profile.avatar_url).length - 5}
+              </Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity 
@@ -185,34 +187,26 @@ const styles = StyleSheet.create({
   },
   membersRow: {
     marginBottom: 16,
+    flexDirection: 'row', // Arrange avatars horizontally
+    alignItems: 'center', // Align avatars vertically
   },
-  membersScrollView: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  smallAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16, // Make it circular
+    borderWidth: 1.5,
+    borderColor: '#fff', // White border to separate overlapping images
+    backgroundColor: '#e0e0e0', // Placeholder background
   },
-  avatarContainer: {
+  moreMembersIndicator: {
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
-    marginBottom: 8,
-    width: 60,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-  },
-  memberName: {
+  moreMembersText: {
+    color: '#555',
     fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
-    width: 60,
-  },
-  adminName: {
     fontWeight: '600',
-    color: '#007AFF',
   },
   viewButton: {
     backgroundColor: '#007AFF',
