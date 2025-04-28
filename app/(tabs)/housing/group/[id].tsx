@@ -489,7 +489,9 @@ export default function HousingGroupDetail() {
               </View>
             ))
           ) : (
-             <Text style={styles.noMembersText}>No members have joined yet.</Text>
+             <View>
+               <Text style={styles.noMembersText}>No members have joined yet.</Text>
+             </View>
           )}
         </View>
 
