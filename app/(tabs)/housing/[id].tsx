@@ -196,14 +196,37 @@ function HousingDetail() {
     const groupIds = (groups || []).map((g: any) => g.id);
     let membersByGroup: Record<string, any[]> = {};
     if (groupIds.length > 0) {
+      // Step 1: Fetch members (no join)
       const { data: members, error: membersError } = await supabase
         .from('housing_group_members')
-        .select('*, user_profile:user_id(*)')
+        .select('*')
         .in('group_id', groupIds)
         .eq('status', 'approved');
       if (membersError) throw handleApiError(membersError);
-      // Group members by group_id
-      membersByGroup = (members || []).reduce((acc: Record<string, any[]>, m: any) => {
+
+      // Step 2: Collect unique user_ids
+      const userIds = [...new Set((members || []).map((m: any) => m.user_id).filter(Boolean))];
+      let profiles: any[] = [];
+      if (userIds.length > 0) {
+        // Step 3: Fetch user_profiles for these user IDs (id column)
+        console.log('Fetching user_profiles for IDs:', userIds);
+        const { data: fetchedProfiles, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .in('id', userIds);
+        if (profilesError) throw handleApiError(profilesError);
+        profiles = fetchedProfiles || [];
+      }
+
+      // Step 4: Merge profile data into each member
+      const profilesById = Object.fromEntries(profiles.map((p: any) => [p.user_id, p]));
+      const membersWithProfiles = (members || []).map((m: any) => ({
+        ...m,
+        user_profile: profilesById[m.user_id] || null,
+      }));
+
+      // Step 5: Group members by group_id
+      membersByGroup = (membersWithProfiles || []).reduce((acc: Record<string, any[]>, m: any) => {
         if (!acc[m.group_id]) acc[m.group_id] = [];
         acc[m.group_id].push(m);
         return acc;

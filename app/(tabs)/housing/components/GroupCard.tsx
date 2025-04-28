@@ -14,6 +14,7 @@ import { Users, ChevronRight } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { HousingGroup } from '../types/housing';
 
+
 // Props type for the component
 interface GroupCardProps {
   group: HousingGroup;
@@ -101,24 +102,23 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
         {/* Overlapping Avatars Row */}
         <View style={styles.membersRow}>
           {group.members
-            // Filter for approved members WITH an avatar_url
-            .filter(member => member.status === 'approved' && member.user_profile.avatar_url)
+            // Filter for approved members WITH a non-null user_profile and avatar_url
+            .filter(member => member.status === 'approved' && member.user_profile && member.user_profile.avatar_url)
             .slice(0, 5) // Limit to first 5 members
             .map((member, i) => (
               <Image
                 key={member.id}
                 // Explicitly handle null case for TypeScript, even though filter prevents it
-                source={member.user_profile.avatar_url ? { uri: member.user_profile.avatar_url } : undefined}
-                // Add a simple fallback mechanism or placeholder source if needed
+                source={{ uri: member.user_profile!.avatar_url as string }}
                 // onError={(e) => console.log('Avatar load error:', e.nativeEvent.error)}
                 style={[styles.smallAvatar, { marginLeft: i === 0 ? 0 : -12 }]} // Overlap effect
               />
             ))}
           {/* Adjust the count for the '+N' indicator based on the same filter */}
-          {group.members.filter(m => m.status === 'approved' && m.user_profile.avatar_url).length > 5 && (
+          {group.members.filter(m => m.status === 'approved' && m.user_profile?.avatar_url).length > 5 && (
             <View style={[styles.smallAvatar, styles.moreMembersIndicator, { marginLeft: -12 }]}>
               <Text style={styles.moreMembersText}>
-                +{group.members.filter(m => m.status === 'approved' && m.user_profile.avatar_url).length - 5}
+                +{group.members.filter(m => m.status === 'approved' && m.user_profile?.avatar_url).length - 5}
               </Text>
             </View>
           )}
