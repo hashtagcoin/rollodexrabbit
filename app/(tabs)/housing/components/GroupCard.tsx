@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -20,13 +20,18 @@ interface GroupCardProps {
   group: HousingGroup;
   onJoinGroup?: (groupId: string) => void;
   index?: number; // Added index for staggered animations
+  onGroupHover?: () => void;
+  cardWidth?: number;
 }
 
-export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardProps) {
+export default function GroupCard({ group, onJoinGroup, index = 0, onGroupHover, cardWidth }: GroupCardProps) {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const translateYAnim = useRef(new Animated.Value(20)).current;
+  // Hover animation (web)
+  const hoverAnim = useRef(new Animated.Value(0)).current;
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     // Staggered animation for multiple cards
@@ -57,23 +62,60 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
     ]).start();
   }, [fadeAnim, scaleAnim, translateYAnim, index]);
 
+  useEffect(() => {
+    Animated.timing(hoverAnim, {
+      toValue: hovered ? -20 : 0,
+      duration: 200,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.cubic)
+    }).start();
+  }, [hovered, hoverAnim]);
+
   const formatJoinDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString();
   };
 
+  // Helper to get initials from first and last name
+  function getInitials(first: string | undefined, last: string | undefined): string {
+    const f = first ? first[0].toUpperCase() : '';
+    const l = last ? last[0].toUpperCase() : '';
+    return f + l;
+  }
+
+  // Helper to get a color from a string (for avatar placeholder diversity)
+  function getColorForString(str: string): string {
+    // Simple hash function for color
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // Generate color
+    const color = `hsl(${hash % 360},70%,60%)`;
+    return color;
+  }
+
   return (
+  
+  // @ts-ignore
     <Animated.View
       style={[
         styles.container,
+        cardWidth ? { width: cardWidth, minWidth: cardWidth, maxWidth: cardWidth } : {},
         {
           opacity: fadeAnim,
           transform: [
             { scale: scaleAnim },
-            { translateY: translateYAnim }
+            { translateY: translateYAnim },
+            { translateX: hoverAnim },
           ]
         }
       ]}
+      onMouseEnter={() => {
+        setHovered(true);
+        if (onGroupHover) onGroupHover();
+      }}
+      onMouseLeave={() => setHovered(false)}
     >
       <TouchableOpacity
         style={styles.card}
@@ -102,18 +144,31 @@ export default function GroupCard({ group, onJoinGroup, index = 0 }: GroupCardPr
         {/* Overlapping Avatars Row */}
         <View style={styles.membersRow}>
           {group.members
-            // Filter for approved members WITH a non-null user_profile and avatar_url
-            .filter(member => member.status === 'approved' && member.user_profile && member.user_profile.avatar_url)
-            .slice(0, 5) // Limit to first 5 members
-            .map((member, i) => (
-              <Image
-                key={member.id}
-                // Explicitly handle null case for TypeScript, even though filter prevents it
-                source={{ uri: member.user_profile!.avatar_url as string }}
-                // onError={(e) => console.log('Avatar load error:', e.nativeEvent.error)}
-                style={[styles.smallAvatar, { marginLeft: i === 0 ? 0 : -12 }]} // Overlap effect
-              />
-            ))}
+            .filter(member => member.status === 'approved' && member.user_profile)
+            .slice(0, 5)
+            .map((member, i) => {
+              const avatarUrl = member.user_profile!.avatar_url;
+              const firstName = (member.user_profile as any).first_name || '';
+              const lastName = (member.user_profile as any).last_name || '';
+              const initials = getInitials(firstName, lastName);
+              const [avatarError, setAvatarError] = useState(false);
+              const bgColor = getColorForString(firstName + lastName);
+              return avatarUrl && !avatarError ? (
+                <Image
+                  key={member.id}
+                  source={{ uri: avatarUrl }}
+                  style={[styles.smallAvatar, { marginLeft: i === 0 ? 0 : -12 }]}
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <View
+                  key={member.id}
+                  style={[styles.smallAvatar, { marginLeft: i === 0 ? 0 : -12, backgroundColor: bgColor, justifyContent: 'center', alignItems: 'center' }]}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>{initials}</Text>
+                </View>
+              );
+            })}
           {/* Adjust the count for the '+N' indicator based on the same filter */}
           {group.members.filter(m => m.status === 'approved' && m.user_profile?.avatar_url).length > 5 && (
             <View style={[styles.smallAvatar, styles.moreMembersIndicator, { marginLeft: -12 }]}>

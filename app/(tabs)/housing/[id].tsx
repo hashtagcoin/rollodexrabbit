@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -8,7 +8,8 @@ import {
   TouchableOpacity, 
   Dimensions, 
   ActivityIndicator,
-  Alert
+  Alert,
+  FlatList
 } from 'react-native';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -82,6 +83,17 @@ function HousingDetail() {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedTestGroup, setSelectedTestGroup] = useState<HousingGroup | null>(null);
   const [showingTestGroupDetail, setShowingTestGroupDetail] = useState(false);
+
+  // Ref for FlatList scrolling
+  const flatListRef = React.useRef<FlatList<HousingGroup>>(null);
+
+  // Calculate dynamic card width (ensure Dimensions is imported)
+  const CARD_WIDTH = Dimensions.get('window').width * 0.4; // Show ~2 cards
+
+  // Handler for hover effect to scroll list
+  const handleGroupHover = () => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+  };
 
   // Set current user ID from session
   useEffect(() => {
@@ -317,15 +329,33 @@ function HousingDetail() {
 
     // Main rendering logic for the list of actual groups
     return (
-      <View style={styles.groupListContainer}>
-         {housingGroups.map((group: HousingGroup) => (
-           <GroupCard
-             key={group.id}
-             group={group}
-             onJoinGroup={handleJoinGroup}
-           />
-         ))}
-      </View>
+      <FlatList
+        ref={flatListRef}
+        data={housingGroups}
+        keyExtractor={(group: HousingGroup) => group.id}
+        renderItem={({ item }: { item: HousingGroup }) => (
+          <GroupCard
+            group={item}
+            onJoinGroup={handleJoinGroup}
+            onGroupHover={handleGroupHover}
+            cardWidth={CARD_WIDTH}
+          />
+        )}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16 }}
+        ItemSeparatorComponent={() => <View style={{ width: 16 }} />}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        pagingEnabled
+        // getItemLayout={(_data, index) => ({
+        //   length: CARD_WIDTH + 16, // card width + separator
+        //   offset: (CARD_WIDTH + 16) * index,
+        //   index,
+        // })}
+        snapToInterval={CARD_WIDTH + 16}
+        style={{ marginVertical: 8, minHeight: 220 }}
+      />
     );
   };
 
