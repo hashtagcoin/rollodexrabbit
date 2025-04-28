@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { RemoteImageWithPlaceholder } from './RemoteImageWithPlaceholder';
 import {
   View,
   Text,
@@ -65,6 +66,32 @@ type HousingListingSummary = {
 };
 
 export default function HousingGroupDetail() {
+  // ...existing code...
+
+  // Handler for joining group
+  // ...existing state declarations...
+
+    if (!group || !userId) return;
+    setError(null);
+    try {
+      const { error } = await supabase.from('housing_group_members').insert([
+        {
+          user_id: userId,
+          group_id: group.id,
+          status: 'pending',
+          join_date: new Date().toISOString(),
+          is_admin: false,
+        },
+      ]);
+      if (error) throw error;
+      // Refresh membership state after join
+      await loadGroupDetails();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to join group');
+    } finally {
+      setJoining(false);
+    }
+  };
   const { id, action } = useLocalSearchParams<{ id: string; action?: string }>(); 
   console.log('GroupDetail: received id param:', id);
   const router = useRouter();
@@ -77,6 +104,7 @@ export default function HousingGroupDetail() {
   const [listing, setListing] = useState<HousingListingSummary | null>(null); 
   const [userMembership, setUserMembership] = useState<ExtendedGroupMember | null>(null); 
   const [error, setError] = useState<string | null>(null);
+  const [avatarErrorStates, setAvatarErrorStates] = useState<boolean[]>([]);
 
   // Format date as Month Day
   const formatMoveInDate = (dateString: string) => {
@@ -128,7 +156,7 @@ export default function HousingGroupDetail() {
       console.log(`Querying details for Housing Group ID: ${id}, Listing ID: ${groupData.listing_id}`);
 
       const [listingResult, membersResult, userMembershipResult] = await Promise.all([
-        supabase.from('housing_listings').select('*').eq('id', groupData.listing_id).single(),
+        supabase.from('housing_listings').select(`id, title, address, suburb, weekly_rent, available_from, media_urls`).eq('id', groupData.listing_id).single(),
         // Fetch members (approved)
         supabase
           .from('housing_group_members')
@@ -271,6 +299,14 @@ export default function HousingGroupDetail() {
     loadGroupDetails();
   }, [id, userId]);
 
+  useEffect(() => {
+    setAvatarErrorStates(
+      group && Array.isArray(group.members)
+        ? Array(group.members.length).fill(false)
+        : []
+    );
+  }, [group]);
+
   // --- RENDER ACTUAL CONTENT --- 
   // Check if group and listing data are loaded before rendering the main UI
   if (!group) {
@@ -296,14 +332,31 @@ export default function HousingGroupDetail() {
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
         {/* Group Header */}
-        <View style={styles.listingCard}>
-          <Image source={{ uri: listing?.media_urls[0] || '' }} style={styles.listingImage} />
+        <TouchableOpacity
+          style={styles.listingCard}
+          activeOpacity={0.8}
+          onPress={() => {
+            if (listing) {
+              // Log the full listing object for debugging
+              console.log('Listing object:', listing);
+            } else {
+              console.log('No listing loaded');
+            }
+          }}
+        >
+          {/* Listing Image with Placeholder */}
+          <Image
+            source={listing && listing.media_urls && listing.media_urls[0]
+              ? { uri: listing.media_urls[0] }
+              : { uri: 'https://via.placeholder.com/400x300?text=No+Image' }}
+            style={styles.listingImage}
+          />
           <View style={styles.listingInfo}>
             <Text style={styles.listingTitle}>{listing?.title}</Text>
             <Text style={styles.listingAddress}>{listing?.address}</Text>
             <Text style={styles.listingPrice}>${listing?.weekly_rent}/week</Text>
           </View>
-        </View>
+        </TouchableOpacity>
         {/* Group Details */}
         <View style={styles.listingCard}>
           <Text style={styles.listingTitle}>{group?.name}</Text>
@@ -320,14 +373,16 @@ export default function HousingGroupDetail() {
           <Text style={styles.sectionTitle}>Members ({group?.current_members || 0}/{group?.max_members || 0})</Text>
           {group?.members.map((member, index) => (
             <View key={member.id} style={styles.memberCard}>
-              <Image
-  source={{
-    uri: member.user_profile.avatar_url
-      ? `https://smtckdlpdfvdycocwoip.supabase.co/storage/v1/object/public/avatars/${member.user_profile.avatar_url}`
-      : 'https://ui-avatars.com/api/?name=User&background=random'
-  }}
-  style={styles.memberAvatar}
-/>
+              {/* Member Avatar with Placeholder */}
+          {(!member.user_profile.avatar_url || avatarErrorStates[index]) ? (
+  <View style={[styles.memberAvatar, { backgroundColor: '#ccc', borderRadius: styles.memberAvatar.width ? styles.memberAvatar.width / 2 : 24, justifyContent: 'center', alignItems: 'center' }]} />
+) : (
+  <Image
+    source={{ uri: `https://smtckdlpdfvdycocwoip.supabase.co/storage/v1/object/public/avatars/${member.user_profile.avatar_url}` }}
+    style={styles.memberAvatar}
+    onError={() => handleAvatarError(index)}
+  />
+)}
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>{member.user_profile.full_name}</Text>
                 <View style={styles.memberTags}>
@@ -365,10 +420,11 @@ export default function HousingGroupDetail() {
         )}
         {!userMembership && (
           <TouchableOpacity
-            style={[styles.actionButton, styles.joinButton]}
-            onPress={() => console.log('Pressed join button')}
+            style={[styles.actionButton, styles.joinButton, joining && styles.disabledButton]}
+            onPress={joinGroupHandler}
+            disabled={joining}
           >
-            <Text style={styles.actionButtonText}>Join Group</Text>
+            <Text style={styles.actionButtonText}>{joining ? 'Joining...' : 'Join Group'}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -379,12 +435,13 @@ export default function HousingGroupDetail() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8F9FA', 
+    backgroundColor: '#F8F9FA',
   },
   container: {
     padding: 16,
-    paddingBottom: 40, 
+    paddingBottom: 40,
   },
+  // --- Deduplicated keys below ---
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -429,9 +486,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   listingSubtitle: {
-    fontSize: 15,       // Slightly smaller than title
-    color: '#555',      // Grey color for subtitle
-    marginBottom: 12,   // Spacing below subtitle
+    fontSize: 15,
+    color: '#555',
+    marginBottom: 12,
   },
   listingAddress: {
     fontSize: 14,
@@ -454,7 +511,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: '#E0E0E0', 
+    backgroundColor: '#E0E0E0',
     marginVertical: 24,
   },
   sectionTitle: {
@@ -580,8 +637,28 @@ const styles = StyleSheet.create({
   centered: { 
     flex: 1,
     justifyContent: 'center',
+  },
+  errorText: {
+    color: '#d32f2f',
+    fontSize: 15,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#1976d2',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
     alignItems: 'center',
-    padding: 20,
+    marginTop: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   errorContainer: {
     flex: 1,
@@ -589,21 +666,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     backgroundColor: '#F8F9FA',
-  },
-  errorText: {
-    fontSize: 16,
-    color: 'red',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
   },
 });
