@@ -3,6 +3,7 @@ import {
   View, 
   Text, 
   StyleSheet, 
+  Platform,
   Image, 
   TouchableOpacity, 
   Animated, 
@@ -111,11 +112,13 @@ export default function GroupCard({ group, onJoinGroup, index = 0, onGroupHover,
           ]
         }
       ]}
-      onMouseEnter={() => {
-        setHovered(true);
-        if (onGroupHover) onGroupHover();
-      }}
-      onMouseLeave={() => setHovered(false)}
+      {...(Platform.OS === 'web' ? {
+        onMouseEnter: () => {
+          setHovered(true);
+          if (onGroupHover) onGroupHover();
+        },
+        onMouseLeave: () => setHovered(false)
+      } : {})}
     >
       <TouchableOpacity
         style={styles.card}

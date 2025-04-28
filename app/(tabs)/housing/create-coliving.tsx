@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Picker } from './PickerShim';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import {
@@ -40,6 +41,7 @@ export default function CreateCoLivingGroup() {
   const [supportNeeds, setSupportNeeds] = useState<SupportLevel>('light');
   const [moveInTimeline, setMoveInTimeline] = useState('In 1-3 months');
   const [inviteLink, setInviteLink] = useState('');
+  const [groupDescription, setGroupDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function CreateCoLivingGroup() {
         const { data, error } = await supabase
           .from('user_profiles')
           .select('*')
-          .eq('user_id', session.user.id)
+          .eq('id', session.user.id)
           .single();
           
         if (error) throw error;
@@ -116,11 +118,15 @@ export default function CreateCoLivingGroup() {
         .from('housing_groups')
         .insert({
           name: `${userProfile?.first_name || 'New'}'s Co-Living Group`,
-          description: `Co-living group for ${listing.title}`,
+          description: groupDescription && groupDescription.trim().length > 0
+            ? groupDescription.trim()
+            : `Co-living group for ${listing.title}`,
           listing_id: listing.id,
           max_members: 4, // Default max members
           creator_id: session.user.id,
           is_active: true,
+          // Store the creator's avatar with the group if supported by schema
+          avatar_url: userProfile?.avatar_url || null,
         })
         .select()
         .single();
@@ -286,62 +292,59 @@ export default function CreateCoLivingGroup() {
         <Text style={styles.sectionLabel}>Preferences</Text>
         
         <View style={styles.preferenceItem}>
-          <Text style={styles.preferenceLabel}>Roommate gender preference</Text>
-          <TouchableOpacity style={styles.preferenceSelector} onPress={() => {
-            Alert.alert(
-              'Select Preference',
-              'What gender do you prefer for roommates?',
-              [
-                { text: 'Any', onPress: () => setGenderPreference('Any') },
-                { text: 'Male', onPress: () => setGenderPreference('Male') },
-                { text: 'Female', onPress: () => setGenderPreference('Female') },
-                { text: 'Non-binary', onPress: () => setGenderPreference('Non-binary') },
-              ]
-            );
-          }}>
-            <Text style={styles.preferenceSelectorText}>{genderPreference}</Text>
-            <ChevronRight size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
+  <Text style={styles.preferenceLabel}>Roommate gender preference</Text>
+  <Picker
+    selectedValue={genderPreference}
+    onValueChange={(itemValue: 'Any' | 'Male' | 'Female' | 'Non-binary') => setGenderPreference(itemValue)}
+    style={styles.picker}
+  >
+    <Picker.Item label="Any" value="Any" />
+    <Picker.Item label="Male" value="Male" />
+    <Picker.Item label="Female" value="Female" />
+    <Picker.Item label="Non-binary" value="Non-binary" />
+  </Picker>
+</View>
         
         <View style={styles.preferenceItem}>
-          <Text style={styles.preferenceLabel}>Support needs</Text>
-          <TouchableOpacity style={styles.preferenceSelector} onPress={() => {
-            Alert.alert(
-              'Select Support Level',
-              'What level of support do you need?',
-              [
-                { text: 'None', onPress: () => setSupportNeeds('none') },
-                { text: 'Light', onPress: () => setSupportNeeds('light') },
-                { text: 'Moderate', onPress: () => setSupportNeeds('moderate') },
-                { text: 'High', onPress: () => setSupportNeeds('high') },
-              ]
-            );
-          }}>
-            <Text style={styles.preferenceSelectorText}>{supportNeeds.charAt(0).toUpperCase() + supportNeeds.slice(1)}</Text>
-            <ChevronRight size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
+  <Text style={styles.preferenceLabel}>Support needs</Text>
+  <Picker
+    selectedValue={supportNeeds}
+    onValueChange={(itemValue: SupportLevel) => setSupportNeeds(itemValue)}
+    style={styles.picker}
+  >
+    <Picker.Item label="None" value="none" />
+    <Picker.Item label="Light" value="light" />
+    <Picker.Item label="Moderate" value="moderate" />
+    <Picker.Item label="High" value="high" />
+  </Picker>
+</View>
         
         <View style={styles.preferenceItem}>
-          <Text style={styles.preferenceLabel}>Move-in timeline</Text>
-          <TouchableOpacity style={styles.preferenceSelector} onPress={() => {
-            Alert.alert(
-              'Select Timeline',
-              'When do you plan to move in?',
-              [
-                { text: 'ASAP', onPress: () => setMoveInTimeline('ASAP') },
-                { text: 'In 1-3 months', onPress: () => setMoveInTimeline('In 1-3 months') },
-                { text: 'In 3-6 months', onPress: () => setMoveInTimeline('In 3-6 months') },
-                { text: 'More than 6 months', onPress: () => setMoveInTimeline('More than 6 months') },
-              ]
-            );
-          }}>
-            <Text style={styles.preferenceSelectorText}>{moveInTimeline}</Text>
-            <ChevronRight size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
+  <Text style={styles.preferenceLabel}>Move-in timeline</Text>
+  <Picker
+    selectedValue={moveInTimeline}
+    onValueChange={(itemValue: string) => setMoveInTimeline(itemValue)}
+    style={styles.picker}
+  >
+    <Picker.Item label="ASAP" value="ASAP" />
+    <Picker.Item label="In 1-3 months" value="In 1-3 months" />
+    <Picker.Item label="In 3-6 months" value="In 3-6 months" />
+    <Picker.Item label="More than 6 months" value="More than 6 months" />
+  </Picker>
+</View>
         
+        {/* Group Description Section */}
+        <Text style={styles.sectionLabel}>Group Description</Text>
+        <TextInput
+          style={styles.groupDescriptionInput}
+          placeholder="Describe your group, its vibe, goals, or anything important..."
+          value={groupDescription}
+          onChangeText={setGroupDescription}
+          multiline
+          numberOfLines={4}
+          maxLength={500}
+        />
+
         {/* Invite Friends Section */}
         <Text style={styles.sectionLabel}>Invite Friends (Optional)</Text>
         <TextInput
@@ -367,6 +370,29 @@ export default function CreateCoLivingGroup() {
 }
 
 const styles = StyleSheet.create({
+  picker: {
+    width: '100%',
+    minHeight: 44,
+    marginTop: 8,
+    marginBottom: 8,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  groupDescriptionInput: {
+    width: '100%',
+    minHeight: 80,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: '#fafafa',
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 16,
+    textAlignVertical: 'top',
+    fontSize: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
