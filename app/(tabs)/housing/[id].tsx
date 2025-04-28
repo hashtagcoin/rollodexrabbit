@@ -65,457 +65,8 @@ type HousingListing = {
   };
 };
 
-const lighterBlue = '#589AF0';
-const lightBlueBackground = '#EAF2FF';
-
-// Styles must be defined before the component that uses them
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollContainer: {
-    paddingBottom: 80,
-  },
-  contentContainer: {
-    padding: 16,
-  },
-  centeredContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 24,
-    color: '#666',
-  },
-  error: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: 24,
-    padding: 16,
-    backgroundColor: '#fff2f2',
-    borderRadius: 12,
-    gap: 12,
-  },
-  errorText: {
-    flex: 1,
-    color: '#ff3b30',
-    fontSize: 16,
-  },
-  imageContainer: {
-    height: 300,
-    backgroundColor: '#f5f5f5',
-  },
-  image: {
-    width,
-    height: '100%',
-  },
-  imageIndicators: {
-    position: 'absolute',
-    bottom: 16,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  imageIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  imageIndicatorActive: {
-    backgroundColor: '#fff',
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  location: {
-    fontSize: 16,
-    color: '#666',
-  },
-  priceContainer: {
-    alignItems: 'flex-end',
-  },
-  price: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  priceLabel: {
-    fontSize: 13,
-    color: lighterBlue,
-  },
-  sdaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    marginBottom: 24,
-  },
-  sdaBadgeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  features: {
-    flexDirection: 'row',
-    gap: 20,
-    marginBottom: 20,
-  },
-  feature: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  featureText: {
-    fontSize: 13,
-    color: lighterBlue,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: lighterBlue,
-    marginBottom: 8,
-  },
-  locationDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  locationText: {
-    flex: 1,
-    fontSize: 14,
-    color: lighterBlue,
-  },
-  availabilityDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  availabilityText: {
-    fontSize: 14,
-    color: lighterBlue,
-  },
-  description: {
-    fontSize: 15,
-    color: '#555',
-    lineHeight: 22,
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: lightBlueBackground,
-    borderRadius: 12,
-  },
-  tagText: {
-    fontSize: 13,
-    color: lighterBlue,
-  },
-  virtualTourButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    borderRadius: 12,
-  },
-  virtualTourText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  providerCard: {
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  providerTitle: {
-    fontSize: 13,
-    color: lighterBlue,
-    marginBottom: 2,
-  },
-  providerName: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#333',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e1e1e1',
-    padding: 20,
-  },
-  footerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  footerPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  footerBond: {
-    fontSize: 13,
-    color: lighterBlue,
-  },
-  applyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-  },
-  applyButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  groupsSection: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    marginTop: 16,
-    paddingVertical: 16,
-  },
-  groupsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  groupsTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: lighterBlue,
-  },
-  groupList: {
-    paddingHorizontal: 16,
-  },
-  groupListLoading: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupCardContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  groupDescription: {
-    fontSize: 15,
-    color: '#333',
-    marginBottom: 6,
-    fontWeight: '500',
-  },
-  avatarsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    marginLeft: 0, // Align to left edge
-  },
-  smallAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    backgroundColor: '#e0e0e0',
-  },
-  groupStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  statText: {
-    fontSize: 14,
-    color: '#555',
-    marginLeft: 6,
-  },
-  groupLoadingText: {
-    marginTop: 8,
-    color: '#666',
-  },
-  noGroupsContainer: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noGroupsText: {
-    marginBottom: 16,
-    textAlign: 'center',
-    color: '#666',
-  },
-  createGroupButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  createGroupButtonText: {
-    color: '#fff',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  groupMatchBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#4cd964',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginLeft: 8,
-    marginTop: 4,
-  },
-  groupMatchText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  // Test Group Detail Styles
-  testGroupDetailOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  testGroupDetailCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '85%',
-    maxHeight: '80%',
-  },
-  testGroupDetailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  testGroupDetailTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  testGroupDetailClose: {
-    fontSize: 16,
-    color: '#007AFF',
-  },
-  testGroupDetailDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  testGroupDetailStats: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  testGroupDetailStat: {
-    fontSize: 14,
-    color: '#555',
-  },
-  testGroupDetailMembersTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#555',
-    marginBottom: 8,
-  },
-  testGroupDetailMembersList: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  testGroupDetailMember: {
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  testGroupDetailMemberAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginBottom: 4,
-  },
-  testGroupDetailMemberName: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  testGroupDetailMemberAdmin: {
-    fontSize: 10,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  testGroupDetailButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  testGroupDetailButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-});
+const lighterBlue = '#007AFF';
+const lightGray = '#d3d3d3';
 
 function HousingDetail() {
   const { id, returnIndex, returnViewMode } = useLocalSearchParams();
@@ -627,173 +178,130 @@ function HousingDetail() {
   }
 
   async function loadHousingGroups() {
-    if (!id) return; // Don't run if listing ID is not available
-    try {
-      setLoadingGroups(true);
-      console.log('Loading REAL housing groups for listing:', id);
+  if (!id) return; // Don't run if listing ID is not available
+  try {
+    setLoadingGroups(true);
+    console.log('Loading REAL housing groups for listing:', id);
 
-      // Fetch housing groups associated with this listing_id
-      // Also fetch all approved members and their avatars for each group
-      const { data, error: groupsError } = await supabase
-        .from('housing_groups')
-        .select(`
-          id,
-          name
-        `)
-        .eq('listing_id', id)
-        .eq('is_active', true)
-        
+    // Fetch housing groups for this listing
+    const { data: groups, error: groupsError } = await supabase
+      .from('housing_groups')
+      .select('*')
+      .eq('listing_id', id)
+      .eq('is_active', true);
 
-      if (groupsError) throw handleApiError(groupsError);
+    if (groupsError) throw handleApiError(groupsError);
 
-      // Process data to format it as HousingGroup[] with members array
-      const processedData: HousingGroup[] = (data || []).map((group: any) => {
-        // Only include approved members
-        const members = (group.housing_group_members || [])
-          .filter((m: any) => m.status === 'approved' && m.user_profile && m.user_profile.avatar_url)
-          .map((m: any) => ({
-            ...m,
-            user_profile: m.user_profile
-          }));
-        return {
-          ...group,
-          current_members: members.length,
-          housing_group_members: undefined,
-          members
-        };
-      });
-
-      console.log(`Fetched ${processedData.length} active groups for listing ${id}`);
-      setHousingGroups(processedData);
-
-    } catch (e: unknown) {
-      const error = handleApiError(e);
-      console.error('Error loading housing groups:', error);
-      // Decide if you want to show an error to the user for groups failing to load
-      // showErrorAlert(error, 'Could not load housing groups');
-    } finally {
-      setLoadingGroups(false);
+    // For each group, fetch approved members and join with user_profiles
+    const groupIds = (groups || []).map((g: any) => g.id);
+    let membersByGroup: Record<string, any[]> = {};
+    if (groupIds.length > 0) {
+      const { data: members, error: membersError } = await supabase
+        .from('housing_group_members')
+        .select('*, user_profile:user_id(*)')
+        .in('group_id', groupIds)
+        .eq('status', 'approved');
+      if (membersError) throw handleApiError(membersError);
+      // Group members by group_id
+      membersByGroup = (members || []).reduce((acc: Record<string, any[]>, m: any) => {
+        if (!acc[m.group_id]) acc[m.group_id] = [];
+        acc[m.group_id].push(m);
+        return acc;
+      }, {});
     }
+    // Compose processedData
+    const processedData: HousingGroup[] = (groups || []).map((group: any) => {
+      const members = (membersByGroup[group.id] || []).map((m: any) => ({
+        ...m,
+        user_profile: m.user_profile
+      }));
+      return {
+        ...group,
+        current_members: members.length,
+        members
+      };
+    });
+    console.log(`Fetched ${processedData.length} active groups for listing ${id}`);
+    setHousingGroups(processedData);
+  } catch (e: unknown) {
+    const error = handleApiError(e);
+    console.error('Error loading housing groups:', error);
+    // Decide if you want to show an error to the user for groups failing to load
+    // showErrorAlert(error, 'Could not load housing groups');
+  } finally {
+    setLoadingGroups(false);
   }
+}
 
   const renderGroupsSection = () => {
-    return (
-      <View style={styles.groupsSection}>
-        <View style={styles.groupsHeader}>
-          <Text style={styles.groupsTitle}>Group Housing Opportunities</Text>
-          <TouchableOpacity style={styles.createGroupButton} onPress={handleCreateGroup}>
-            <Text style={styles.createGroupButtonText}>+ Create Group</Text>
+    // If no groups loaded yet, show loading or empty state
+    if (loadingGroups) {
+      return (
+        <View style={styles.groupSectionContainer}>
+          <Text style={styles.sectionTitle}>Co-living Groups</Text>
+          <ActivityIndicator style={styles.groupListLoading} size="small" color={lighterBlue} />
+        </View>
+      );
+    }
+
+    // If groups loaded but empty, show option to create one
+    if (!loadingGroups && housingGroups.length === 0) {
+      return (
+        <View style={styles.groupSectionContainer}>
+          <Text style={styles.sectionTitle}>Co-living Groups</Text>
+          <TouchableOpacity style={styles.createGroupPrompt} onPress={handleCreateGroup}>
+            <Plus size={20} color={lighterBlue} style={styles.createGroupIcon} />
+            <Text style={styles.createGroupText}>Be the first to create a co-living group for this home</Text>
+            <ChevronRight size={20} color={lighterBlue} />
           </TouchableOpacity>
         </View>
-        
-        {loadingGroups ? (
-          <View style={styles.groupListLoading}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.groupLoadingText}>Loading groups...</Text>
-          </View>
-        ) : (
-          renderHousingGroups()
-        )}
+      );
+    }
+
+    // If groups exist, render them
+    return (
+      <View style={styles.groupSectionContainer}>
+        <View style={styles.groupSectionHeader}>
+          <Text style={styles.sectionTitle}>Co-living Groups ({housingGroups.length})</Text>
+          <TouchableOpacity onPress={handleCreateGroup}>
+            <Text style={styles.createGroupLink}>Create Group</Text>
+          </TouchableOpacity>
+        </View>
+        {renderHousingGroups()} 
       </View>
     );
   };
 
   const renderHousingGroups = () => {
-    console.log('Rendering housing groups, count:', housingGroups.length);
-    
-    if (housingGroups.length === 0) {
+    // Check if housingGroups is empty or undefined
+    if (!housingGroups || housingGroups.length === 0) {
+      // Render a message or component indicating no groups are available
+      // Optionally, show a button to create a group if appropriate here
       return (
         <View style={styles.noGroupsContainer}>
-          <Text style={styles.noGroupsText}>No housing groups have been created for this listing yet.</Text>
-          <TouchableOpacity style={styles.createGroupButton} onPress={handleCreateGroup}>
-            <Text style={styles.createGroupButtonText}>Create a Housing Group</Text>
-          </TouchableOpacity>
+          <Text style={styles.noGroupsText}>No co-living groups available for this listing yet.</Text>
+          {/* You might want the create button here instead of just in renderGroupsSection */}
+           <TouchableOpacity style={styles.createGroupPromptSmall} onPress={handleCreateGroup}>
+             <Plus size={16} color={lighterBlue} />
+             <Text style={styles.createGroupTextSmall}> Create one?</Text>
+           </TouchableOpacity>
         </View>
       );
     }
     
-    return (
-      <View style={styles.groupList}>
-        {housingGroups.map((group) => (
-          <View key={group.id} style={styles.groupCardContainer}>
-            <Text style={styles.groupDescription}>{group.description}</Text>
-            {/* Avatars Row */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.avatarsRow}>
-              {group.members && group.members.length > 0 && group.members.map((m, idx) => (
-                <Image
-                  key={m.id}
-                  source={m.user_profile.avatar_url ? { uri: m.user_profile.avatar_url } : undefined}
-                  style={[styles.smallAvatar, { marginLeft: idx === 0 ? 0 : -12 }]}
-                />
-              ))}
-            </ScrollView>
-            {/* Group count icon and other info can go here */}
-            <View style={styles.groupStatsRow}>
-              <Users size={16} color="#555" />
-              <Text style={styles.statText}>{group.current_members}/{group.max_members} members</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  };
+    // If showing the detail modal for a test group - Removed as per previous logic simplification
+    // if (showingTestGroupDetail && selectedTestGroup) { ... }
 
-  const TestGroupDetailView = () => {
-    if (!selectedTestGroup) return null;
-
+    // Main rendering logic for the list of actual groups
     return (
-      <View style={styles.testGroupDetailOverlay}>
-        <View style={styles.testGroupDetailCard}>
-          <View style={styles.testGroupDetailHeader}>
-            <Text style={styles.testGroupDetailTitle}>{selectedTestGroup.name}</Text>
-            <TouchableOpacity onPress={handleCloseTestGroupDetail}>
-              <Text style={styles.testGroupDetailClose}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <Text style={styles.testGroupDetailDescription}>
-            {selectedTestGroup.description}
-          </Text>
-          
-          <View style={styles.testGroupDetailStats}>
-            <Text style={styles.testGroupDetailStat}>
-              Members: {selectedTestGroup.current_members}/{selectedTestGroup.max_members}
-            </Text>
-          </View>
-          
-          <Text style={styles.testGroupDetailMembersTitle}>Members</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.testGroupDetailMembersList}>
-            {selectedTestGroup.members
-              .filter(member => member.status === 'approved')
-              .map((member: GroupMember, i: number) => (
-                <View key={member.id} style={styles.testGroupDetailMember}>
-                  <Image
-                    source={{ uri: member.user_profile.avatar_url || `https://randomuser.me/api/portraits/${i % 2 === 0 ? 'women' : 'men'}/${10 + i}.jpg` }}
-                    style={styles.testGroupDetailMemberAvatar}
-                  />
-                  <Text style={styles.testGroupDetailMemberName}>
-                    {member.user_profile.first_name}
-                  </Text>
-                  {member.is_admin && (
-                    <Text style={styles.testGroupDetailMemberAdmin}>Admin</Text>
-                  )}
-                </View>
-              ))}
-          </ScrollView>
-          
-          <TouchableOpacity 
-            style={styles.testGroupDetailButton} 
-            onPress={() => {
-              Alert.alert(
-                'Join Group',
-                'For demo purposes, you have successfully joined this test group.'
-              );
-              handleCloseTestGroupDetail();
-            }}
-          >
-            <Text style={styles.testGroupDetailButtonText}>Join Group</Text>
+      <View style={styles.groupListContainer}>
+        {housingGroups.map((group: HousingGroup) => (
+          <TouchableOpacity key={group.id} onPress={() => handleJoinGroup(group.id)}>
+            <GroupCard
+              group={group}
+            />
           </TouchableOpacity>
-        </View>
+        ))}
       </View>
     );
   };
@@ -818,213 +326,508 @@ function HousingDetail() {
     }
   }, [session]);
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
-        <Text style={styles.loadingText}>Loading listing...</Text>
-      </View>
-    );
-  }
-
-  if (error || !listing) {
-    return (
-      <View style={styles.container}>
-        <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
-        <View style={styles.error}>
-          <AlertCircle size={24} color="#ff3b30" />
-          <Text style={styles.errorText}>
-            {error || 'Listing not found'}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Main content is rendered when we have a listing and no errors
+  // Main return statement for HousingDetail component
   return (
     <View style={styles.container}>
-      <AppHeader title="Housing Detail" showBackButton={true} onBackPress={handleBackPress} />
-      <ScrollView>
-        <View style={styles.imageContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => {
-              const offset = e.nativeEvent.contentOffset.x;
-              setCurrentImageIndex(Math.round(offset / width));
-            }}
-            scrollEventThrottle={16}
-          >
-            {listing.media_urls.map((url, index) => (
-              <Image
-                key={index}
-                source={{ uri: url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop' }}
-                style={styles.image}
-              />
-            ))}
-          </ScrollView>
-          <View style={styles.imageIndicators}>
-            {listing.media_urls.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.imageIndicator,
-                  currentImageIndex === index && styles.imageIndicatorActive,
-                ]}
-              />
-            ))}
-          </View>
+      <AppHeader title={listing?.title ?? 'Housing Detail'} showBackButton onBackPress={handleBackPress} />
+      {loading && (
+        <View style={[styles.loadingContainer, styles.centeredContent]}>
+          <ActivityIndicator size="large" color={lighterBlue} />
+          <Text style={styles.loadingText}>Loading housing details...</Text>
         </View>
-
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>{listing.title}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.location}>
-                  {listing.suburb}, {listing.state}
-                </Text>
-                {housingGroups.length > 0 && (
-                  <View style={styles.groupMatchBadge}>
-                    <Users size={12} color="#fff" />
-                    <Text style={styles.groupMatchText}>Group Match</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>${listing.weekly_rent}</Text>
-              <Text style={styles.priceLabel}>per week</Text>
-            </View>
-          </View>
-
-          <View style={styles.sdaBadge}>
-            <Wheelchair size={20} color="#fff" />
-            <Text style={styles.sdaBadgeText}>
-              {listing.sda_category.split('_').map(
-                word => word.charAt(0).toUpperCase() + word.slice(1)
-              ).join(' ')}
-            </Text>
-          </View>
-
-          <View style={styles.features}>
-            <View style={styles.feature}>
-              <Bed size={24} color="#666" />
-              <Text style={styles.featureText}>
-                {listing.bedrooms} {listing.bedrooms === 1 ? 'Bed' : 'Beds'}
-              </Text>
-            </View>
-            <View style={styles.feature}>
-              <Bath size={24} color="#666" />
-              <Text style={styles.featureText}>
-                {listing.bathrooms} {listing.bathrooms === 1 ? 'Bath' : 'Baths'}
-              </Text>
-            </View>
-            {listing.parking_spaces > 0 && (
-              <View style={styles.feature}>
-                <Car size={24} color="#666" />
-                <Text style={styles.featureText}>
-                  {listing.parking_spaces} {listing.parking_spaces === 1 ? 'Park' : 'Parks'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Location</Text>
-            <View style={styles.locationDetail}>
-              <MapPin size={20} color="#666" />
-              <Text style={styles.locationText}>{listing.address}</Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Availability</Text>
-            <View style={styles.availabilityDetail}>
-              <Calendar size={20} color="#666" />
-              <Text style={styles.availabilityText}>
-                Available from {new Date(listing.available_from).toLocaleDateString()}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{listing.description}</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Accessibility Features</Text>
-            <View style={styles.tags}>
-              {listing.accessibility_features.map((feature, index) => (
-                <View key={index} style={styles.tag}>
-                  <DoorOpen size={16} color="#007AFF" />
-                  <Text style={styles.tagText}>{feature}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Property Features</Text>
-            <View style={styles.tags}>
-              {listing.features.map((feature, index) => (
-                <View key={index} style={styles.tag}>
-                  <DoorOpen size={16} color="#007AFF" />
-                  <Text style={styles.tagText}>{feature}</Text>
-                </View>
-              ))}
-              {listing.pets_allowed && (
-                <View style={styles.tag}>
-                  <Dog size={16} color="#007AFF" />
-                  <Text style={styles.tagText}>Pet Friendly</Text>
+      )}
+      {error && !loading && (
+        <View style={[styles.errorContainer, styles.centeredContent]}>
+          <AlertCircle size={24} color="#D9534F" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+      {!loading && !error && listing && (
+        <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
+          {/* Image Carousel */}
+          {listing.media_urls && listing.media_urls.length > 0 && (
+            <View style={styles.imageContainer}>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={(event) => {
+                  const contentOffsetX = event.nativeEvent.contentOffset.x;
+                  const layoutMeasurementWidth = event.nativeEvent.layoutMeasurement.width;
+                  // Ensure layoutMeasurementWidth is not zero to avoid division by zero
+                  if (layoutMeasurementWidth > 0) {
+                     const slide = Math.round(contentOffsetX / layoutMeasurementWidth);
+                     if (slide !== currentImageIndex) {
+                       setCurrentImageIndex(slide);
+                     }
+                  }
+                }}
+                scrollEventThrottle={16} 
+              >
+                {listing.media_urls.map((url, index) => (
+                  <Image key={index} source={{ uri: url }} style={styles.image} resizeMode="cover" />
+                ))}
+              </ScrollView>
+              {listing.media_urls.length > 1 && (
+                <View style={styles.pagination}>
+                  {listing.media_urls.map((_, index) => (
+                    <Text key={index} style={index === currentImageIndex ? styles.paginationDotActive : styles.paginationDot}>•</Text>
+                  ))}
                 </View>
               )}
             </View>
+          )}
+
+          {/* Title and Basic Info */}
+          <Text style={styles.title}>{listing.title}</Text>
+          <View style={styles.locationRow}>
+            <MapPin size={16} color="#666" />
+            <Text style={styles.locationText}>{`${listing.suburb}, ${listing.state} ${listing.postcode}`}</Text>
           </View>
 
+           {/* Rent and Bond */}
+           <View style={styles.rentBondRow}>
+             <Text style={styles.rentText}>${listing.weekly_rent}/week</Text>
+             {listing.bond_amount && <Text style={styles.bondText}>Bond: ${listing.bond_amount}</Text>}
+           </View>
+
+          {/* Property Details Grid */}
+           <View style={styles.detailsGrid}>
+             <View style={styles.detailItem}>
+               <Bed size={20} color="#666" />
+               <Text style={styles.detailText}>{listing.bedrooms} bed{listing.bedrooms !== 1 ? 's' : ''}</Text>
+             </View>
+             <View style={styles.detailItem}>
+               <Bath size={20} color="#666" />
+               <Text style={styles.detailText}>{listing.bathrooms} bath{listing.bathrooms !== 1 ? 's' : ''}</Text>
+             </View>
+             <View style={styles.detailItem}>
+               <Car size={20} color="#666" />
+               <Text style={styles.detailText}>{listing.parking_spaces} park{listing.parking_spaces !== 1 ? 's' : ''}</Text>
+             </View>
+             <View style={styles.detailItem}>
+               <Calendar size={20} color="#666" />
+               <Text style={styles.detailText}>Avail. {new Date(listing.available_from).toLocaleDateString()}</Text>
+             </View>
+           </View>
+           
+          {/* Description */}
+          <Text style={styles.sectionTitle}>Description</Text>
+          <Text style={styles.description}>{listing.description}</Text>
+
+          {/* Features & Accessibility */}
+          {(listing.features?.length > 0 || listing.accessibility_features?.length > 0) && (
+            <View>
+              {listing.features?.length > 0 && (
+                <View>
+                  <Text style={styles.sectionTitle}>Features</Text>
+                  <View style={styles.featureList}>
+                    {listing.features.map((feature, index) => (
+                      <Text key={index} style={styles.featureItem}>• {feature}</Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {listing.accessibility_features?.length > 0 && (
+                <View>
+                  <Text style={styles.sectionTitle}>Accessibility</Text>
+                  <View style={styles.featureList}>
+                    {listing.accessibility_features.map((feature, index) => (
+                      <Text key={index} style={styles.featureItem}>♿ {feature}</Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Additional Details (Pets, NDIS) */}
+          <View style={styles.additionalDetailsContainer}>
+             <View style={styles.additionalDetailItem}>
+               <Dog size={18} color={listing.pets_allowed ? '#4CAF50' : '#F44336'} />
+               <Text style={styles.additionalDetailText}>{listing.pets_allowed ? 'Pets Allowed' : 'No Pets'}</Text>
+             </View>
+             {listing.ndis_supported && (
+               <View style={styles.additionalDetailItem}>
+                 <Info size={18} color={lighterBlue} /> 
+                 <Text style={styles.additionalDetailText}>NDIS Supported</Text>
+               </View>
+             )}
+             {/* SDA Category if applicable */}
+             {listing.sda_category && listing.sda_category !== 'None' && (
+                <View style={styles.additionalDetailItem}>
+                  <Wheelchair size={18} color='#8A2BE2'/>
+                  <Text style={styles.additionalDetailText}>SDA: {listing.sda_category}</Text>
+                </View>
+             )}
+           </View>
+
+          {/* Provider Info */}
+          <View style={styles.providerContainer}>
+            <Text style={styles.providerLabel}>Listed by:</Text>
+            <Text style={styles.providerName}>{listing.provider?.business_name ?? 'Provider details unavailable'}</Text>
+            {/* Add verified badge if applicable */}
+          </View>
+          
+          {/* Virtual Tour Link */}
           {listing.virtual_tour_url && (
-            <TouchableOpacity style={styles.virtualTourButton}>
-              <Text style={styles.virtualTourText}>View Virtual Tour</Text>
-              <ChevronRight size={20} color="#007AFF" />
+            <TouchableOpacity style={styles.virtualTourButton} onPress={() => {/* Add linking logic */}}>
+              <Text style={styles.virtualTourButtonText}>Virtual Tour</Text>
+              <ChevronRight size={18} color="#fff" />
             </TouchableOpacity>
           )}
 
+          {/* Render the Co-living Groups Section */}
           {renderGroupsSection()}
 
-          <View style={styles.providerCard}>
-            <Text style={styles.providerTitle}>Listed by</Text>
-            <Text style={styles.providerName}>{listing.provider.business_name}</Text>
-          </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
 
-      <View style={styles.footer}>
-        <View style={styles.footerContent}>
-          <View>
-            <Text style={styles.footerPrice}>${listing.weekly_rent}/week</Text>
-            {listing.bond_amount && (
-              <Text style={styles.footerBond}>
-                Bond: ${listing.bond_amount}
-              </Text>
-            )}
-          </View>
-          <TouchableOpacity
-            style={styles.applyButton}
-            onPress={handleApply}
-          >
+      {/* Apply Button Fixed at Bottom */}
+      {!loading && !error && listing && (
+        <View style={styles.applyButtonContainer}>
+          <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
             <Text style={styles.applyButtonText}>Apply Now</Text>
-            <ChevronRight size={20} color="#fff" />
           </TouchableOpacity>
         </View>
-      </View>
-
-      {showingTestGroupDetail && <TestGroupDetailView />}
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa', // Light background
+  },
+  scrollContainer: {
+    // Removed paddingBottom, handled by applyButtonContainer margin
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 100, // Ensure space for fixed button
+  },
+  centeredContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1, // Take up full screen
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: { 
+    flex: 1,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: { 
+    marginTop: 10,
+    fontSize: 16,
+    color: '#D9534F', // Error red
+    textAlign: 'center',
+  },
+  imageContainer: {
+    width: width - 32, // Full width minus padding
+    height: 250, // Fixed height for images
+    marginBottom: 16,
+    borderRadius: 8,
+    overflow: 'hidden', // Clip images to rounded corners
+    alignSelf: 'center',
+  },
+  image: {
+    width: width - 32,
+    height: 250,
+  },
+  pagination: { 
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paginationDot: { 
+    fontSize: 30, // Make dots larger
+    color: '#ccc', 
+    marginHorizontal: 4,
+  },
+  paginationDotActive: { 
+    fontSize: 30,
+    color: lighterBlue, // Active color
+    marginHorizontal: 4,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+  },
+  locationRow: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  locationText: {
+    fontSize: 16,
+    color: '#666',
+    marginLeft: 6,
+  },
+  rentBondRow: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline', // Align text baselines
+    marginBottom: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+  },
+  rentText: { 
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: lighterBlue,
+  },
+  bondText: { 
+    fontSize: 14,
+    color: '#666',
+  },
+  detailsGrid: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap', // Allow items to wrap
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  detailItem: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '48%', // Roughly two items per row
+    marginBottom: 10,
+  },
+  detailText: { 
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#333',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    color: '#444',
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#555',
+    marginBottom: 16,
+  },
+  featureList: { 
+    marginLeft: 10, // Indent feature list
+    marginBottom: 16,
+  },
+  featureItem: { 
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 22, // Space out list items
+  },
+  additionalDetailsContainer: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap', // Allow wrapping
+    justifyContent: 'flex-start', // Align items to the start
+    marginTop: 8,
+    marginBottom: 16,
+    gap: 15, // Add gap between items
+  },
+  additionalDetailItem: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+  },
+  additionalDetailText: { 
+    marginLeft: 6,
+    fontSize: 13,
+    color: '#333',
+  },
+  providerContainer: { 
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  providerLabel: { 
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  providerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  virtualTourButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: lighterBlue,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  virtualTourButtonText: { 
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  groupSectionContainer: {
+    marginTop: 20,
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  groupSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  groupSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#444',
+  },
+  createGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: lightGray, 
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+  },
+  createGroupButtonText: {
+    marginLeft: 4,
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '500',
+  },
+  groupListContainer: {
+    // Container for GroupCards, add styles if needed (e.g., spacing)
+  },
+  createGroupPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    backgroundColor: '#f0f8ff', // Light blue background
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  createGroupIcon: {
+    marginRight: 8,
+  },
+  createGroupText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  createGroupLink: {
+    marginLeft: 4,
+    fontSize: 14,
+    color: lighterBlue,
+    fontWeight: 'bold',
+  },
+  createGroupPromptSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: '#e6f3ff', // Lighter blue
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  createGroupTextSmall: {
+    fontSize: 13,
+    color: '#005A9C', // Darker blue text
+    marginLeft: 5,
+  },
+  avatarsRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  avatarContainer: {
+    marginRight: 6,
+    position: 'relative',
+  },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  adminBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#ffd700', // Gold color for admin
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  applyButtonContainer: { 
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: '#f8f9fa', // Match container background
+    borderTopWidth: 1,
+    borderColor: '#eee',
+  },
+  applyButton: { 
+    backgroundColor: lighterBlue,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  applyButtonText: { 
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  groupListLoading: { 
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noGroupsContainer: { 
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  noGroupsText: { 
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 14,
+  },
+});
 
 export default function HousingDetailWithErrorBoundary() {
   return (
