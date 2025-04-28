@@ -219,7 +219,7 @@ function HousingDetail() {
       }
 
       // Step 4: Merge profile data into each member
-      const profilesById = Object.fromEntries(profiles.map((p: any) => [p.user_id, p]));
+      const profilesById = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
       const membersWithProfiles = (members || []).map((m: any) => ({
         ...m,
         user_profile: profilesById[m.user_id] || null,
