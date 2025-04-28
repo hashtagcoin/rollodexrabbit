@@ -318,13 +318,13 @@ function HousingDetail() {
     // Main rendering logic for the list of actual groups
     return (
       <View style={styles.groupListContainer}>
-        {housingGroups.map((group: HousingGroup) => (
-          <TouchableOpacity key={group.id} onPress={() => handleJoinGroup(group.id)}>
-            <GroupCard
-              group={group}
-            />
-          </TouchableOpacity>
-        ))}
+         {housingGroups.map((group: HousingGroup) => (
+           <GroupCard
+             key={group.id}
+             group={group}
+             onJoinGroup={handleJoinGroup}
+           />
+         ))}
       </View>
     );
   };
