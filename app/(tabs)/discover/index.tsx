@@ -39,6 +39,8 @@ import AppHeader from '../../../components/AppHeader';
 import SwipeListView from './components/SwipeListView';
 import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
 import { ShadowCard } from './components/ShadowCard';
+import GroupMatchIcon from '../housing/components/GroupMatchIcon';
+import HousingCard from './components/HousingCard';
 // Import Bottom Sheet components
 import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 
@@ -443,14 +445,11 @@ export default function DiscoverScreen() {
     }
   };
 
-  // Render Group Match badge for grid and list view
+  // Render Group Match icon for grid and list view
   const renderGroupMatchBadge = (item: ListingItem) => {
     if (isHousingListing(item) && housingGroupsMap[item.id]) {
       return (
-        <View style={styles.groupMatchBadge}>
-          <Users size={12} color="#fff" />
-          <Text style={styles.groupMatchText}>Group Match</Text>
-        </View>
+        <GroupMatchIcon style={styles.groupMatchBadge} />
       );
     }
     return null;
@@ -530,54 +529,66 @@ export default function DiscoverScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.serviceCardTouchable}
-            onPress={() => navigateToDetails(item)}
-          >
-            <ShadowCard 
-              width={(width - 36) / 2}
-              height={240}
-              radius={12}
-              style={styles.serviceCard}
+          isHousingListing(item) ? (
+            <HousingCard
+              item={item}
+              onPress={() => navigateToDetails(item)}
+              onToggleFavorite={() => toggleFavorite(item)}
+              isFavorite={favorites.has(item.id)}
+              onMorePress={() => { /* TODO: handle more options */ }}
+              showGroupMatch={housingGroupsMap[item.id]}
+            />
+          ) : (
+            // Keep existing service card rendering for non-housing listings
+            <TouchableOpacity
+              style={styles.serviceCardTouchable}
+              onPress={() => navigateToDetails(item)}
             >
-              <View style={styles.imageContainer}>
-                <Image
-                  source={{ uri: getItemImage(item) }}
-                  style={styles.serviceImage}
-                />
-                {renderGroupMatchBadge(item)}
-                {isServiceListing(item) && item.provider?.verified && (
-                  <View style={styles.ndisBadgeGrid}>
-                    <BadgeCheck size={14} color="#fff" />
-                    <Text style={styles.ndisBadgeText}>NDIS</Text>
-                  </View>
-                )}
-                <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
-                  <Heart 
-                    size={20} 
-                    color={favorites.has(item.id) ? "#ff4081" : "#ccc"} 
-                    fill={favorites.has(item.id) ? "#ff4081" : "none"} 
+              <ShadowCard 
+                width={(width - 36) / 2}
+                height={240}
+                radius={12}
+                style={styles.serviceCard}
+              >
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: getItemImage(item) }}
+                    style={styles.serviceImage}
                   />
-                </Pressable>
-              </View>
-              
-              <View style={styles.serviceDetails}>
-                <Text style={styles.serviceTitle} numberOfLines={3}>
-                  {item.title}
-                </Text>
-                {renderServiceProvider(item)}
-                <View style={styles.serviceFooter}>
-                  <View style={styles.priceContainer}>
-                    {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIcon}/>}
-                    <Text style={styles.servicePrice}>
-                      ${getItemPrice(item)}
-                      {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
-                    </Text>
+                  {renderGroupMatchBadge(item)}
+                  {isServiceListing(item) && item.provider?.verified && (
+                    <View style={styles.ndisBadgeGrid}>
+                      <BadgeCheck size={14} color="#fff" />
+                      <Text style={styles.ndisBadgeText}>NDIS</Text>
+                    </View>
+                  )}
+                  <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
+                    <Heart 
+                      size={20} 
+                      color={favorites.has(item.id) ? "#ff4081" : "#ccc"} 
+                      fill={favorites.has(item.id) ? "#ff4081" : "none"} 
+                    />
+                  </Pressable>
+                </View>
+                
+                <View style={styles.serviceDetails}>
+                  <Text style={styles.serviceTitle} numberOfLines={3}>
+                    {item.title}
+                  </Text>
+                  {renderServiceProvider(item)}
+                  <View style={styles.serviceFooter}>
+                    <View style={styles.priceContainer}>
+                      {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIcon}/>}
+                      <Text style={styles.servicePrice}>
+                        ${getItemPrice(item)}
+                        {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </ShadowCard>
-          </TouchableOpacity>
+              </ShadowCard>
+            </TouchableOpacity>
+          )
         )}
       />
     );
