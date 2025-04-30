@@ -93,7 +93,7 @@ export default function ServiceDetails() {
             .from('service_providers') // Changed table name
             .select('business_name, verified, id') // Selecting columns assumed to be in service_providers
             .eq('id', serviceDataResult.provider_id) // Assuming FK still relates via this ID
-            .single();
+            .maybeSingle();
 
           if (providerError) {
             console.warn(`Could not fetch provider ${serviceDataResult.provider_id}:`, providerError.message);

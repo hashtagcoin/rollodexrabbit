@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Calendar, Clock, ChevronRight, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
+import AppHeader from '../../../components/AppHeader';
 
 export default function BookingScreen() {
   const { serviceId } = useLocalSearchParams();
@@ -175,6 +176,7 @@ export default function BookingScreen() {
 
   return (
     <View style={styles.container}>
+      <AppHeader title="Book Appointment" showBackButton={true} onBackPress={() => router.back()} />
       <ScrollView style={styles.content}>
         <Text style={styles.title}>Book Appointment</Text>
         <Text style={styles.subtitle}>{service.name}</Text>

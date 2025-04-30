@@ -91,28 +91,36 @@ export default function BookingsScreen() {
       if (error) throw error;
 
       // Get user details separately for each booking
-      const bookingsWithUserNames = await Promise.all((data || []).map(async (booking) => {
+      const bookingsWithUserNames: Booking[] = await Promise.all((data || []).map(async (booking) => {
+        // extract single service object
+        const serviceArr = (booking as any).service;
+        const serviceObj = Array.isArray(serviceArr) && serviceArr.length > 0
+          ? { id: serviceArr[0].id, title: serviceArr[0].title }
+          : undefined;
+
+        let fullName = 'Unknown User';
         try {
           const { data: userData } = await supabase
             .from('user_profiles')
             .select('full_name')
             .eq('id', booking.user_id)
             .single();
-            
-          return {
-            ...booking,
-            user_full_name: userData?.full_name || 'Unknown User'
-          };
+          fullName = userData?.full_name || fullName;
         } catch (e) {
           console.error('Error fetching user details:', e);
-          return {
-            ...booking,
-            user_full_name: 'Unknown User'
-          };
         }
-      }));
 
-      setBookings(bookingsWithUserNames || []);
+        return {
+          id: booking.id,
+          scheduled_at: booking.scheduled_at,
+          total_price: booking.total_price,
+          status: booking.status,
+          service_title: serviceObj?.title,
+          service: serviceObj,
+          user_full_name: fullName,
+        };
+      }));
+      setBookings(bookingsWithUserNames);
     } catch (error) {
       console.error('Error loading bookings:', error);
     } finally {
@@ -169,7 +177,7 @@ export default function BookingsScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Service Bookings" showBackButton={true} />
+      <AppHeader title="Service Bookings" showBackButton={true} onBackPress={() => router.back()} />
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -294,56 +302,68 @@ export default function BookingsScreen() {
             {bookings.map((booking) => {
               const { date, time } = formatDate(booking.scheduled_at);
               return (
-                <TouchableOpacity
-                  key={booking.id}
-                  style={styles.bookingCard}
-                  onPress={() => router.push(`/provider/bookings/${booking.id}`)}
-                >
-                  <View style={styles.bookingHeader}>
-                    <View style={styles.serviceInfo}>
-                      <Text style={styles.serviceName}>{booking.service_title || booking.service?.title}</Text>
-                      <View style={styles.statusContainer}>
-                        {getStatusIcon(booking.status)}
-                        <Text
-                          style={[
-                            styles.statusText,
-                            { color: getStatusColor(booking.status) },
-                          ]}
-                        >
-                          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                        </Text>
+                <View key={booking.id} style={styles.bookingContainer}>
+                  <TouchableOpacity
+                    style={styles.bookingCard}
+                    onPress={() => router.push(`/provider/bookings/${booking.id}`)}
+                  >
+                    <View style={styles.bookingHeader}>
+                      <View style={styles.serviceInfo}>
+                        <Text style={styles.serviceName}>{booking.service_title || booking.service?.title}</Text>
+                        <View style={styles.statusContainer}>
+                          {getStatusIcon(booking.status)}
+                          <Text
+                            style={[
+                              styles.statusText,
+                              { color: getStatusColor(booking.status) },
+                            ]}
+                          >
+                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.bookingTime}>
+                        <Calendar size={16} color="#666" />
+                        <Text style={styles.dateText}>{date}</Text>
+                        <Text style={styles.timeText}>{time}</Text>
                       </View>
                     </View>
-                    <View style={styles.bookingTime}>
-                      <Calendar size={16} color="#666" />
-                      <Text style={styles.dateText}>{date}</Text>
-                      <Text style={styles.timeText}>{time}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.bookingDetails}>
-                    <View style={styles.clientSection}>
-                      <Text style={styles.detailLabel}>Client</Text>
-                      <Text style={styles.clientName}>
-                        {booking.user_full_name || booking.user?.full_name || 'Unknown User'}
-                      </Text>
+                    <View style={styles.bookingDetails}>
+                      <View style={styles.clientSection}>
+                        <Text style={styles.detailLabel}>Client</Text>
+                        <Text style={styles.clientName}>
+                          {booking.user_full_name || booking.user?.full_name || 'Unknown User'}
+                        </Text>
+                      </View>
+                      <View style={styles.amountSection}>
+                        <Text style={styles.detailLabel}>Amount</Text>
+                        <Text style={styles.amount}>${booking.total_price}</Text>
+                      </View>
                     </View>
-                    <View style={styles.amountSection}>
-                      <Text style={styles.detailLabel}>Amount</Text>
-                      <Text style={styles.amount}>${booking.total_price}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.bookingFooter}>
+                    <View style={styles.bookingFooter}>
+                      <TouchableOpacity
+                        style={styles.viewDetailsButton}
+                        onPress={() => router.push(`/provider/bookings/${booking.id}`)}
+                      >
+                        <Text style={styles.viewDetailsText}>View Details</Text>
+                        <ChevronRight size={16} color="#007AFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                  {booking.status === 'pending' && (
                     <TouchableOpacity
-                      style={styles.viewDetailsButton}
-                      onPress={() => router.push(`/provider/bookings/${booking.id}`)}
+                      style={styles.confirmButton}
+                      onPress={() => router.push({
+                        pathname: '/(tabs)/discover/booking/confirmation',
+                        params: { bookingId: booking.id },
+                      })}
                     >
-                      <Text style={styles.viewDetailsText}>View Details</Text>
-                      <ChevronRight size={16} color="#007AFF" />
+                      <Text style={styles.confirmButtonText}>Confirm Booking</Text>
                     </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
+                  )}
+                </View>
               );
             })}
           </View>
@@ -358,31 +378,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 24,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    textAlign: 'center',
+  bookingContainer: {
+    marginBottom: 16,
   },
   filterContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
+    paddingVertical: 8,
   },
   filterScrollView: {
     paddingVertical: 16,
@@ -443,7 +443,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e1e1e1',
   },
@@ -524,5 +523,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '500',
+  },
+  confirmButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
