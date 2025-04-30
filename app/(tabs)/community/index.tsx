@@ -181,10 +181,7 @@ export default function CommunityFeed() {
           
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.push({
-              pathname: "/(tabs)/community",
-              params: { screen: "events" }
-            })}
+            onPress={() => router.push('/community/events')}
           >
             <CalendarHeart size={24} color="#000" />
             <Text style={styles.buttonLabel}>Events</Text>
