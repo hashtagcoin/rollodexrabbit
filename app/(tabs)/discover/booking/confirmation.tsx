@@ -99,10 +99,16 @@ export default function BookingConfirmation() {
         <View style={styles.content}>
           <View style={styles.successIcon}>
             <Image
-              source={service?.provider?.avatar_url 
-                ? { uri: service.provider.avatar_url } 
-                : { uri: 'https://images.unsplash.com/photo-1530695440407-21fef47230b1?q=80&w=2070&auto=format&fit=crop' }}
-              style={styles.providerImage}
+              source={
+                service?.provider?.avatar_url
+                  ? { uri: service.provider.avatar_url }
+                  : require('../../../../assets/rollodex-icon-lrg.png')
+              }
+              style={[
+                styles.providerImage,
+                !service?.provider?.avatar_url && styles.fallbackImage
+              ]}
+              resizeMode="cover"
             />
             <View style={styles.checkmark}>
               <Text style={styles.checkmarkText}>✓</Text>
@@ -239,6 +245,13 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
+  },
+  fallbackImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    alignSelf: 'center',
+    marginTop: 20,
   },
   checkmark: {
     position: 'absolute',

@@ -150,7 +150,7 @@ export default function CommunityFeed() {
              style={styles.iconButton}
              onPress={() => router.push('/profile/friends')}
            >
-             <UserPlus size={24} color="#007AFF" />
+             <UserPlus size={24} color="#000" />
              <Text style={styles.buttonLabel}>Friends</Text>
            </TouchableOpacity>
           
@@ -190,12 +190,14 @@ export default function CommunityFeed() {
         <Animated.ScrollView
           scrollEventThrottle={16}
           onScroll={handleScroll}
+          onScrollEndDrag={() => {Animated.spring(headerTranslateY, { toValue: 0, useNativeDriver: true }).start(); lastScrollDirection.current = 'up';}}
+          onMomentumScrollEnd={() => {Animated.spring(headerTranslateY, { toValue: 0, useNativeDriver: true }).start(); lastScrollDirection.current = 'up';}}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: APP_HEADER_HEIGHT + NAV_HEADER_HEIGHT } // Add padding for both headers
+            { paddingTop: APP_HEADER_HEIGHT } // Padding only for main header
           ]}
         >
         {loading ? (
@@ -351,6 +353,7 @@ const styles = StyleSheet.create({
   createButtonContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 12,  // moved down to avoid overlap with AppHeader
   },
   createButton: {
     alignItems: 'center',
