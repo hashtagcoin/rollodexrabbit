@@ -13,6 +13,7 @@ export default function BookingScreen() {
   const [notes, setNotes] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serviceAgreementViewed, setServiceAgreementViewed] = useState(false);
 
   // This would be fetched from API
   const service = {
@@ -287,11 +288,21 @@ export default function BookingScreen() {
               <Text style={styles.paymentTotal}>${service.gapPayment}</Text>
             </View>
           </View>
+          <TouchableOpacity
+            style={styles.viewAgreementButton}
+            onPress={() => {
+              setServiceAgreementViewed(true);
+              router.push({ pathname: '/service-agreement', params: { serviceId } });
+            }}
+          >
+            <Text style={styles.viewAgreementText}>View Service Agreement for this provider</Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          style={styles.agreementToggle}
-          onPress={() => setAgreed(!agreed)}
+          style={[styles.agreementToggle, !serviceAgreementViewed && styles.agreementToggleDisabled]}
+          onPress={() => serviceAgreementViewed && setAgreed(!agreed)}
+          disabled={!serviceAgreementViewed}
         >
           <View style={[styles.checkbox, agreed && styles.checkboxChecked]} />
           <Text style={styles.agreementText}>
@@ -302,9 +313,9 @@ export default function BookingScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.confirmButton, loading && styles.confirmButtonDisabled]}
+          style={[styles.confirmButton, (!agreed || loading) && styles.confirmButtonDisabled]}
           onPress={handleBooking}
-          disabled={loading}
+          disabled={!agreed || loading}
         >
           <Text style={styles.confirmButtonText}>
             {loading ? 'Confirming...' : 'Confirm Booking'}
@@ -449,6 +460,9 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 24,
   },
+  agreementToggleDisabled: {
+    opacity: 0.5,
+  },
   checkbox: {
     width: 24,
     height: 24,
@@ -466,6 +480,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  viewAgreementButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  viewAgreementText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
   footer: {
     padding: 24,

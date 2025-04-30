@@ -5,21 +5,20 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Image,
 } from 'react-native';
+import Signature from 'react-native-signature-canvas';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { ArrowLeft, Download, Eye, SquareCheck as CheckSquare, Pencil, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Download, Eye, SquareCheck as CheckSquare, CircleAlert as AlertCircle } from 'lucide-react-native';
 import AppHeader from '../../components/AppHeader';
 
 export default function ServiceAgreementScreen() {
   const { serviceId, bookingId } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signature, setSignature] = useState('');
+  const [signatureData, setSignatureData] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
-  
+
   // This would typically be fetched from the API based on serviceId
   const serviceDetails = {
     name: 'Physiotherapy Session',
@@ -32,8 +31,8 @@ export default function ServiceAgreementScreen() {
 
   const handleSign = async () => {
     try {
-      if (!signature.trim()) {
-        setError('Please enter your full name as signature');
+      if (!signatureData) {
+        setError('Please provide your signature');
         return;
       }
 
@@ -66,7 +65,7 @@ export default function ServiceAgreementScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Service Agreement" />
+      <AppHeader title="Service Agreement" showBackButton onBackPress={() => router.back()} />
 
       <View style={styles.serviceInfo}>
         <Text style={styles.serviceName}>{serviceDetails.name}</Text>
@@ -159,21 +158,21 @@ export default function ServiceAgreementScreen() {
           </Text>
         </View>
 
-        <View style={styles.signatureInputContainer}>
-          <Text style={styles.signatureLabel}>Signature (Type Full Name)</Text>
-          <TextInput
-            style={styles.signatureInput}
-            value={signature}
-            onChangeText={setSignature}
-            placeholder="Your full name"
+        <View style={styles.signatureCanvasContainer}>
+          <Signature
+            onOK={(sig) => setSignatureData(sig)}
+            onEmpty={() => setError('Signature is required')}
+            descriptionText="Sign"
+            clearText="Clear"
+            confirmText="Save"
+            webStyle={`.m-signature-pad--footer {display: none; margin: 0;} .m-signature-pad {box-shadow: none; border: 1px solid #e1e1e1;}`}
           />
-          <Pencil size={20} color="#666" style={styles.signatureIcon} />
         </View>
 
         <TouchableOpacity
-          style={[styles.signButton, loading && styles.signButtonDisabled]}
+          style={[styles.signButton, (!signatureData || loading) && styles.signButtonDisabled]}
           onPress={handleSign}
-          disabled={loading}
+          disabled={!signatureData || loading}
         >
           <Text style={styles.signButtonText}>
             {loading ? 'Processing...' : 'Sign & Accept'}
@@ -288,29 +287,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#666',
   },
-  signatureInputContainer: {
+  signatureCanvasContainer: {
+    height: 200,
     marginBottom: 16,
-    position: 'relative',
-  },
-  signatureLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  signatureInput: {
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1a1a1a',
-    paddingRight: 48,
-  },
-  signatureIcon: {
-    position: 'absolute',
-    right: 16,
-    bottom: 12,
   },
   signButton: {
     backgroundColor: '#007AFF',
