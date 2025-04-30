@@ -27,7 +27,7 @@ import {
 } from 'lucide-react-native';
 import AppHeader from '../../../../components/AppHeader'; // Kept unused import
 import { HousingGroup, GroupMember } from '../types/housing';
-import { type Database } from '../types/database.types'; // Adjusted path
+import { type Database } from '../../../../types/database.types'; // Updated path after moving types
 
 // Define Tables type from Supabase generated types
 type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];

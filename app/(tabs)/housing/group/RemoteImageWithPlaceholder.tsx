@@ -10,19 +10,16 @@ interface RemoteImageWithPlaceholderProps {
 const BROKEN_IMAGE_ICON = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
 
 export const RemoteImageWithPlaceholder: React.FC<RemoteImageWithPlaceholderProps> = ({ uri, style }) => {
-  console.log('RemoteImageWithPlaceholder uri:', uri);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(false);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
-  // Reset loading, error, and fadeAnim whenever the uri changes
   React.useEffect(() => {
     setLoading(true);
     setError(false);
     fadeAnim.setValue(0);
   }, [uri]);
 
-  // Animate fade-in when loading completes and no error
   React.useEffect(() => {
     if (!loading && !error) {
       Animated.timing(fadeAnim, {
@@ -33,13 +30,9 @@ export const RemoteImageWithPlaceholder: React.FC<RemoteImageWithPlaceholderProp
     }
   }, [loading, error, fadeAnim]);
 
-  // Ensure style always has width and height
   const imageStyle = style && style.width && style.height
     ? style
     : { ...style, width: 300, height: 200 };
-
-  // Debug logs for uri, loading, error
-  console.log('RemoteImageWithPlaceholder uri:', uri, 'loading:', loading, 'error:', error);
 
   return (
     <>
@@ -79,3 +72,8 @@ export const RemoteImageWithPlaceholder: React.FC<RemoteImageWithPlaceholderProp
     </>
   );
 };
+
+// Default export for route compliance
+export default function RemoteImageWithPlaceholderRouteStub() {
+  return null;
+}

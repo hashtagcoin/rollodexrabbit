@@ -8,20 +8,24 @@ module.exports = function(api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // Always include module-resolver, regardless of environment
+      // Expo Router babel plugin (should come first)
+      require.resolve("expo-router/babel"),
+
+      // Module resolver plugin
       [
         'module-resolver',
         {
           root: ['./'],
           extensions: ['.ios.js', '.android.js', '.js', '.ts', '.tsx', '.json'],
           alias: {
-            '@': './app', // Restore general '@' mapping
+            '@': './app',
             '@/lib': './lib',
             '@/providers': './providers',
-            // Ensure specific aliases are listed *before* general if order matters for your use case, though often module-resolver handles it.
           },
         },
       ],
+
+      // Reanimated plugin MUST BE LAST
       'react-native-reanimated/plugin',
     ],
   };

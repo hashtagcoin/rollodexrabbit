@@ -20,3 +20,7 @@ try {
 }
 
 export { Picker };
+
+export default function PickerShimPlaceholder() {
+  return null;
+}
