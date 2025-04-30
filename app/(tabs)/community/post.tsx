@@ -25,15 +25,28 @@ export default function PostDetails() {
   async function loadPost() {
     try {
       setLoading(true);
-      // Use the posts_with_users view instead of complex joins
+      // Fetch post and author profile
       const { data: postData, error: postError } = await supabase
-        .from('posts_with_users')
+        .from('posts')
         .select('*')
         .eq('id', id)
         .single();
-
       if (postError) throw postError;
-      setPost(postData);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('full_name, avatar_url')
+        .eq('id', postData.user_id)
+        .single();
+      if (profileError) throw profileError;
+
+      // Enrich postData with user profile info
+      const enrichedPost = {
+        ...postData,
+        full_name: profileData.full_name,
+        avatar_url: profileData.avatar_url,
+      };
+      setPost(enrichedPost);
 
       // Join comments with user profiles for display
       const { data, error: commentsError } = await supabase
@@ -156,8 +169,13 @@ export default function PostDetails() {
         <View style={styles.postCard}>
           <View style={styles.postHeader}>
             <Image
-              source={{ uri: post.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
+              source={
+                post.avatar_url
+                  ? { uri: post.avatar_url }
+                  : require('../../../assets/rollodex-icon-lrg.png')
+              }
               style={styles.avatar}
+              resizeMode="cover"
             />
             <View style={styles.postHeaderInfo}>
               <Text style={styles.userName}>{post.full_name}</Text>
@@ -189,8 +207,13 @@ export default function PostDetails() {
           {comments.map((comment) => (
             <View key={comment.id} style={styles.commentCard}>
               <Image
-                source={{ uri: comment.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
+                source={
+                  comment.avatar_url
+                    ? { uri: comment.avatar_url }
+                    : require('../../../assets/rollodex-icon-lrg.png')
+                }
                 style={styles.commentAvatar}
+                resizeMode="cover"
               />
               <View style={styles.commentContent}>
                 <Text style={styles.commentUserName}>

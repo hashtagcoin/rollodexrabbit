@@ -35,8 +35,9 @@ type Post = {
   caption: string;
   media_urls: string[];
   post_created_at: string;
+  user_id: string;
   full_name: string;
-  avatar_url: string;
+  avatar_url: string | null;
   likes_count: number;
   comments_count: number;
 };
@@ -83,14 +84,38 @@ export default function CommunityFeed() {
   async function loadPosts() {
     try {
       setLoading(true);
-      // Use the posts_with_users view instead of complex joins
-      const { data, error } = await supabase
-        .from('posts_with_users')
-        .select('*')
-        .order('post_created_at', { ascending: false });
+      // Fetch posts
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select('id, caption, media_urls, created_at, user_id, likes_count, comments_count')
+        .order('created_at', { ascending: false });
+      if (postsError) throw postsError;
 
-      if (error) throw error;
-      setPosts(data || []);
+      // Fetch author profiles
+      const userIds = [...new Set(postsData.map((post) => post.user_id))];
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', userIds);
+      if (profilesError) throw profilesError;
+      const profileMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
+      profiles.forEach((profile) => {
+        profileMap[profile.id] = profile;
+      });
+
+      // Enrich posts with profile data
+      const enrichedPosts = postsData.map((post) => ({
+        post_id: post.id,
+        caption: post.caption,
+        media_urls: post.media_urls,
+        post_created_at: post.created_at,
+        user_id: post.user_id,
+        full_name: profileMap[post.user_id]?.full_name || '',
+        avatar_url: profileMap[post.user_id]?.avatar_url || null,
+        likes_count: post.likes_count,
+        comments_count: post.comments_count,
+      }));
+      setPosts(enrichedPosts);
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -214,8 +239,13 @@ export default function CommunityFeed() {
             <View key={post.post_id} style={styles.postCard}>
               <View style={styles.postHeader}>
                 <Image
-                  source={{ uri: post.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
+                  source={
+                    post.avatar_url
+                      ? { uri: post.avatar_url }
+                      : require('../../../assets/rollodex-icon-lrg.png')
+                  }
                   style={styles.avatar}
+                  resizeMode="cover"
                 />
                 <View style={styles.postHeaderInfo}>
                   <Text style={styles.userName}>{post.full_name}</Text>
@@ -225,7 +255,10 @@ export default function CommunityFeed() {
                 </View>
               </View>
 
-              <Text style={styles.caption}>{post.caption}</Text>
+              <Text style={styles.caption}>
+                <Text style={styles.userName}>{post.full_name} </Text>
+                {post.caption}
+              </Text>
 
               {post.media_urls && post.media_urls.length > 0 && (
                 <Image
@@ -430,13 +463,12 @@ const styles = StyleSheet.create({
   },
   caption: {
     fontSize: 16,
-    color: '#1a1a1a',
-    marginBottom: 12,
-    lineHeight: 24,
+    color: '#333',
+    marginVertical: 8,
   },
   postImage: {
     width: '100%',
-    height: 300,
+    height: 200,
     borderRadius: 12,
     marginBottom: 12,
   },
