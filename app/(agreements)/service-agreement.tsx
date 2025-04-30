@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import Signature from 'react-native-signature-canvas';
+import Signature, { SignatureViewRef } from 'react-native-signature-canvas';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { ArrowLeft, Download, Eye, SquareCheck as CheckSquare, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Download, Eye, SquareCheck as CheckSquare, CircleAlert as AlertCircle, X } from 'lucide-react-native';
 import AppHeader from '../../components/AppHeader';
 
 export default function ServiceAgreementScreen() {
@@ -17,7 +17,10 @@ export default function ServiceAgreementScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [hasDrawn, setHasDrawn] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(false);
+  const signatureRef = useRef<SignatureViewRef>(null);
 
   // This would typically be fetched from the API based on serviceId
   const serviceDetails = {
@@ -29,38 +32,20 @@ export default function ServiceAgreementScreen() {
     price: '$120.00',
   };
 
-  const handleSign = async () => {
-    try {
-      if (!signatureData) {
-        setError('Please provide your signature');
-        return;
-      }
-
-      if (!agreed) {
-        setError('Please read and agree to the terms of service');
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      // In a real app, you would:
-      // 1. Save the signature to the database
-      // 2. Update the booking status
-      // 3. Create a PDF of the agreement
-      // 4. Send confirmation emails
-
-      // Simulate API call
-      await new Promise(r => setTimeout(r, 1000));
-
-      // Navigate back to booking confirmation or dashboard
-      router.back();
-    } catch (e: unknown) {
-      const errorMessage = typeof e === 'object' && e && 'message' in e ? String(e.message) : 'An unknown error occurred';
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+  const handleSign = () => {
+    if (!showCanvas) {
+      setShowCanvas(true);
+      return;
     }
+    if (!hasDrawn) {
+      setError('Please provide your signature');
+      return;
+    }
+    if (!agreed) {
+      setError('Please read and agree to the terms of service');
+      return;
+    }
+    router.back();
   };
 
   return (
@@ -158,24 +143,33 @@ export default function ServiceAgreementScreen() {
           </Text>
         </View>
 
-        <View style={styles.signatureCanvasContainer}>
-          <Signature
-            onOK={(sig) => setSignatureData(sig)}
-            onEmpty={() => setError('Signature is required')}
-            descriptionText="Sign"
-            clearText="Clear"
-            confirmText="Save"
-            webStyle={`.m-signature-pad--footer {display: none; margin: 0;} .m-signature-pad {box-shadow: none; border: 1px solid #e1e1e1;}`}
-          />
-        </View>
-
+        {showCanvas && (
+          <View style={styles.signatureCanvasContainer}>
+            <Signature
+              ref={signatureRef}
+              onBegin={() => setHasDrawn(true)}
+              onClear={() => { setHasDrawn(false); setSignatureData(null); }}
+              onOK={(sig: string) => setSignatureData(sig)}
+              onEmpty={() => setError('Signature is required')}
+              descriptionText="Sign"
+              clearText="Clear"
+              confirmText="Save"
+              webStyle={`.m-signature-pad { box-shadow: none; border: 1px solid #e1e1e1; }`}
+            />
+            <TouchableOpacity style={styles.clearIcon} onPress={() => { setSignatureData(null); signatureRef.current?.clearSignature(); setHasDrawn(false); }}>
+              <X size={24} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
+        )}
         <TouchableOpacity
-          style={[styles.signButton, (!signatureData || loading) && styles.signButtonDisabled]}
+          style={[
+            styles.signButton,
+            showCanvas && hasDrawn && styles.signButtonActive
+          ]}
           onPress={handleSign}
-          disabled={!signatureData || loading}
         >
           <Text style={styles.signButtonText}>
-            {loading ? 'Processing...' : 'Sign & Accept'}
+            {showCanvas && hasDrawn ? 'Accept' : 'Sign & Accept'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -291,12 +285,21 @@ const styles = StyleSheet.create({
     height: 200,
     marginBottom: 16,
   },
+  clearIcon: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+  },
   signButton: {
     backgroundColor: '#007AFF',
     height: 56,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  signButtonActive: {
+    backgroundColor: '#28a745',
   },
   signButtonDisabled: {
     opacity: 0.7,

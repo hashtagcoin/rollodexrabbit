@@ -8,6 +8,15 @@ declare module 'react-native-signature-canvas' {
     confirmText?: string;
     webStyle?: string;
   }
-  const Signature: React.ComponentType<SignatureCanvasProps>;
+  export interface SignatureViewRef {
+    clearSignature(): void;
+    readSignature(): void;
+    changePenColor(color: string): void;
+    changePenSize(size: number): void;
+    cropWhitespace(): void;
+  }
+  const Signature: React.ForwardRefExoticComponent<
+    SignatureCanvasProps & React.RefAttributes<SignatureViewRef>
+  >;
   export default Signature;
 }
