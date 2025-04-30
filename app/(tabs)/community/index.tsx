@@ -87,7 +87,7 @@ export default function CommunityFeed() {
       // Fetch posts
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('id, caption, media_urls, created_at, user_id, likes_count, comments_count')
+        .select('post_id, caption, media_urls, created_at, user_id')
         .order('created_at', { ascending: false });
       if (postsError) throw postsError;
 
@@ -105,15 +105,15 @@ export default function CommunityFeed() {
 
       // Enrich posts with profile data
       const enrichedPosts = postsData.map((post) => ({
-        post_id: post.id,
+        post_id: post.post_id,
         caption: post.caption,
         media_urls: post.media_urls,
         post_created_at: post.created_at,
         user_id: post.user_id,
         full_name: profileMap[post.user_id]?.full_name || '',
         avatar_url: profileMap[post.user_id]?.avatar_url || null,
-        likes_count: post.likes_count,
-        comments_count: post.comments_count,
+        likes_count: 0,
+        comments_count: 0,
       }));
       setPosts(enrichedPosts);
     } catch (error) {
