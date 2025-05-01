@@ -8,7 +8,8 @@ export type FriendCategory = 'all' | 'friend' | 'provider' | 'family';
 export const useFriends = (category: FriendCategory = 'all') => {
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
   const [filteredFriends, setFilteredFriends] = useState<FriendWithProfile[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<FriendWithProfile[]>([]);
+  const [incomingPendingRequests, setIncomingPendingRequests] = useState<FriendWithProfile[]>([]);
+  const [outgoingPendingRequests, setOutgoingPendingRequests] = useState<FriendWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,60 +46,79 @@ export const useFriends = (category: FriendCategory = 'all') => {
 
       // Process the returned data
       const acceptedFriends: FriendWithProfile[] = [];
-      const pendingFriendRequests: FriendWithProfile[] = [];
+      const incomingPendingRequests: FriendWithProfile[] = [];
+      const outgoingPendingRequests: FriendWithProfile[] = [];
 
-      // Normalize data to always have the current user as user_id and the friend as friend_id
+      // Normalize data so 'user' always refers to the current user
+      // and 'friend' refers to the other party in the relationship.
+      // Assumes view provides: relationship_id, requester_id, addressee_id, status, category,
+      // requester_name, requester_avatar, addressee_name, addressee_avatar
       const processedData = friendshipsData?.map((item: any) => {
-        if (item.user_id === userId) {
-          return item; // Already in the correct format
-        } else {
-          // Swap user and friend data for friendships where the current user is the friend
-          return {
-            ...item,
-            user_id: item.friend_id,
-            friend_id: item.user_id,
-            friend_name: item.user_name,
-            friend_avatar: item.user_avatar,
-            friend_role: item.friend_role || 'participant', // Keep original role or use default
-            user_name: item.friend_name,
-            user_avatar: item.friend_avatar
-          };
-        }
+        const userIsRequester = item.requester_id === userId;
+        return {
+          // Core relationship fields
+          relationship_id: item.relationship_id, // Assuming this exists
+          status: item.status,
+          category: item.category,
+
+          // Normalized user fields (current user)
+          user_id: userId, // Always the current user's ID
+          user_name: userIsRequester ? item.requester_name : item.addressee_name,
+          user_avatar: userIsRequester ? item.requester_avatar : item.addressee_avatar,
+
+          // Normalized friend fields (other user)
+          friend_id: userIsRequester ? item.addressee_id : item.requester_id,
+          friend_name: userIsRequester ? item.addressee_name : item.requester_name,
+          friend_avatar: userIsRequester ? item.addressee_avatar : item.requester_avatar,
+          // friend_role: ??? // Determine if needed based on category or other field
+
+          // Include original directional IDs for splitting pending requests later
+          requester_id: item.requester_id,
+          addressee_id: item.addressee_id
+        };
       }) || [];
 
       console.log('fetchFriends: Processed data:', processedData.length, 'records');
       
-      // Split into accepted friends and pending requests
+      // Split into accepted friends and pending requests (incoming/outgoing)
       processedData.forEach((friend: any) => {
         if (friend.status === 'accepted') {
           acceptedFriends.push(friend);
         } else if (friend.status === 'pending') {
-          pendingFriendRequests.push(friend);
+          if (friend.addressee_id === userId) {
+            incomingPendingRequests.push(friend);
+          } else if (friend.requester_id === userId) {
+            outgoingPendingRequests.push(friend);
+          }
         }
       });
 
-      console.log('fetchFriends: Accepted friends:', acceptedFriends.length, 'Pending requests:', pendingFriendRequests.length);
-      
       setFriends(acceptedFriends);
-      setPendingRequests(pendingFriendRequests);
+      setIncomingPendingRequests(incomingPendingRequests);
+      setOutgoingPendingRequests(outgoingPendingRequests);
     } catch (e: unknown) {
       console.error('Error fetching friends:', e instanceof Error ? e.message : 'Unknown error');
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
       
       // Use mock data as fallback
+      // Add requester_id and addressee_id to mock data for type safety
       const currentUserMockFriends = mockFriends.map(friend => ({
         ...friend,
-        user_id: userId || 'current-user-id'
+        user_id: userId || 'current-user-id',
+        requester_id: friend.requester_id || userId || 'current-user-id',
+        addressee_id: friend.addressee_id || friend.friend_id || 'mock-friend-id'
       }));
       
       // Filter the mock data the same way we would real data
       const acceptedMockFriends = currentUserMockFriends.filter(f => f.status === 'accepted');
-      const pendingMockRequests = currentUserMockFriends.filter(f => f.status === 'pending');
+      const incomingPendingMockRequests = currentUserMockFriends.filter(f => f.status === 'pending' && f.addressee_id === userId);
+      const outgoingPendingMockRequests = currentUserMockFriends.filter(f => f.status === 'pending' && f.requester_id === userId);
       
       console.log('fetchFriends: Using mock data -', acceptedMockFriends.length, 'friends');
       
       setFriends(acceptedMockFriends);
-      setPendingRequests(pendingMockRequests);
+      setIncomingPendingRequests(incomingPendingMockRequests);
+      setOutgoingPendingRequests(outgoingPendingMockRequests);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -130,16 +150,16 @@ export const useFriends = (category: FriendCategory = 'all') => {
   }, [fetchFriends, userId]);
 
   // Function to send a friend request
-  const sendFriendRequest = async (friendId: string, category: string = 'friend') => {
+  const sendFriendRequest = async (addresseeId: string, category: string = 'friend') => {
     if (!userId) return { error: 'User not authenticated' };
 
     try {
       const { data, error } = await supabase
-        .from('friendships')
+        .from('user_relationships')
         .insert([
           {
-            user_id: userId,
-            friend_id: friendId,
+            requester_id: userId,
+            addressee_id: addresseeId,
             status: 'pending',
             category
           }
@@ -158,22 +178,22 @@ export const useFriends = (category: FriendCategory = 'all') => {
   };
 
   // Function to respond to a friend request
-  const respondToFriendRequest = async (friendshipId: string, accept: boolean) => {
+  const respondToFriendRequest = async (relationshipId: string, accept: boolean) => {
     try {
       if (accept) {
         // Accept the friend request
         const { data, error } = await supabase
-          .from('friendships')
+          .from('user_relationships')
           .update({ status: 'accepted' })
-          .eq('id', friendshipId);
+          .eq('user_relationships_id', relationshipId);
 
         if (error) throw error;
       } else {
         // Reject the friend request (delete it)
         const { data, error } = await supabase
-          .from('friendships')
+          .from('user_relationships')
           .delete()
-          .eq('id', friendshipId);
+          .eq('user_relationships_id', relationshipId);
 
         if (error) throw error;
       }
@@ -189,12 +209,12 @@ export const useFriends = (category: FriendCategory = 'all') => {
   };
 
   // Function to change friend category
-  const changeFriendCategory = async (friendshipId: string, newCategory: string) => {
+  const changeFriendCategory = async (relationshipId: string, newCategory: string) => {
     try {
       const { data, error } = await supabase
-        .from('friendships')
+        .from('user_relationships')
         .update({ category: newCategory })
-        .eq('id', friendshipId);
+        .eq('user_relationships_id', relationshipId);
 
       if (error) throw error;
 
@@ -209,12 +229,12 @@ export const useFriends = (category: FriendCategory = 'all') => {
   };
 
   // Function to remove a friend
-  const removeFriend = async (friendshipId: string) => {
+  const removeFriend = async (relationshipId: string) => {
     try {
       const { data, error } = await supabase
-        .from('friendships')
+        .from('user_relationships')
         .delete()
-        .eq('id', friendshipId);
+        .eq('user_relationships_id', relationshipId);
 
       if (error) throw error;
 
@@ -236,7 +256,8 @@ export const useFriends = (category: FriendCategory = 'all') => {
 
   return {
     friends: filteredFriends, // Return filtered friends based on category
-    pendingRequests,
+    incomingPendingRequests,
+    outgoingPendingRequests,
     loading,
     error,
     refreshing,

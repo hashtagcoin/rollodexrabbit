@@ -73,14 +73,15 @@ export default function FriendDetailScreen() {
     }
 
     const fetchFriendDetail = async () => {
-      if (!friendId) {
-        setError("No friend ID provided");
+      if (!friendId || friendId === 'undefined' || friendId === '') {
+        console.warn('[fetchFriendDetail] Called with undefined or empty friendId:', friendId);
+        setError('No friend ID provided');
         setLoading(false);
         return;
       }
 
       if (!user?.id) {
-        setError("Authentication required");
+        setError('Authentication required');
         setLoading(false);
         return;
       }
@@ -89,7 +90,7 @@ export default function FriendDetailScreen() {
         setLoading(true);
         setError(null);
 
-        console.log(`Fetching friend details for friendId: ${friendId}, userId: ${user.id}`);
+        console.log(`[fetchFriendDetail] Fetching friend details for friendId: ${friendId}, userId: ${user.id}`);
         
         // FIRST: Check local friends array from useFriends hook
         // This is likely to have the most up-to-date data since it's already been loaded

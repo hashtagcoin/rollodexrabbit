@@ -173,11 +173,15 @@ export default function CommunityFeed() {
 
           <TouchableOpacity
              style={styles.iconButton}
-             onPress={() => router.push('/profile/friends')}
+             // Change the navigation path to profile friends find
+             onPress={() => {
+              console.log('Navigating to /profile/friends/find...');
+              router.push('/profile/friends/find'); // Fix: Navigate to profile/friends/find
+             }}
            >
              <UserPlus size={24} color="#000" />
              <Text style={styles.buttonLabel}>Friends</Text>
-           </TouchableOpacity>
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.iconButton}
@@ -341,7 +345,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    zIndex: 90, // Lower than AppHeader's zIndex
+    zIndex: 110, // Increase zIndex from 90 to 110
     height: NAV_HEADER_HEIGHT,
     paddingTop: 8, // Add some padding at the top for extra spacing
     shadowColor: '#000',

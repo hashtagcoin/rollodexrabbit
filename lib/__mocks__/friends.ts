@@ -3,9 +3,10 @@
  * Used as fallback when database operations fail
  */
 
-import { User } from '../../types/user';
 
 export interface FriendWithProfile {
+  requester_id?: string;
+  addressee_id?: string;
   id: string;
   user_id: string;
   friend_id: string;
@@ -88,6 +89,15 @@ export const mockFriends: FriendWithProfile[] = [
   }
 ];
 
+// Minimal User type for mock usage
+export type User = {
+  id: string;
+  full_name: string;
+  avatar_url?: string;
+  username?: string;
+  role?: string;
+};
+
 // Mock function to search for users that can be added as friends
 export const mockSearchUsers = (query: string): User[] => {
   const mockUsers: User[] = [
@@ -132,6 +142,6 @@ export const mockSearchUsers = (query: string): User[] => {
   
   return mockUsers.filter(user => 
     user.full_name.toLowerCase().includes(query.toLowerCase()) || 
-    user.username.toLowerCase().includes(query.toLowerCase())
+    (user.username ?? '').toLowerCase().includes(query.toLowerCase())
   );
 };

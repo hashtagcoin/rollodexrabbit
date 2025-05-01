@@ -8,23 +8,193 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFriends, FriendCategory } from '../../../hooks/useFriends';
-import { User, ChevronRight, UserPlus, AlertCircle } from 'lucide-react-native';
+import { User, ChevronRight, UserPlus, AlertCircle, MoreVertical, Check, MessageCircle, UserMinus, ChevronDown } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../providers/AuthProvider';
+import { Menu, Provider as PaperProvider } from 'react-native-paper';
+
+const styles = StyleSheet.create({
+  friendActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  friendInfo: {
+    flex: 1,
+  },
+  friendName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  friendCategory: {
+    fontSize: 14,
+    color: '#666',
+  },
+  friendItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  friendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  emptyStateIcon: { marginBottom: 16 },
+  emptyStateTitle: { fontSize: 20, fontWeight: 'bold', color: '#222', marginBottom: 6 },
+  emptyStateText: { fontSize: 15, color: '#666', marginBottom: 16, textAlign: 'center' },
+  findFriendsButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, marginTop: 12 },
+  findFriendsButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#4F46E5' },
+  errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  errorStateTitle: { fontSize: 18, fontWeight: 'bold', color: '#EF4444', marginTop: 12 },
+  errorStateText: { color: '#EF4444', fontSize: 15, marginVertical: 8, textAlign: 'center' },
+  retryButton: { backgroundColor: '#4F46E5', borderRadius: 6, paddingVertical: 8, paddingHorizontal: 20, marginTop: 8 },
+  retryButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  listContent: { paddingBottom: 32 },
+  requestsSection: { backgroundColor: '#F9FAFB', borderRadius: 8, margin: 16, padding: 12 },
+  sectionTitle: { fontWeight: 'bold', fontSize: 16, marginBottom: 8, color: '#222' },
+  categoryTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  activeTab: { borderBottomColor: '#4F46E5' },
+  categoryTabText: { fontSize: 15, color: '#666' },
+  activeTabText: { color: '#4F46E5', fontWeight: 'bold' },
+  requestItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  requestHeader: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  requestActions: { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
+  acceptButton: { backgroundColor: '#22C55E', borderRadius: 6, paddingVertical: 6, paddingHorizontal: 14, marginRight: 8 },
+  acceptButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  rejectButton: { backgroundColor: '#EF4444', borderRadius: 6, paddingVertical: 6, paddingHorizontal: 14 },
+  rejectButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  // --- ADDED/MISSING STYLES ---
+  requestInfo: { flex: 1, marginLeft: 10 },
+  requestName: { fontSize: 16, fontWeight: 'bold', color: '#222' },
+  requestText: { fontSize: 14, color: '#666' },
+  categoryTabs: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 8, marginHorizontal: 16, marginTop: 12 },
+  removeButton: {
+    backgroundColor: '#4F46E5', // Blue background
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    color: '#fff', // White text
+    fontSize: 14,
+  },
+  modalOverlay: { // Style for semi-transparent background
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: { // Style for modal container
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#000', // Black text
+  },
+  modalButton: {
+    backgroundColor: '#eee', // Light grey button background
+    borderRadius: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#000', // Black text
+    fontSize: 16,
+  },
+  cancelButton: {
+    backgroundColor: '#ccc', // Darker grey for cancel
+    marginTop: 5, 
+  },
+  cancelButtonText: {
+     color: '#000', // Black text
+  },
+  categoryContainer: { // Style for category text + icon container
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2, // Add some space below name
+  },
+});
 
 interface FriendsScreenProps {}
+
+interface SelectedFriendData {
+  relationship_id: string;
+  friend_id: string;
+  friend_name: string;
+  category: FriendCategory | null;
+}
 
 export default function FriendsScreen({}: FriendsScreenProps) {
   const [activeCategory, setActiveCategory] = useState<FriendCategory>('all');
   const { user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
-  
+
   // Initialize with category from params or default to 'all'
   useEffect(() => {
     const paramCategory = params.category as FriendCategory;
@@ -33,14 +203,15 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     }
   }, [params]);
 
-  const { 
-    friends, 
-    pendingRequests, 
-    loading, 
-    error, 
-    refreshing, 
+  const {
+    friends,
+    incomingPendingRequests,
+    loading,
+    error,
+    refreshing,
     onRefresh,
-    respondToFriendRequest
+    respondToFriendRequest,
+    removeFriend
   } = useFriends(activeCategory);
 
   const filteredFriends = friends.filter(friend => {
@@ -58,10 +229,59 @@ export default function FriendsScreen({}: FriendsScreenProps) {
 
   // Navigate to friend profile
   const goToFriendDetail = (friendId: string) => {
-    router.push(`/profile/friends/${friendId}`);
+    if (!friendId || friendId === '' || friendId === 'undefined') {
+      console.warn('[goToFriendDetail] Attempted navigation with invalid friendId:', friendId);
+      Alert.alert('Error', 'Unable to open friend profile. Invalid friend ID.');
+      return;
+    }
+    router.push({
+      pathname: '/profile/[id]',
+      params: { id: friendId }
+    });
   };
 
-  // Inline Find Friends panel state
+  const handleChat = (friendId: string, fullName: string) => {
+    router.push(`/chat/new?friendId=${friendId}&name=${encodeURIComponent(fullName)}`);
+  };
+
+  const handleAcceptRequest = (requestId: string) => {
+    Alert.alert(
+      'Accept Friend Request',
+      'Are you sure you want to accept this friend request?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            const result = await respondToFriendRequest(requestId, true);
+            if (result.error) {
+              Alert.alert('Error', result.error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleRejectRequest = (requestId: string) => {
+    Alert.alert(
+      'Reject Friend Request',
+      'Are you sure you want to reject this friend request?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          onPress: async () => {
+            const result = await respondToFriendRequest(requestId, false);
+            if (result.error) {
+              Alert.alert('Error', result.error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const [showFindFriends, setShowFindFriends] = useState(false);
   const [findFriendsLoading, setFindFriendsLoading] = useState(false);
   const [findFriendsError, setFindFriendsError] = useState<string|null>(null);
@@ -100,60 +320,73 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     }
   };
 
-  const handleChat = (friendId: string, fullName: string) => {
-    router.push(`/chat/new?friendId=${friendId}&name=${encodeURIComponent(fullName)}`);
+  // State for category change modal
+  const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
+  const [selectedFriend, setSelectedFriend] = useState<SelectedFriendData | null>(null);
+
+  // Function to open category change modal
+  const openCategoryModal = (friend: any) => { 
+    if (friend && friend.relationship_id && friend.friend_name && friend.friend_id) {
+       setSelectedFriend({
+        relationship_id: friend.relationship_id,
+        friend_id: friend.friend_id,
+        friend_name: friend.friend_name,
+        category: friend.category
+      });
+      setIsCategoryModalVisible(true);
+    } else {
+      console.error("Cannot open category modal: Missing friend data", friend);
+      Alert.alert("Error", "Could not load friend details for category change.");
+    }
   };
 
-  // Handle responding to friend requests
-  const handleAcceptRequest = (requestId: string) => {
-    Alert.alert(
-      'Accept Friend Request',
-      'Are you sure you want to accept this friend request?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Accept',
-          onPress: async () => {
-            const result = await respondToFriendRequest(requestId, true);
-            if (result.error) {
-              Alert.alert('Error', result.error);
-            }
-          }
-        }
-      ]
-    );
+  // Handle category update
+  const handleUpdateCategory = async (newCategory: FriendCategory) => {
+    if (!selectedFriend || !user) {
+      Alert.alert("Error", "Cannot update category. Friend or user data missing.");
+      setIsCategoryModalVisible(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('user_relationships')
+        .update({ category: newCategory })
+        .eq('id', selectedFriend.relationship_id) 
+        .eq('user_id', user.id); 
+
+      if (error) {
+        console.error('Error updating category:', error);
+        Alert.alert('Error', `Could not update friend category: ${error.message}`);
+      } else {
+        // Optional: Success alert
+        // Alert.alert('Success', `${selectedFriend.friend_name}'s category updated to ${newCategory}.`);
+        refetchFriends(); 
+      }
+    } catch (e) {
+      console.error('Exception updating category:', e);
+      Alert.alert('Error', 'An unexpected error occurred while updating the category.');
+    } finally {
+      setIsCategoryModalVisible(false); 
+      setSelectedFriend(null); 
+    }
   };
 
-  const handleRejectRequest = (requestId: string) => {
-    Alert.alert(
-      'Reject Friend Request',
-      'Are you sure you want to reject this friend request?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Reject',
-          onPress: async () => {
-            const result = await respondToFriendRequest(requestId, false);
-            if (result.error) {
-              Alert.alert('Error', result.error);
-            }
-          }
-        }
-      ]
-    );
+  const handleRemoveFriend = async (relationshipId: string) => {
+    if (!user) return { success: false, error: 'User not authenticated' };
+    const result = await removeFriend(relationshipId);
+    if (result.error) {
+      Alert.alert('Error', result.error);
+    }
+    // No need for success alert, list will refresh
   };
 
-  // Render friend item
   const renderFriendItem = ({ item }: { item: any }) => (
+  <View style={styles.friendItemRow}>
     <TouchableOpacity
       style={styles.friendItem}
-      onPress={() => goToFriendDetail(item.id)}
+      onPress={() => goToFriendDetail(item.friend_id)}
+      activeOpacity={0.85}
     >
       <View style={styles.avatarContainer}>
         {item.friend_avatar ? (
@@ -166,11 +399,53 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       </View>
       <View style={styles.friendInfo}>
         <Text style={styles.friendName}>{item.friend_name || 'Unknown'}</Text>
-        <Text style={styles.friendCategory}>{item.category || 'friend'}</Text>
+        {/* Wrap category text and icon in TouchableOpacity */}
+        <TouchableOpacity 
+          style={styles.categoryContainer} 
+          onPress={() => openCategoryModal(item)}
+        >
+          <Text style={styles.friendCategory}>{item.category || 'friend'}</Text>
+          <ChevronDown size={16} color="#000000" style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
       </View>
-      <ChevronRight size={20} color="#6B7280" />
+      <View style={styles.friendActions}>
+        <TouchableOpacity
+          style={{ padding: 8 }}
+          onPress={() => handleChat(item.friend_id, item.friend_name)}
+          accessibilityLabel={`Chat with ${item.friend_name}`}
+        >
+          <MessageCircle size={22} color="#000000" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.removeButton, { marginLeft: 8 }]}
+          onPress={() => {
+            Alert.alert(
+              'Remove Friend',
+              `Are you sure you want to remove ${item.friend_name || 'this friend'}?`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Remove',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const result = await removeFriend(item.relationship_id);
+                    if (result?.error) { 
+                      Alert.alert('Error', result.error);
+                    }
+                    // No need for success alert, list will refresh
+                  },
+                },
+              ]
+            );
+          }}
+          accessibilityLabel={`Remove ${item.friend_name}`}
+        >
+          <Text style={styles.removeButtonText}>Remove</Text>
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
-  );
+  </View>
+);
 
   // Render friend request item
   const renderRequestItem = ({ item }: { item: any }) => (
@@ -291,7 +566,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
         style={styles.findFriendsButton}
         onPress={handleShowFindFriends}
       >
-        <UserPlus size={20} color="#ffffff" />
+        <UserPlus size={22} color="#000000" />
         <Text style={styles.findFriendsButtonText}>Find People</Text>
       </TouchableOpacity>
     </View>
@@ -299,7 +574,8 @@ export default function FriendsScreen({}: FriendsScreenProps) {
 
   // Main render
   return (
-    <View style={styles.container}>
+    <PaperProvider>
+      <View style={styles.container}>
       <AppHeader 
         title="Friends" 
         showBackButton={true} 
@@ -312,48 +588,56 @@ export default function FriendsScreen({}: FriendsScreenProps) {
           style={styles.findFriendsButton}
           onPress={handleShowFindFriends}
         >
-          <UserPlus size={20} color="#ffffff" />
+          <UserPlus size={22} color="#000000" />
           <Text style={styles.findFriendsButtonText}>Find People</Text>
         </TouchableOpacity>
         {showFindFriends && (
-          <View style={{marginTop:16, backgroundColor:'#fff', borderRadius:8, padding:8, elevation:2}}>
-            {findFriendsLoading ? (
-              <ActivityIndicator size="small" color="#4F46E5" />
-            ) : findFriendsError ? (
-              <Text style={{color:'#EF4444'}}>{findFriendsError}</Text>
+  <View style={{marginTop:16, backgroundColor:'#fff', borderRadius:8, padding:8, elevation:2}}>
+    {findFriendsLoading ? (
+      <ActivityIndicator size="small" color="#4F46E5" />
+    ) : findFriendsError ? (
+      <Text style={{color:'#EF4444'}}>{findFriendsError}</Text>
+    ) : (
+      <FlatList
+        data={findFriendsResults}
+        keyExtractor={item => item.id}
+        renderItem={({item}) => (
+          <View style={{flexDirection:'row',alignItems:'center',paddingVertical:6}}>
+            {item.avatar_url ? (
+              <Image source={{ uri: item.avatar_url }} style={{width:32,height:32,borderRadius:16,backgroundColor:'#eee',marginRight:8}} />
             ) : (
-              <FlatList
-                data={findFriendsResults}
-                keyExtractor={item => item.id}
-                renderItem={({item}) => (
-                  <View style={{flexDirection:'row',alignItems:'center',paddingVertical:6}}>
-                    {item.avatar_url ? (
-                      <Image source={{ uri: item.avatar_url }} style={{width:32,height:32,borderRadius:16,backgroundColor:'#eee',marginRight:8}} />
-                    ) : (
-                      <View style={{width:32,height:32,borderRadius:16,backgroundColor:'#9CA3AF',justifyContent:'center',alignItems:'center',marginRight:8}}>
-                        <User size={16} color="#fff" />
-                      </View>
-                    )}
-                    <Text style={{flex:1,fontSize:15,color:'#222'}} numberOfLines={1}>{item.full_name}</Text>
-                    <TouchableOpacity
-                      disabled={pendingIds.includes(item.id)}
-                      style={{backgroundColor:pendingIds.includes(item.id)?'#D1D5DB':'#4F46E5',borderRadius:6,paddingVertical:4,paddingHorizontal:10,marginRight:6}}
-                      onPress={()=>handleSendRequest(item.id)}
-                    >
-                      <UserPlus size={14} color="#fff" />
-                      <Text style={{color:'#fff',fontSize:13,marginLeft:4}}>{pendingIds.includes(item.id)?'Pending':'Add'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={()=>handleChat(item.id, item.full_name)} style={{padding:4}}>
-                      <ChevronRight size={16} color="#4F46E5" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                ItemSeparatorComponent={()=> <View style={{height:1,backgroundColor:'#F3F4F6'}} />}
-                style={{maxHeight:260}}
-              />
+              <View style={{width:32,height:32,borderRadius:16,backgroundColor:'#9CA3AF',justifyContent:'center',alignItems:'center',marginRight:8}}>
+                <User size={16} color="#fff" />
+              </View>
             )}
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{fontSize:15,color:'#222'}} numberOfLines={1}>{item.full_name}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={()=>handleChat(item.id, item.full_name)} 
+                style={{padding: 4, marginRight: 6}}
+              >
+                <MessageCircle size={22} color="#000000" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={pendingIds.includes(item.id)}
+                style={{backgroundColor:pendingIds.includes(item.id)?'#D1D5DB':'#4F46E5',borderRadius:6,paddingVertical:4,paddingHorizontal:10}}
+                onPress={()=>handleSendRequest(item.id)}
+              >
+                <View>
+                  <Text style={{color:'#fff',fontSize:13}}>{pendingIds.includes(item.id)?'Pending':'Add'}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
+        ItemSeparatorComponent={()=> <View style={{height:1,backgroundColor:'#F3F4F6'}} />} 
+        style={{maxHeight:260}}
+      />
+    )}
+  </View>
+)}
       </View>
 
       {/* Category Filter */}
@@ -379,16 +663,16 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       ) : (
         <FlatList
           data={filteredFriends}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.friend_id}
           renderItem={renderFriendItem}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           ListHeaderComponent={
-            pendingRequests.length > 0 ? (
+            incomingPendingRequests.length > 0 ? (
               <View style={styles.requestsSection}>
                 <Text style={styles.sectionTitle}>Friend Requests</Text>
-                {pendingRequests.map((request) => (
+                {incomingPendingRequests.map((request) => (
                   <View key={request.id}>
                     {renderRequestItem({ item: request })}
                   </View>
@@ -401,243 +685,39 @@ export default function FriendsScreen({}: FriendsScreenProps) {
         />
       )}
     </View>
+
+    {/* Category Change Modal */}
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={isCategoryModalVisible}
+      onRequestClose={() => {
+        setIsCategoryModalVisible(!isCategoryModalVisible);
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Change Category for {selectedFriend?.friend_name}</Text>
+          {/* Placeholder for Category Options */}
+          <TouchableOpacity style={styles.modalButton} onPress={() => handleUpdateCategory('friend')}>
+            <Text style={styles.modalButtonText}>Friend</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalButton} onPress={() => handleUpdateCategory('provider')}>
+            <Text style={styles.modalButtonText}>Provider</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalButton} onPress={() => handleUpdateCategory('family')}>
+            <Text style={styles.modalButtonText}>Family</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.modalButton, styles.cancelButton]} 
+            onPress={() => setIsCategoryModalVisible(false)}
+          >
+            <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  </PaperProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  categoryTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  categoryTab: {
-    paddingVertical: 16,
-    marginRight: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#4F46E5',
-  },
-  categoryTabText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#4F46E5',
-    fontWeight: '600',
-  },
-  friendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  avatarContainer: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#9CA3AF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  friendInfo: {
-    flex: 1,
-  },
-  friendName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  friendCategory: {
-    fontSize: 14,
-    color: '#6B7280',
-    textTransform: 'capitalize',
-  },
-  requestsSection: {
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginVertical: 8,
-    paddingHorizontal: 16,
-  },
-  requestItem: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  requestHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  requestInfo: {
-    flex: 1,
-  },
-  requestName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  requestText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  requestActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  acceptButton: {
-    backgroundColor: '#4F46E5',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  acceptButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  rejectButton: {
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  rejectButtonText: {
-    color: '#374151',
-    fontWeight: '600',
-  },
-  listContent: {
-    flexGrow: 1,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-    marginTop: 32,
-  },
-  emptyStateIcon: {
-    backgroundColor: '#F3F4F6',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 16,
-    maxWidth: 300,
-  },
-  findFriendsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4F46E5',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  findFriendsButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginTop: 8,
-  },
-  errorState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  errorStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorStateText: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 16,
-    maxWidth: 300,
-  },
-  retryButton: {
-    backgroundColor: '#4F46E5',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  headerButtonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-  },
-  addFriendButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4F46E5',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  addFriendButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-});

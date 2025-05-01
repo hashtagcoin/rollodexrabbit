@@ -10,6 +10,7 @@ export default function CommunityLayout() {
       <Stack.Screen name="groups/create" />
       <Stack.Screen name="post" />
       <Stack.Screen name="create" />
+      <Stack.Screen name="find-friends" />
     </Stack>
   );
 }

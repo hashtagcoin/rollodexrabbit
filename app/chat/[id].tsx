@@ -26,7 +26,6 @@ import {
   Image as ImageIcon,
   X
 } from 'lucide-react-native';
-import AppHeader from '../../components/AppHeader';
 
 export default function ChatScreen() {
   const [message, setMessage] = useState('');
@@ -35,10 +34,11 @@ export default function ChatScreen() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   
   const listRef = useRef<FlatList>(null);
-  const params = useLocalSearchParams();
-  const conversationId = params.id as string;
+  const { id: conversationId, name } = useLocalSearchParams<{ id: string, name?: string | string[] }>();
   const router = useRouter();
-  
+  // Safely get name for title
+  const headerTitle = (Array.isArray(name) ? name[0] : name) || 'Chat';
+
   const {
     conversation,
     participants,
@@ -245,133 +245,110 @@ export default function ChatScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <AppHeader 
-        title={conversationName} 
-        showBackButton={true} 
-        onBackPress={() => router.push('/(tabs)/chat' as any)} 
-      />
-      
-      <Stack.Screen
+    <>
+      <Stack.Screen 
         options={{
-          title: conversationName,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-              <ArrowLeft size={24} color="#000000" />
-            </TouchableOpacity>
-          ),
-          headerTitle: () => (
-            <View style={styles.headerTitle}>
-              {conversationAvatar ? (
-                <Image source={{ uri: conversationAvatar }} style={styles.headerAvatar} />
-              ) : (
-                <View style={styles.headerAvatarFallback}>
-                  <User size={16} color="#ffffff" />
-                </View>
-              )}
-              <Text style={styles.headerText} numberOfLines={1}>
-                {conversationName}
-              </Text>
-            </View>
-          ),
+          headerShown: true,
+          title: headerTitle, 
         }}
       />
-      
-      {loading && !refreshing ? (
-        renderLoadingState()
-      ) : error ? (
-        renderErrorState()
-      ) : (
-        <View style={styles.chatContentContainer}>
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={renderMessageItem}
-            contentContainerStyle={styles.messagesList}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          />
-          
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={100}
-          >
-            {imagePreview ? (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: imagePreview }} style={styles.imagePreview} />
+      <View style={styles.container}>
+        {loading && !refreshing ? (
+          renderLoadingState()
+        ) : error ? (
+          renderErrorState()
+        ) : (
+          <View style={styles.chatContentContainer}>
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={renderMessageItem}
+              contentContainerStyle={styles.messagesList}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+            
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={100}
+            >
+              {imagePreview ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: imagePreview }} style={styles.imagePreview} />
+                  <TouchableOpacity
+                    style={styles.cancelImageButton}
+                    onPress={cancelImagePreview}
+                  >
+                    <X size={20} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              <View style={styles.inputContainer}>
                 <TouchableOpacity
-                  style={styles.cancelImageButton}
-                  onPress={cancelImagePreview}
+                  style={styles.imageButton}
+                  onPress={handlePickImage}
                 >
-                  <X size={20} color="#ffffff" />
+                  <ImageIcon size={24} color="#6B7280" />
+                </TouchableOpacity>
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type a message..."
+                  value={message}
+                  onChangeText={setMessage}
+                  multiline
+                  maxLength={1000}
+                  editable={!imagePreview}
+                />
+                
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    (!message.trim() && !imagePreview) ? styles.sendButtonDisabled : {}
+                  ]}
+                  onPress={handleSendMessage}
+                  disabled={(!message.trim() && !imagePreview) || isSending}
+                >
+                  {isSending ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Send size={20} color="#ffffff" />
+                  )}
                 </TouchableOpacity>
               </View>
-            ) : null}
+            </KeyboardAvoidingView>
+          </View>
+        )}
 
-            <View style={styles.inputContainer}>
-              <TouchableOpacity
-                style={styles.imageButton}
-                onPress={handlePickImage}
-              >
-                <ImageIcon size={24} color="#6B7280" />
-              </TouchableOpacity>
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Type a message..."
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                maxLength={1000}
-                editable={!imagePreview}
+        {/* Full-screen image viewer modal */}
+        <Modal
+          visible={!!viewingImage}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closeImageViewer}
+        >
+          <View style={styles.imageViewerContainer}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={closeImageViewer}
+            >
+              <X size={28} color="#ffffff" />
+            </TouchableOpacity>
+            
+            {viewingImage && (
+              <Image
+                source={{ uri: viewingImage }}
+                style={styles.fullScreenImage}
+                resizeMode="contain"
               />
-              
-              <TouchableOpacity
-                style={[
-                  styles.sendButton,
-                  (!message.trim() && !imagePreview) ? styles.sendButtonDisabled : {}
-                ]}
-                onPress={handleSendMessage}
-                disabled={(!message.trim() && !imagePreview) || isSending}
-              >
-                {isSending ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Send size={20} color="#ffffff" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      )}
-
-      {/* Full-screen image viewer modal */}
-      <Modal
-        visible={!!viewingImage}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeImageViewer}
-      >
-        <View style={styles.imageViewerContainer}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={closeImageViewer}
-          >
-            <X size={28} color="#ffffff" />
-          </TouchableOpacity>
-          
-          {viewingImage && (
-            <Image
-              source={{ uri: viewingImage }}
-              style={styles.fullScreenImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
-    </View>
+            )}
+          </View>
+        </Modal>
+      </View>
+    </>
   );
 }
 
