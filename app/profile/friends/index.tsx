@@ -211,7 +211,8 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     refreshing,
     onRefresh,
     respondToFriendRequest,
-    removeFriend
+    fetchFriends, // Make sure this is destructured
+    removeFriend,
   } = useFriends(activeCategory);
 
   const filteredFriends = friends.filter(friend => {
@@ -326,7 +327,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
 
   // Function to open category change modal
   const openCategoryModal = (friend: any) => { 
-    if (friend && friend.relationship_id && friend.friend_name && friend.friend_id) {
+    if (friend && friend.relationship_id && friend.friend_name && friend.friend_id) { 
        setSelectedFriend({
         relationship_id: friend.relationship_id,
         friend_id: friend.friend_id,
@@ -352,8 +353,8 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       const { error } = await supabase
         .from('user_relationships')
         .update({ category: newCategory })
-        .eq('id', selectedFriend.relationship_id) 
-        .eq('user_id', user.id); 
+        // Use the correct DB column 'user_relationships_id'
+        .eq('user_relationships_id', selectedFriend.relationship_id);
 
       if (error) {
         console.error('Error updating category:', error);
@@ -361,7 +362,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       } else {
         // Optional: Success alert
         // Alert.alert('Success', `${selectedFriend.friend_name}'s category updated to ${newCategory}.`);
-        refetchFriends(); 
+        fetchFriends(); // Refresh the list to show the change
       }
     } catch (e) {
       console.error('Exception updating category:', e);
@@ -428,7 +429,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
                   text: 'Remove',
                   style: 'destructive',
                   onPress: async () => {
-                    const result = await removeFriend(item.relationship_id);
+                    const result = await removeFriend(item.relationship_id); // Assuming removeFriend expects the actual relationship ID
                     if (result?.error) { 
                       Alert.alert('Error', result.error);
                     }

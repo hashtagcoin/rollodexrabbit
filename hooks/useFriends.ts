@@ -41,6 +41,10 @@ export const useFriends = (category: FriendCategory = 'all') => {
         console.error('Error fetching friends:', friendshipError.message);
         throw friendshipError;
       }
+      
+      // --- DEBUG LOGGING START ---
+      console.log('Raw Supabase data:', JSON.stringify(friendshipsData, null, 2));
+      // --- DEBUG LOGGING END ---
 
       console.log('fetchFriends: Raw data from database:', friendshipsData?.length || 0, 'records');
 
@@ -57,7 +61,7 @@ export const useFriends = (category: FriendCategory = 'all') => {
         const userIsRequester = item.requester_id === userId;
         return {
           // Core relationship fields
-          relationship_id: item.relationship_id, // Assuming this exists
+          relationship_id: item.id, // Assign item.id to relationship_id
           status: item.status,
           category: item.category,
 
@@ -265,6 +269,7 @@ export const useFriends = (category: FriendCategory = 'all') => {
     sendFriendRequest,
     respondToFriendRequest,
     changeFriendCategory,
-    removeFriend
+    removeFriend,
+    fetchFriends // Explicitly return fetchFriends
   };
 };
