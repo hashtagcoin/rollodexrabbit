@@ -15,8 +15,8 @@ import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { ArrowLeft, User, Upload, Hash, CircleAlert as AlertCircle, Camera } from 'lucide-react-native';
 import ModernImagePicker from '../../../components/ModernImagePicker';
-import { MediaError, MediaErrorType } from '../../../lib/mediaService';
-import { decode } from '../../../lib/base64Utils';
+import { decode as base64ToArrayBuffer } from '../../../lib/base64Utils';
+import * as FileSystem from 'expo-file-system';
 
 export default function EditProfile() {
   const [loading, setLoading] = useState(false);
@@ -43,34 +43,85 @@ export default function EditProfile() {
     try {
       setLoading(true);
       setError(null);
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Get file extension
       const extMatch = uri.match(/\.([a-zA-Z0-9]+)$/);
-      const ext = extMatch ? extMatch[1] : 'jpg';
-      const fileName = `avatar/${user.id}_${Date.now()}.${ext}`;
+      const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+      const baseFileName = `${user.id}_${Date.now()}.${ext}`;
+      const pathInBucket = `avatar/${baseFileName}`;
 
-      let fileOrBlob: Blob | File;
-      if (Platform.OS === 'web' && (window as any).pickedFile) {
-        // If ModernImagePicker exposes the File object on web
-        fileOrBlob = (window as any).pickedFile;
-      } else {
+      let uploadBody: FormData | ArrayBuffer;
+      let uploadContentType: string;
+
+      if (Platform.OS === 'web') {
+        console.log('Fetching URI for blob (Web):', uri);
         const response = await fetch(uri);
-        fileOrBlob = await response.blob();
+        const webBlob = await response.blob();
+        if (!webBlob || webBlob.size === 0) {
+          Alert.alert('Error', 'Web: Could not read image data or image is empty.');
+          setLoading(false);
+          return;
+        }
+        uploadContentType = webBlob.type || `image/${ext}`; // Save for FileOptions
+
+        const formData = new FormData();
+        formData.append('file', webBlob, baseFileName);
+        uploadBody = formData;
+        uploadContentType = uploadContentType; // For Supabase options with FormData
+        console.log('Using FormData for Web. Blob Size:', webBlob.size, 'Type:', uploadContentType);
+
+      } else {
+        // Native (iOS/Android): Read file as base64, then convert to ArrayBuffer
+        console.log('Reading file as base64 (Native):', uri);
+        const base64String = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        if (!base64String) {
+          Alert.alert('Error', 'Native: Failed to read file as base64 string.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          uploadBody = base64ToArrayBuffer(base64String); // Use the utility to get ArrayBuffer
+        } catch (e) {
+          console.error('Error converting base64 to ArrayBuffer:', e);
+          Alert.alert('Error', 'Native: Failed to convert image data.');
+          setLoading(false);
+          return;
+        }
+        
+        uploadContentType = `image/${ext}`; // Derive from extension, crucial for ArrayBuffer upload
+        
+        console.log('Created ArrayBuffer (Native). Size:', uploadBody.byteLength, 'Type:', uploadContentType);
+
+        if (!uploadBody || uploadBody.byteLength === 0) {
+          Alert.alert('Error', 'Native: Could not process image data to ArrayBuffer or ArrayBuffer is empty.');
+          setLoading(false);
+          return;
+        }
       }
-      if (!fileOrBlob || (fileOrBlob as any).size === 0) {
-        Alert.alert('Upload failed', 'Could not read the image data.');
-        setLoading(false);
-        return;
-      }
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+
+      console.log('Attempting to upload to Supabase. Path:', pathInBucket, 'Content-Type:', uploadContentType);
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(fileName, fileOrBlob, { contentType: fileOrBlob.type || 'image/jpeg', upsert: true });
-      if (uploadError) throw uploadError;
-      // Get public URL
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        .upload(pathInBucket, uploadBody, { // uploadBody is FormData for web, ArrayBuffer for native
+          contentType: uploadContentType, // Crucial for ArrayBuffer, also used for FormData path for consistency with previous fix
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Supabase upload successful:', uploadData);
+
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(pathInBucket);
       if (!publicUrlData?.publicUrl) throw new Error('Failed to get public URL for avatar');
       setAvatarUrl(publicUrlData.publicUrl);
     } catch (e: any) {

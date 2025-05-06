@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -16,6 +17,8 @@ import {
   CircleAlert as AlertCircle,
 } from 'lucide-react-native';
 import ModernImagePicker from '../../../components/ModernImagePicker';
+import { decode as base64ToArrayBuffer } from '../../../lib/base64Utils'; // Import utility
+import * as FileSystem from 'expo-file-system'; // Import FileSystem
 
 export default function CreatePost() {
   const [loading, setLoading] = useState(false);
@@ -25,8 +28,8 @@ export default function CreatePost() {
 
   const handlePost = async () => {
     try {
-      if (!caption) {
-        setError('Please write something to post');
+      if (!caption && !mediaUrl) {
+        setError('Please write something or add an image to post');
         return;
       }
 
@@ -36,12 +39,91 @@ export default function CreatePost() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      let supabaseMediaUrl: string | null = null;
+
+      if (mediaUrl) {
+        console.log('Media URL selected:', mediaUrl);
+        const fileExtMatch = mediaUrl.match(/\.([a-zA-Z0-9]+)$/);
+        const fileExt = fileExtMatch ? fileExtMatch[1].toLowerCase() : 'jpg';
+        const baseFileName = `${user.id}_post_${Date.now()}.${fileExt}`;
+        const pathInBucket = `post_media/${user.id}/${baseFileName}`; // Store in user-specific folder within post_media
+
+        let uploadBody: FormData | ArrayBuffer;
+        let uploadContentType: string;
+
+        if (Platform.OS === 'web') {
+          console.log('Fetching media URL for blob (Web):', mediaUrl);
+          const response = await fetch(mediaUrl);
+          const webBlob = await response.blob();
+          if (!webBlob || webBlob.size === 0) {
+            console.error('Failed to create blob or blob is empty');
+            throw new Error('Failed to process image data or image is empty.');
+          }
+          uploadContentType = webBlob.type || `image/${fileExt}`;
+
+          const formData = new FormData();
+          formData.append('file', webBlob, baseFileName);
+          uploadBody = formData;
+          console.log('Using FormData for Web post. Blob Size:', webBlob.size, 'Type:', uploadContentType);
+        } else {
+          // Native (iOS/Android): Read file as base64, then convert to ArrayBuffer
+          console.log('Reading media file as base64 (Native):', mediaUrl);
+          const base64String = await FileSystem.readAsStringAsync(mediaUrl, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          if (!base64String) {
+            console.error('Failed to read media file as base64 string');
+            throw new Error('Failed to read media file as base64 string');
+          }
+
+          try {
+            uploadBody = base64ToArrayBuffer(base64String);
+          } catch (e) {
+            console.error('Error converting base64 to ArrayBuffer:', e);
+            throw new Error('Failed to convert media data');
+          }
+
+          uploadContentType = `image/${fileExt}`; // Crucial for ArrayBuffer upload
+          console.log('Created ArrayBuffer for post (Native). Size:', uploadBody.byteLength, 'Type:', uploadContentType);
+
+          if (!uploadBody || uploadBody.byteLength === 0) {
+            console.error('Could not process media data to ArrayBuffer or ArrayBuffer is empty');
+            throw new Error('Could not process media data to ArrayBuffer or ArrayBuffer is empty');
+          }
+        }
+
+        console.log('Uploading post media to Supabase. Path:', pathInBucket, 'Content-Type:', uploadContentType);
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('post_media')
+          .upload(pathInBucket, uploadBody, {
+            contentType: uploadContentType,
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error('Supabase post media upload error:', uploadError);
+          throw uploadError;
+        }
+
+        console.log('Supabase post media upload successful:', uploadData);
+
+        const { data: publicUrlData } = supabase.storage
+          .from('post_media')
+          .getPublicUrl(pathInBucket);
+        
+        if (!publicUrlData?.publicUrl) {
+          throw new Error('Failed to get public URL for post media');
+        }
+        supabaseMediaUrl = publicUrlData.publicUrl;
+      }
+
       const { error: postError } = await supabase
         .from('posts')
         .insert({
           user_id: user.id,
           caption,
-          media_urls: mediaUrl ? [mediaUrl] : [],
+          media_urls: supabaseMediaUrl ? [supabaseMediaUrl] : [],
         });
 
       if (postError) throw postError;

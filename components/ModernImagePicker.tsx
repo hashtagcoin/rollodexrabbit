@@ -46,7 +46,7 @@ export default function ModernImagePicker({
         }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: crop,
         aspect: aspect,
         quality: 0.85,

@@ -27,6 +27,8 @@ import {
 import AppHeader from '../../../components/AppHeader';
 import SharePostModal from '../../../components/SharePostModal'; // Added import
 import { User } from '@supabase/supabase-js'; // Added import
+import { Alert } from 'react-native'; // Added import
+import { AntDesign } from '@expo/vector-icons'; // Changed import for AntDesign
 
 // Constants for header heights
 const APP_HEADER_HEIGHT = 100; // Further increased app header height to prevent overlap
@@ -42,7 +44,7 @@ type Post = {
   author_avatar_url: string | null;
   likes_count: number;
   comments_count: number;
-  user_liked?: boolean; // Added user_liked property
+  current_user_has_liked?: boolean; // Added current_user_has_liked property
 };
 
 export default function CommunityFeed() {
@@ -150,61 +152,57 @@ export default function CommunityFeed() {
     setRefreshing(false);
   };
 
-  const handleLike = async (postId: string) => {
+  const handleLike = async (postId: string, currentlyLiked?: boolean) => {
+    if (!currentUserSession) {
+      Alert.alert("Error", "You need to be logged in to like posts.");
+      return;
+    }
+
+    // Optimistically update UI
+    setPosts(currentPosts =>
+      currentPosts.map(p =>
+        p.post_id === postId
+          ? {
+              ...p,
+              current_user_has_liked: !currentlyLiked,
+              likes_count: currentlyLiked ? p.likes_count - 1 : p.likes_count + 1,
+            }
+          : p
+      )
+    );
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: existingLike, error: fetchError } = await supabase
-        .from('post_likes')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (fetchError) {
-        if (fetchError.code !== 'PGRST116') {
-          throw fetchError;
-        }
-      }
-
-      let actionTaken: 'liked' | 'unliked';
-
-      if (existingLike) {
-        const { error: deleteError } = await supabase
+      if (currentlyLiked) {
+        // User is unliking the post
+        const { error } = await supabase
           .from('post_likes')
           .delete()
-          .match({ post_id: postId, user_id: user.id });
-
-        if (deleteError) throw deleteError;
-        console.log('Post unliked');
-        actionTaken = 'unliked';
+          .match({ post_id: postId, user_id: currentUserSession.id });
+        if (error) throw error;
       } else {
-        const { error: insertError } = await supabase
+        // User is liking the post
+        const { error } = await supabase
           .from('post_likes')
-          .insert({ post_id: postId, user_id: user.id });
-
-        if (insertError) throw insertError;
-        console.log('Post liked');
-        actionTaken = 'liked';
+          .insert([{ post_id: postId, user_id: currentUserSession.id }]);
+        if (error) throw error;
       }
-
-      // Update local state instead of reloading all posts
-      setPosts(currentPosts =>
-        currentPosts.map(p => {
-          if (p.post_id === postId) {
-            return {
-              ...p,
-              likes_count: p.likes_count + (actionTaken === 'liked' ? 1 : -1),
-              user_liked: actionTaken === 'liked' // Update user_liked status
-            };
-          }
-          return p;
-        })
-      );
-
-    } catch (error) {
+      // No need to re-fetch, optimistic update handles UI. 
+      // Can add a silent re-fetch here if strong consistency is paramount after some delay.
+    } catch (error: any) {
       console.error('Error liking/unliking post:', error);
+      // Revert optimistic update on error
+      setPosts(currentPosts =>
+        currentPosts.map(p =>
+          p.post_id === postId
+            ? {
+                ...p,
+                current_user_has_liked: currentlyLiked, // Revert to original liked status
+                likes_count: currentlyLiked ? p.likes_count + 1 : p.likes_count - 1, // Revert count
+              }
+            : p
+        )
+      );
+      Alert.alert('Error', `Could not update like status: ${error.message}`);
     }
   };
 
@@ -224,12 +222,43 @@ export default function CommunityFeed() {
     setSharingPostId(null);
   };
 
-  const handleConfirmShare = (postId: string, selectedFriendIds: string[]) => {
-    console.log(`Post ${postId} shared with friends: ${selectedFriendIds.join(', ')}`);
-    // Here you would typically call a Supabase function or insert into a 'shares' or 'notifications' table
-    // For now, we just log and close
-    console.log('Shared!', `Post shared with ${selectedFriendIds.length} friend(s).`);
-    // TODO: Implement actual notification/sharing logic with Supabase
+  const handleConfirmShare = async (postId: string, selectedFriendIds: string[]) => {
+    if (!currentUserSession) {
+      Alert.alert("Error", "You must be logged in to share posts.");
+      return;
+    }
+
+    const senderId = currentUserSession.id;
+    // Attempt to get sender's name, provide a fallback
+    const senderName = currentUserSession.user_metadata?.full_name || currentUserSession.email || "Someone";
+
+    const notificationsToInsert = selectedFriendIds.map(friendId => ({
+      user_id: friendId, // Recipient ID
+      type: 'post_share',
+      title: `${senderName} shared a post with you`,
+      body: 'Tap to view the post.',
+      content: JSON.stringify({ 
+        sender_id: senderId,
+        post_id: postId,
+        // Future enhancement: could add post caption preview here if available
+      }),
+      // 'seen' and 'created_at' will use default values in the DB
+    }));
+
+    if (notificationsToInsert.length > 0) {
+      try {
+        const { error } = await supabase.from('notifications').insert(notificationsToInsert);
+        if (error) {
+          throw error;
+        }
+        Alert.alert('Shared!', `Post shared successfully with ${selectedFriendIds.length} friend(s).`);
+      } catch (error: any) {
+        console.error('Error creating notifications:', error);
+        Alert.alert('Error', `Could not share the post: ${error.message || 'Unknown error'}`);
+      }
+    }
+
+    handleCloseShareModal(); // Close modal regardless of notification success for now
   };
 
   // Render the sticky navigation header
@@ -324,7 +353,7 @@ export default function CommunityFeed() {
               <View style={styles.postHeader}>
                 <Image
                   source={
-                    post.author_avatar_url
+                    post.author_avatar_url && !post.author_avatar_url.startsWith('file:///')
                       ? { uri: post.author_avatar_url }
                       : require('../../../assets/rollodex-icon-lrg.png')
                   }
@@ -344,7 +373,10 @@ export default function CommunityFeed() {
                 {post.content}
               </Text>
 
-              {post.media_urls && post.media_urls.length > 0 && (
+              {post.media_urls &&
+                post.media_urls.length > 0 &&
+                post.media_urls[0] && // Ensure the URL string itself exists
+                !post.media_urls[0].startsWith('file:///') && ( // Only render if not a local file URI
                 <TouchableOpacity
                   onPress={() => router.push({
                     pathname: '/community/post',
@@ -361,9 +393,13 @@ export default function CommunityFeed() {
               <View style={styles.postActions}>
                 <TouchableOpacity
                   style={styles.postActionButton}
-                  onPress={() => handleLike(post.post_id)}
+                  onPress={() => handleLike(post.post_id, post.current_user_has_liked)}
                 >
-                  <Heart size={24} color="#666" />
+                  <AntDesign 
+                    name={post.current_user_has_liked ? "heart" : "hearto"} 
+                    size={24} 
+                    color={post.current_user_has_liked ? "red" : "grey"} 
+                  />
                   <Text style={styles.actionText}>{post.likes_count}</Text>
                 </TouchableOpacity>
 
