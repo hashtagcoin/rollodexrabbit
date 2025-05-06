@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import * as DocumentPicker from 'expo-document-picker';
+import { Platform, ActivityIndicator, Alert as RNAlert } from 'react-native';
+import { decode } from 'base64-arraybuffer';
+import { WebView } from 'react-native-webview';
 import {
   View,
   Text,
@@ -14,6 +18,118 @@ import { ArrowLeft, FileCheck, Calendar, Clock, DollarSign, ChevronRight, Circle
 import AppHeader from '../components/AppHeader';
 
 export default function NdisPlanScreen() {
+  const [planRecord, setPlanRecord] = useState<any>(null);
+  const [planPdfUrl, setPlanPdfUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  useEffect(() => {
+    fetchPlanRecord();
+  }, []);
+
+  async function fetchPlanRecord() {
+    try {
+      setPdfLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const { data, error } = await supabase
+        .from('ndis_plans')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      setPlanRecord(data);
+      if (data?.storage_path) {
+        // Fetch signed URL
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+          .from('ndis-plans')
+          .createSignedUrl(data.storage_path, 60 * 60); // 1 hour expiry
+        if (signedUrlError) throw signedUrlError;
+        setPlanPdfUrl(signedUrlData?.signedUrl);
+      } else {
+        setPlanPdfUrl(null);
+      }
+    } catch (err: any) {
+      setPlanRecord(null);
+      setPlanPdfUrl(null);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
+  async function handleUploadPlan() {
+    try {
+      setUploading(true);
+      setError(null);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const pickerResult = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (pickerResult.canceled || !pickerResult.assets?.length) return;
+      const file = pickerResult.assets[0];
+      if ((file.size ?? 0) > 10 * 1024 * 1024) {
+        RNAlert.alert('File too large', 'Please select a PDF under 10MB.');
+        return;
+      }
+      // Read file data
+      let blob: Blob | File;
+      if (Platform.OS === 'web' && file.file) {
+        blob = file.file; // Use the File object directly on web
+      } else {
+        const response = await fetch(file.uri);
+        blob = await response.blob();
+      }
+      console.log('Blob size:', blob.size);
+      if (!blob || blob.size === 0) {
+        RNAlert.alert(
+          'Upload failed',
+          'Could not read the PDF file data. If you are using Expo web, this is a known limitation. Please try using Expo Go on a mobile device.'
+        );
+        return;
+      }
+      const storagePath = `${user.id}/${Date.now()}_${file.name}`;
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('ndis-plans')
+        .upload(storagePath, blob, { contentType: 'application/pdf', upsert: true });
+      if (uploadError) throw uploadError;
+      // Defensive: Ensure user_id is present and matches auth.uid()
+      if (!user.id) {
+        console.error('Authenticated user ID missing during NDIS plan upload.');
+        RNAlert.alert('Upload failed', 'Could not determine your user ID. Please sign in again.');
+        return;
+      }
+      // Upsert DB record
+      const { error: upsertError } = await supabase
+        .from('ndis_plans')
+        .upsert({ user_id: user.id, storage_path: storagePath, original_filename: file.name }, { onConflict: 'user_id' });
+      if (upsertError) {
+        // Special handling for RLS errors
+        if (
+          upsertError.message?.includes('violates row-level security policy') ||
+          upsertError.message?.toLowerCase().includes('row-level security')
+        ) {
+          console.error('RLS policy violation during NDIS plan upload:', upsertError);
+          RNAlert.alert(
+            'Upload failed',
+            'Your account is not permitted to upload an NDIS plan. Please ensure you are logged in with the correct account or contact support.'
+          );
+          return;
+        }
+        throw upsertError;
+      }
+      // Refresh plan record and signed URL
+      await fetchPlanRecord();
+      RNAlert.alert('Success', 'NDIS Plan uploaded successfully.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload NDIS Plan.');
+      RNAlert.alert('Upload failed', err.message || 'Failed to upload NDIS Plan.');
+    } finally {
+      setUploading(false);
+    }
+  }
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -153,81 +269,83 @@ export default function NdisPlanScreen() {
                   <Text style={styles.dateLabel}>Start Date:</Text>
                   <Text style={styles.dateValue}>{planDates.startDate}</Text>
                 </View>
-                <View style={styles.dateItem}>
-                  <Calendar size={16} color="#666" />
-                  <Text style={styles.dateLabel}>End Date:</Text>
-                  <Text style={styles.dateValue}>{planDates.endDate}</Text>
+                <View style={styles.planActions}>
+                  {/* View Plan Button */}
+                  <TouchableOpacity
+                    style={styles.planActionButton}
+                    onPress={() => {
+                      if (planPdfUrl) {
+                        setPdfLoading(true);
+                        setTimeout(() => setPdfLoading(false), 500); // Simulate loading
+                      } else {
+                        RNAlert.alert('No plan found', 'Please upload your NDIS plan first.');
+                      }
+                    }}
+                    accessibilityLabel="View uploaded NDIS Plan PDF"
+                    disabled={pdfLoading || !planPdfUrl}
+                  >
+                    <FileText size={16} color="#007AFF" />
+                    <Text style={styles.planActionText}>{pdfLoading ? 'Loading...' : 'View Plan'}</Text>
+                  </TouchableOpacity>
+                  {/* Upload/Update Plan Button */}
+                  <TouchableOpacity
+                    style={styles.planActionButton}
+                    onPress={handleUploadPlan}
+                    accessibilityLabel="Upload or update your NDIS Plan PDF"
+                    disabled={uploading}
+                  >
+                    <Upload size={16} color="#007AFF" />
+                    <Text style={styles.planActionText}>{uploading ? 'Uploading...' : 'Update Plan'}</Text>
+                  </TouchableOpacity>
+                  {/* Download Button */}
+                  <TouchableOpacity
+                    style={styles.planActionButton}
+                    onPress={async () => {
+                      if (!planPdfUrl) {
+                        RNAlert.alert('No plan found', 'Please upload your NDIS plan first.');
+                        return;
+                      }
+                      try {
+                        if (Platform.OS === 'web') {
+                          window.open(planPdfUrl, '_blank');
+                        } else {
+                          RNAlert.alert('Download', 'Please open the plan in a browser to download.');
+                        }
+                      } catch (e) {
+                        RNAlert.alert('Error', 'Could not download PDF.');
+                      }
+                    }}
+                    accessibilityLabel="Download your NDIS Plan PDF"
+                    disabled={pdfLoading || !planPdfUrl}
+                  >
+                    <Download size={16} color="#007AFF" />
+                    <Text style={styles.planActionText}>Download</Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.dateItem}>
-                  <Clock size={16} color="#666" />
-                  <Text style={styles.dateLabel}>Remaining:</Text>
-                  <Text style={styles.dateValue}>{planDates.daysRemaining} days</Text>
-                </View>
-              </View>
-
-              <View style={styles.planActions}>
-                <TouchableOpacity style={styles.planActionButton}>
-                  <FileText size={16} color="#007AFF" />
-                  <Text style={styles.planActionText}>View Plan</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.planActionButton}>
-                  <Upload size={16} color="#007AFF" />
-                  <Text style={styles.planActionText}>Update Plan</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.planActionButton}>
-                  <Download size={16} color="#007AFF" />
-                  <Text style={styles.planActionText}>Download</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Funding Summary */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Funding Summary</Text>
-                <TouchableOpacity 
-                  style={styles.viewDetailsButton}
-                  onPress={() => router.push('/wallet')}
-                >
-                  <Text style={styles.viewDetailsText}>View Wallet</Text>
-                  <ChevronRight size={16} color="#007AFF" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.fundingCard}>
-                <View style={styles.fundingHeader}>
-                  <View style={styles.fundingIconContainer}>
-                    <DollarSign size={24} color="#4CD964" />
-                  </View>
-                  <View style={styles.fundingInfo}>
-                    <Text style={styles.fundingLabel}>Total Funding</Text>
-                    <Text style={styles.fundingAmount}>
-                      ${wallet?.total_balance?.toLocaleString() || '0'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.fundingCategories}>
-                  <View style={styles.categoryItem}>
-                    <Text style={styles.categoryLabel}>Core Support</Text>
-                    <Text style={styles.categoryAmount}>
-                      ${wallet?.category_breakdown?.core_support?.toLocaleString() || '0'}
-                    </Text>
-                    <View style={styles.progressBar}>
-                      <View 
-                        style={[
-                          styles.progressFill, 
-                          { 
-                            width: `${wallet?.category_breakdown?.core_support 
-                              ? (wallet.category_breakdown.core_support / wallet.total_balance) * 100 
-                              : 0}%`,
-                            backgroundColor: '#4CD964'
-                          }
-                        ]} 
+                {/* Inline PDF Viewer (shows below actions if planPdfUrl exists) */}
+                <View>
+                  {pdfLoading && (
+                    <View style={{ marginTop: 20, alignItems: 'center' }}>
+                      <ActivityIndicator size="large" color="#007AFF" accessibilityLabel="Loading NDIS Plan PDF" />
+                      <Text style={{ marginTop: 8 }}>Loading your NDIS Plan...</Text>
+                    </View>
+                  )}
+                  {planPdfUrl && !pdfLoading && (
+                    <View style={{ marginTop: 20, minHeight: 400, flex: 1 }}>
+                      <Text style={{ marginBottom: 8, fontWeight: 'bold' }}>Your Uploaded NDIS Plan</Text>
+                      <WebView
+                        source={{ uri: planPdfUrl }}
+                        style={{ flex: 1, height: 400, borderRadius: 8, backgroundColor: '#f4f4f4' }}
+                        onLoadEnd={() => setPdfLoading(false)}
+                        onError={() => RNAlert.alert('Error', 'Failed to load PDF. Please try again.')}
+                        accessibilityLabel="NDIS Plan PDF Web Viewer"
+                        startInLoadingState={true}
+                        renderLoading={() => (
+                          <ActivityIndicator size="large" color="#007AFF" accessibilityLabel="Loading PDF in WebView" />
+                        )}
                       />
                     </View>
-                  </View>
-
+                  )}
                   <View style={styles.categoryItem}>
                     <Text style={styles.categoryLabel}>Capacity Building</Text>
                     <Text style={styles.categoryAmount}>
@@ -267,14 +385,13 @@ export default function NdisPlanScreen() {
                       />
                     </View>
                   </View>
+                  <TouchableOpacity 
+                    style={styles.submitClaimButton}
+                    onPress={() => router.push('/wallet/submit-claim')}
+                  >
+                    <Text style={styles.submitClaimText}>Submit New Claim</Text>
+                  </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity 
-                  style={styles.submitClaimButton}
-                  onPress={() => router.push('/wallet/submit-claim')}
-                >
-                  <Text style={styles.submitClaimText}>Submit New Claim</Text>
-                </TouchableOpacity>
               </View>
             </View>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,9 @@ import {
   Dimensions,
 } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 import { ArrowLeft, Heart, MessageSquare } from 'lucide-react-native';
-import AppHeader from '../../components/AppHeader';
+import AppHeader from '../../../components/AppHeader';
 
 const { width } = Dimensions.get('window');
 
@@ -118,8 +118,8 @@ export default function UserPostsScreen() {
                 key={post.id} 
                 style={styles.postCard}
                 onPress={() => router.push({
-                  pathname: '/(tabs)/community/post' as any,
-                  params: { id: post.id }
+                  pathname: '/(tabs)/profile/post/[postId]',
+                  params: { postId: post.id }
                 })}
               >
                 <View style={styles.postHeader}>

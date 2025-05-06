@@ -32,12 +32,12 @@ const NAV_HEADER_HEIGHT = 70; // Navigation header height
 
 type Post = {
   post_id: string;
-  caption: string;
+  content: string;
   media_urls: string[];
   post_created_at: string;
-  user_id: string;
-  full_name: string;
-  avatar_url: string | null;
+  author_profile_id: string;
+  author_full_name: string;
+  author_avatar_url: string | null;
   likes_count: number;
   comments_count: number;
 };
@@ -84,38 +84,38 @@ export default function CommunityFeed() {
   async function loadPosts() {
     try {
       setLoading(true);
-      // Fetch posts
-      const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select('post_id, caption, media_urls, created_at, user_id')
-        .order('created_at', { ascending: false });
+      // Fetch posts with user details and counts from the view
+      const { data: enrichedPostsData, error: postsError } = await supabase
+        .from('posts_with_users') // Query the view
+        .select('*') // Select all columns from the view (adjust if specific columns needed)
+        .order('post_created_at', { ascending: false }); // CORRECTED: Use post_created_at
+
       if (postsError) throw postsError;
 
-      // Fetch author profiles
-      const userIds = [...new Set(postsData.map((post) => post.user_id))];
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('id, full_name, avatar_url')
-        .in('id', userIds);
-      if (profilesError) throw profilesError;
-      const profileMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
-      profiles.forEach((profile) => {
-        profileMap[profile.id] = profile;
-      });
+      // The view should already contain post_id, content, media_urls, created_at (as post_created_at or created_at),
+      // author_profile_id, author_full_name, author_avatar_url, likes_count, comments_count.
+      // We need to ensure the field names match what the Post type expects.
+      // For now, let's assume the view provides compatible names or we adjust the Post type/mapping here.
+      
+      // Map data if necessary to match the Post type structure, especially for created_at if names differ.
+      // For simplicity, if posts_with_users provides fields like post_id, content, media_urls, author_profile_id, 
+      // author_full_name, author_avatar_url, likes_count, comments_count, and created_at (for post_created_at)
+      // then the mapping can be direct or minimal.
 
-      // Enrich posts with profile data
-      const enrichedPosts = postsData.map((post) => ({
-        post_id: post.post_id,
-        caption: post.caption,
-        media_urls: post.media_urls,
-        post_created_at: post.created_at,
-        user_id: post.user_id,
-        full_name: profileMap[post.user_id]?.full_name || '',
-        avatar_url: profileMap[post.user_id]?.avatar_url || null,
-        likes_count: 0,
-        comments_count: 0,
-      }));
-      setPosts(enrichedPosts);
+      const postsWithCorrectDate = enrichedPostsData?.map(p => ({
+        ...p,
+        // The Post type expects post_created_at, and the view provides post_created_at.
+        // If the view provided it as, say, 'view_created_at', you'd map: post_created_at: p.view_created_at
+        // Since both are named post_created_at (or if p already has post_created_at from the view correctly),
+        // this specific mapping line might be redundant if ...p already spreads it correctly. Assuming direct match for now.
+        post_created_at: p.post_created_at, // ENSURE 'p' has 'post_created_at' from the view
+        // If likes_count and comments_count are not in the view, they will be undefined here.
+        likes_count: p.likes_count || 0, // Default to 0 if not provided by view
+        comments_count: p.comments_count || 0 // Default to 0 if not provided by view
+      })) || [];
+
+      setPosts(postsWithCorrectDate as Post[]); // Cast if confident about structure, or validate/map more robustly
+
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -138,14 +138,55 @@ export default function CommunityFeed() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
+      const { data: existingLike, error: fetchError } = await supabase
         .from('post_likes')
-        .insert({ post_id: postId, user_id: user.id });
+        .select('id')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (error) throw error;
-      loadPosts();
+      if (fetchError) {
+        if (fetchError.code !== 'PGRST116') {
+          throw fetchError;
+        }
+      }
+
+      let actionTaken: 'liked' | 'unliked';
+
+      if (existingLike) {
+        const { error: deleteError } = await supabase
+          .from('post_likes')
+          .delete()
+          .match({ post_id: postId, user_id: user.id });
+
+        if (deleteError) throw deleteError;
+        console.log('Post unliked');
+        actionTaken = 'unliked';
+      } else {
+        const { error: insertError } = await supabase
+          .from('post_likes')
+          .insert({ post_id: postId, user_id: user.id });
+
+        if (insertError) throw insertError;
+        console.log('Post liked');
+        actionTaken = 'liked';
+      }
+
+      // Update local state instead of reloading all posts
+      setPosts(currentPosts =>
+        currentPosts.map(p => {
+          if (p.post_id === postId) {
+            return {
+              ...p,
+              likes_count: p.likes_count + (actionTaken === 'liked' ? 1 : -1),
+            };
+          }
+          return p;
+        })
+      );
+
     } catch (error) {
-      console.error('Error liking post:', error);
+      console.error('Error liking/unliking post:', error);
     }
   };
 
@@ -241,15 +282,15 @@ export default function CommunityFeed() {
               <View style={styles.postHeader}>
                 <Image
                   source={
-                    post.avatar_url
-                      ? { uri: post.avatar_url }
+                    post.author_avatar_url
+                      ? { uri: post.author_avatar_url }
                       : require('../../../assets/rollodex-icon-lrg.png')
                   }
                   style={styles.avatar}
                   resizeMode="cover"
                 />
                 <View style={styles.postHeaderInfo}>
-                  <Text style={styles.userName}>{post.full_name}</Text>
+                  <Text style={styles.userName}>{post.author_full_name}</Text>
                   <Text style={styles.postTime}>
                     {new Date(post.post_created_at).toLocaleDateString()}
                   </Text>
@@ -257,15 +298,22 @@ export default function CommunityFeed() {
               </View>
 
               <Text style={styles.caption}>
-                <Text style={styles.userName}>{post.full_name} </Text>
-                {post.caption}
+                <Text style={styles.userName}>{post.author_full_name} </Text>
+                {post.content}
               </Text>
 
               {post.media_urls && post.media_urls.length > 0 && (
-                <Image
-                  source={{ uri: post.media_urls[0] }}
-                  style={styles.postImage}
-                />
+                <TouchableOpacity
+                  onPress={() => router.push({
+                    pathname: '/community/post',
+                    params: { id: post.post_id }
+                  })}
+                >
+                  <Image
+                    source={{ uri: post.media_urls[0] }}
+                    style={styles.postImage}
+                  />
+                </TouchableOpacity>
               )}
 
               <View style={styles.postActions}>

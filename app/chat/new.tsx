@@ -1,289 +1,396 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   Image,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { useConversations } from '../../hooks/useChat';
-import { mockSearchUsers } from '../../lib/__mocks__/friends';
-import { User, Search, ArrowLeft, Check, X } from 'lucide-react-native';
+import { Phone, Video, Image as ImageIcon, Heart, Mic } from 'lucide-react-native';
 import { useAuth } from '../../providers/AuthProvider';
-import AppHeader from '../../components/AppHeader';
 
-interface UserProfile {
-  id: string;
-  full_name: string;
-  username?: string;
-  avatar_url: string | null;
-  role: string | null;
-  selected?: boolean;
+// TypeScript interfaces for props
+interface ChatBubbleProps {
+  text: string;
+  alignment: 'left' | 'right';
+  bubbleColor: string;
+  textColor: string;
+  avatar?: string | null;
 }
 
-export default function NewChatScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const { createConversation } = useConversations();
-  const router = useRouter();
+const ChatBubble: React.FC<ChatBubbleProps> = ({ text, alignment, bubbleColor, textColor, avatar }) => (
+  <View style={[styles.bubbleRow, alignment === 'right' ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
+    {alignment === 'left' && avatar && (
+      <Image source={{ uri: avatar }} style={styles.bubbleAvatar} accessibilityLabel="Sender avatar" />
+    )}
+    <View
+      style={[
+        styles.bubble,
+        {
+          backgroundColor: bubbleColor,
+          alignSelf: alignment === 'right' ? 'flex-end' : 'flex-start',
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          borderBottomLeftRadius: alignment === 'right' ? 18 : 5,
+          borderBottomRightRadius: alignment === 'left' ? 18 : 5,
+        },
+      ]}
+    >
+      <Text style={[styles.bubbleText, { color: textColor }]}>{text}</Text>
+    </View>
+    {alignment === 'right' && avatar && (
+      <Image source={{ uri: avatar }} style={styles.bubbleAvatar} accessibilityLabel="Your avatar" />
+    )}
+  </View>
+);
+
+interface HeaderProps {
+  onBack: () => void;
+  friendName: string;
+}
+
+const Header: React.FC<HeaderProps> = ({ onBack, friendName }) => (
+  <View style={styles.header}>
+    <TouchableOpacity onPress={onBack} accessibilityLabel="Go back">
+      <Text style={{ fontSize: 20, color: '#007AFF', marginRight: 8 }}>{'<'}</Text>
+    </TouchableOpacity>
+    <Text style={styles.headerTitle} numberOfLines={1}>{friendName}</Text>
+    <View style={styles.headerIcons}>
+      <TouchableOpacity accessibilityLabel="Call">
+        <Phone size={24} color="#222" />
+      </TouchableOpacity>
+      <TouchableOpacity accessibilityLabel="Video Call" style={{ marginLeft: 18 }}>
+        <Video size={24} color="#222" />
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+interface InputBarProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => void;
+  loading: boolean;
+  profileAvatar?: string | null;
+}
+
+const InputBar: React.FC<InputBarProps> = ({ value, onChangeText, onSend, loading, profileAvatar }) => (
+  <View style={styles.inputBar}>
+    {profileAvatar && (
+      <Image source={{ uri: profileAvatar }} style={styles.inputAvatar} accessibilityLabel="Your profile picture" />
+    )}
+    <TextInput
+      style={styles.input}
+      placeholder="Message..."
+      placeholderTextColor="#888"
+      value={value}
+      onChangeText={onChangeText}
+      accessibilityLabel="Message input"
+      editable={!loading}
+      onSubmitEditing={onSend}
+      returnKeyType="send"
+    />
+    <TouchableOpacity accessibilityLabel="Send Image" style={styles.inputIcon} disabled={loading}>
+      <ImageIcon size={20} color="#555" />
+    </TouchableOpacity>
+    <TouchableOpacity accessibilityLabel="Send Heart" style={styles.inputIcon} disabled={loading}>
+      <Heart size={20} color="#555" />
+    </TouchableOpacity>
+    <TouchableOpacity accessibilityLabel="Send Voice Message" style={styles.inputIcon} disabled={loading}>
+      <Mic size={20} color="#555" />
+    </TouchableOpacity>
+  </View>
+);
+
+
+export default function ChatScreen() {
   const { user } = useAuth();
   const userId = user?.id;
+  const router = useRouter();
+  const scrollViewRef = useRef(null);
+  const { friendId, name } = useLocalSearchParams();
 
-  // Search for users based on query
-  const searchUsers = async (query: string) => {
-    if (!query.trim() || query.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
+  // State
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [friendProfile, setFriendProfile] = useState<any>(null);
 
+  // Fetch friend profile (for avatar)
+  useEffect(() => {
+    if (!friendId) return;
+    supabase
+      .from('user_profiles')
+      .select('id, full_name, avatar_url')
+      .eq('id', friendId)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) setFriendProfile(data);
+      });
+  }, [friendId]);
+
+  // Conversation lookup/creation
+  useEffect(() => {
+    if (!userId || !friendId) return;
     setLoading(true);
     setError(null);
-
-    try {
-      // Search for users where name or username contains the query
-      // Exclude the current user and already selected users from results
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('id, full_name, username, avatar_url, role')
-        .or(`full_name.ilike.%${query}%,username.ilike.%${query}%`)
-        .neq('id', userId);
-
-      if (error) throw error;
-
-      // Filter out already selected users
-      const selectedIds = selectedUsers.map(user => user.id);
-      const filteredResults = (data || []).filter(user => !selectedIds.includes(user.id));
-      
-      setSearchResults(filteredResults);
-    } catch (e: unknown) {
-      console.error('Error searching users:', e instanceof Error ? e.message : 'Unknown error');
-      setError(e instanceof Error ? e.message : 'An unknown error occurred');
-      
-      // Use mock data as fallback
-      const mockResults = mockSearchUsers(query);
-      // Filter out already selected users
-      const selectedIds = selectedUsers.map(user => user.id);
-      const filteredMockResults = mockResults.filter(user => !selectedIds.includes(user.id));
-      
-      setSearchResults(filteredMockResults);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Toggle user selection
-  const toggleUserSelection = (user: UserProfile) => {
-    const isAlreadySelected = selectedUsers.some(u => u.id === user.id);
-    
-    if (isAlreadySelected) {
-      setSelectedUsers(prev => prev.filter(u => u.id !== user.id));
-    } else {
-      setSelectedUsers(prev => [...prev, user]);
-    }
-  };
-
-  // Remove selected user
-  const removeSelectedUser = (userId: string) => {
-    setSelectedUsers(prev => prev.filter(user => user.id !== userId));
-  };
-
-  // Clear search query
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  // Create new conversation
-  const handleCreateConversation = async () => {
-    if (selectedUsers.length === 0) {
-      Alert.alert('Error', 'Please select at least one user to chat with.');
-      return;
-    }
-
-    setCreating(true);
-    
-    try {
-      const participantIds = selectedUsers.map(user => user.id);
-      const result = await createConversation(participantIds);
-      
-      if (result.error) {
-        Alert.alert('Error', result.error);
-      } else {
-        // Navigate to the new conversation
-        const conversationId = result.data?.conversationId;
-        router.push(`/chat/${conversationId}` as any);
+    // 1. Try to find an existing 1:1 conversation
+    const findOrCreateConversation = async () => {
+      // Find conversations with exactly these two participants
+      const { data: participantRows, error: partErr } = await supabase
+        .from('chat_participants')
+        .select('conversation_id')
+        .in('user_id', [userId, friendId]);
+      const conversationIds = participantRows?.map(row => row.conversation_id) || [];
+      let foundId: string | null = null;
+      if (conversationIds.length) {
+        // Find a conversation with exactly these two participants
+        for (const cid of conversationIds) {
+          const { count } = await supabase
+            .from('chat_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', cid);
+          if (count === 2) {
+            foundId = cid;
+            break;
+          }
+        }
       }
-    } catch (e) {
-      console.error('Error creating conversation:', e);
-      Alert.alert('Error', 'Failed to create conversation. Please try again.');
-    } finally {
-      setCreating(false);
+      if (foundId) {
+        setConversationId(foundId);
+        setLoading(false);
+        return;
+      }
+      // Not found: create new conversation and add both participants
+      const { data: conv, error: convErr } = await supabase
+        .from('chat_conversations')
+        .insert({})
+        .select()
+        .single();
+      if (convErr || !conv) {
+        setError('Failed to create conversation');
+        setLoading(false);
+        return;
+      }
+      const cid = conv.id;
+      await supabase.from('chat_participants').insert([
+        { conversation_id: cid, user_id: userId },
+        { conversation_id: cid, user_id: friendId },
+      ]);
+      setConversationId(cid);
+      setLoading(false);
+    };
+    findOrCreateConversation();
+  }, [userId, friendId]);
+
+  // Fetch messages and subscribe for realtime updates
+  useEffect(() => {
+    if (!conversationId) return;
+    setLoading(true);
+    setError(null);
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('id, content, sender_id, created_at, sender:sender_id(id, full_name, avatar_url)')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+      if (error) {
+        setError('Failed to fetch messages');
+      } else {
+        setMessages(data || []);
+      }
+      setLoading(false);
+    };
+    fetchMessages();
+    // Subscribe to new messages
+    const sub = supabase
+      .channel('chat_messages')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${conversationId}` },
+        payload => {
+          setMessages(prev => [...prev, payload.new]);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [conversationId]);
+
+  // Send message
+  const handleSend = async () => {
+    if (!input.trim() || !conversationId || !userId) return;
+    setSending(true);
+    const { error } = await supabase.from('chat_messages').insert({
+      conversation_id: conversationId,
+      sender_id: userId,
+      content: input.trim(),
+    });
+    if (error) {
+      Alert.alert('Error', 'Failed to send message');
+    } else {
+      setInput('');
     }
+    setSending(false);
   };
 
-  // Render search results
-  const renderUserItem = ({ item }: { item: UserProfile }) => {
-    const isSelected = selectedUsers.some(user => user.id === item.id);
-    
+  // Get current user avatar
+  // Fix type error: allow avatar_url to be optional on user
+  const myAvatar = (user as { avatar_url?: string })?.avatar_url || null;
+
+  // UI rendering
+  if (loading) {
     return (
-      <TouchableOpacity
-        style={[styles.userItem, isSelected && styles.selectedUserItem]}
-        onPress={() => toggleUserSelection(item)}
-      >
-        <View style={styles.userAvatar}>
-          {item.avatar_url ? (
-            <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <User size={24} color="#ffffff" />
-            </View>
-          )}
-        </View>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.full_name}</Text>
-          {item.username && (
-            <Text style={styles.userUsername}>@{item.username}</Text>
-          )}
-          <Text style={styles.userRole}>{item.role || 'Participant'}</Text>
-        </View>
-        <View style={[styles.checkboxContainer, isSelected && styles.checkboxSelected]}>
-          {isSelected && <Check size={16} color="#ffffff" />}
-        </View>
-      </TouchableOpacity>
+      <View style={[styles.loadingContainer, { flex: 1 }]}> <ActivityIndicator size="large" color="#007AFF" /> </View>
     );
-  };
-
-  // Render selected users
-  const renderSelectedUser = ({ item }: { item: UserProfile }) => (
-    <View style={styles.selectedChip}>
-      <Text style={styles.selectedChipText} numberOfLines={1}>
-        {item.full_name}
-      </Text>
-      <TouchableOpacity onPress={() => removeSelectedUser(item.id)}>
-        <X size={16} color="#6B7280" />
-      </TouchableOpacity>
-    </View>
-  );
-
-  // Render empty state
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Search size={60} color="#9CA3AF" />
-      <Text style={styles.emptyStateTitle}>Search for people</Text>
-      <Text style={styles.emptyStateText}>
-        Find friends, providers, or family members to start a conversation with.
-      </Text>
-    </View>
-  );
+  }
+  if (error) {
+    return (
+      <View style={[styles.loadingContainer, { flex: 1 }]}> <Text style={{ color: 'red' }}>{error}</Text> </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <AppHeader 
-        title="New Conversation" 
-        showBackButton={true} 
-        onBackPress={() => router.push('/(tabs)/chat' as any)} 
-      />
-
-      <View style={styles.content}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Search size={20} color="#6B7280" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search by name or username"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={() => searchUsers(searchQuery)}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={clearSearch}>
-                <X size={20} color="#6B7280" />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity 
-            style={styles.searchButton}
-            onPress={() => searchUsers(searchQuery)}
-            disabled={searchQuery.trim().length < 2}
-          >
-            <Text style={styles.searchButtonText}>Search</Text>
-          </TouchableOpacity>
-        </View>
-
-        {selectedUsers.length > 0 && (
-          <View style={styles.selectedContainer}>
-            <Text style={styles.selectedLabel}>Selected ({selectedUsers.length}):</Text>
-            <FlatList
-              data={selectedUsers}
-              keyExtractor={(item) => item.id}
-              renderItem={renderSelectedUser}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.selectedList}
-            />
-          </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#fff' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+    >
+      <Header onBack={() => router.back()} friendName={name || friendProfile?.full_name || 'Chat'} />
+      <ScrollView
+        ref={scrollViewRef as React.RefObject<any>}
+        style={styles.messages}
+        contentContainerStyle={{ padding: 12, paddingBottom: 8 }}
+        onContentSizeChange={() => (scrollViewRef.current as any)?.scrollToEnd?.({ animated: true })}
+        showsVerticalScrollIndicator={false}
+      >
+        {messages.length === 0 && (
+          <Text style={{ color: '#888', alignSelf: 'center', marginTop: 24 }}>No messages yet. Say hi!</Text>
         )}
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4F46E5" />
-            <Text style={styles.loadingText}>Searching...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorState}>
-            <Text style={styles.errorTitle}>Something went wrong</Text>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => searchUsers(searchQuery)}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            data={searchResults}
-            keyExtractor={(item) => item.id}
-            renderItem={renderUserItem}
-            ListEmptyComponent={renderEmptyState()}
-            contentContainerStyle={styles.listContent}
+        {messages.map((msg, idx) => (
+          <ChatBubble
+            key={msg.id || idx}
+            text={msg.content}
+            alignment={msg.sender_id === userId ? 'right' : 'left'}
+            bubbleColor={msg.sender_id === userId ? '#007AFF' : '#f1f1f1'}
+            textColor={msg.sender_id === userId ? '#fff' : '#000'}
+            avatar={msg.sender_id === userId ? myAvatar : msg.sender?.avatar_url || friendProfile?.avatar_url}
           />
-        )}
-
-        {selectedUsers.length > 0 && (
-          <View style={styles.createButtonContainer}>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={handleCreateConversation}
-              disabled={creating}
-            >
-              {creating ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text style={styles.createButtonText}>Start Conversation</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
+        ))}
+      </ScrollView>
+      <InputBar
+        value={input}
+        onChangeText={setInput}
+        onSend={handleSend}
+        loading={sending}
+        profileAvatar={myAvatar}
+      />
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  // Chat UI styles
+  bubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginVertical: 4,
+  },
+  bubbleRowLeft: {
+    justifyContent: 'flex-start',
+  },
+  bubbleRowRight: {
+    justifyContent: 'flex-end',
+    alignSelf: 'flex-end',
+  },
+  bubble: {
+    maxWidth: '80%',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+  },
+  bubbleAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 6,
+    backgroundColor: '#eee',
+  },
+  bubbleText: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 54,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#222',
+    marginLeft: 8,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#eee',
+    backgroundColor: '#fff',
+  },
+  inputAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+    backgroundColor: '#eee',
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 18,
+    marginRight: 8,
+    color: '#000',
+  },
+  inputIcon: {
+    marginHorizontal: 2,
+    padding: 4,
+  },
+  messages: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
@@ -360,12 +467,6 @@ const styles = StyleSheet.create({
     color: '#4F46E5',
     marginRight: 4,
     maxWidth: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
   },
   loadingText: {
     marginTop: 12,

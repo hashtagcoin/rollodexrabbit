@@ -29,7 +29,7 @@ export default function PostDetails() {
       const { data: postData, error: postError } = await supabase
         .from('posts')
         .select('*')
-        .eq('id', id)
+        .eq('post_id', id)
         .single();
       if (postError) throw postError;
 
@@ -37,14 +37,17 @@ export default function PostDetails() {
         .from('user_profiles')
         .select('full_name, avatar_url')
         .eq('id', postData.user_id)
-        .single();
-      if (profileError) throw profileError;
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn(`Could not fetch profile for user_id ${postData.user_id}:`, profileError);
+      }
 
       // Enrich postData with user profile info
       const enrichedPost = {
         ...postData,
-        full_name: profileData.full_name,
-        avatar_url: profileData.avatar_url,
+        full_name: profileData?.full_name,
+        avatar_url: profileData?.avatar_url,
       };
       setPost(enrichedPost);
 

@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -34,9 +35,52 @@ export default function EditProfile() {
   const [preferredFormats, setPreferredFormats] = useState<string[]>([]);
 
   // ModernImagePicker avatar handler
-  const handleAvatarPicked = (uri: string | null) => {
-    setAvatarUrl(uri);
+  const handleAvatarPicked = async (uri: string | null) => {
+    if (!uri) {
+      setAvatarUrl(null);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Get file extension
+      const extMatch = uri.match(/\.([a-zA-Z0-9]+)$/);
+      const ext = extMatch ? extMatch[1] : 'jpg';
+      const fileName = `avatar/${user.id}_${Date.now()}.${ext}`;
+
+      let fileOrBlob: Blob | File;
+      if (Platform.OS === 'web' && (window as any).pickedFile) {
+        // If ModernImagePicker exposes the File object on web
+        fileOrBlob = (window as any).pickedFile;
+      } else {
+        const response = await fetch(uri);
+        fileOrBlob = await response.blob();
+      }
+      if (!fileOrBlob || (fileOrBlob as any).size === 0) {
+        Alert.alert('Upload failed', 'Could not read the image data.');
+        setLoading(false);
+        return;
+      }
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, fileOrBlob, { contentType: fileOrBlob.type || 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      // Get public URL
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      if (!publicUrlData?.publicUrl) throw new Error('Failed to get public URL for avatar');
+      setAvatarUrl(publicUrlData.publicUrl);
+    } catch (e: any) {
+      setError(e.message || 'Failed to upload avatar');
+      Alert.alert('Upload failed', e.message || 'Failed to upload avatar');
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   // Preset options
   const COMFORT_TRAITS = [
