@@ -25,6 +25,8 @@ import {
   UserPlus
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
+import SharePostModal from '../../../components/SharePostModal'; // Added import
+import { User } from '@supabase/supabase-js'; // Added import
 
 // Constants for header heights
 const APP_HEADER_HEIGHT = 100; // Further increased app header height to prevent overlap
@@ -40,19 +42,23 @@ type Post = {
   author_avatar_url: string | null;
   likes_count: number;
   comments_count: number;
+  user_liked?: boolean; // Added user_liked property
 };
 
 export default function CommunityFeed() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
-  
+  const [currentUserSession, setCurrentUserSession] = useState<User | null>(null); // Added state for current user
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false); // Added state for modal visibility
+  const [sharingPostId, setSharingPostId] = useState<string | null>(null); // Added state for post to share
+
   // Animation refs and states for the sticky header
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollYValue = useRef(0);
   const lastScrollDirection = useRef<'up' | 'down'>('up');
   const headerTranslateY = useRef(new Animated.Value(0)).current;
-  
+
   // Track scroll direction and animate header
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -125,7 +131,18 @@ export default function CommunityFeed() {
 
   useEffect(() => {
     loadPosts();
+    fetchCurrentUser();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Error fetching session:', error);
+      setCurrentUserSession(null);
+      return;
+    }
+    setCurrentUserSession(session?.user ?? null);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -179,6 +196,7 @@ export default function CommunityFeed() {
             return {
               ...p,
               likes_count: p.likes_count + (actionTaken === 'liked' ? 1 : -1),
+              user_liked: actionTaken === 'liked' // Update user_liked status
             };
           }
           return p;
@@ -188,6 +206,30 @@ export default function CommunityFeed() {
     } catch (error) {
       console.error('Error liking/unliking post:', error);
     }
+  };
+
+  // Handlers for SharePostModal
+  const handleOpenShareModal = (postId: string) => {
+    if (!currentUserSession) {
+        console.log('Not Logged In', 'You need to be logged in to share posts.');
+        fetchCurrentUser(); // Try to refetch user, maybe session expired
+        return;
+    }
+    setSharingPostId(postId);
+    setIsShareModalVisible(true);
+  };
+
+  const handleCloseShareModal = () => {
+    setIsShareModalVisible(false);
+    setSharingPostId(null);
+  };
+
+  const handleConfirmShare = (postId: string, selectedFriendIds: string[]) => {
+    console.log(`Post ${postId} shared with friends: ${selectedFriendIds.join(', ')}`);
+    // Here you would typically call a Supabase function or insert into a 'shares' or 'notifications' table
+    // For now, we just log and close
+    console.log('Shared!', `Post shared with ${selectedFriendIds.length} friend(s).`);
+    // TODO: Implement actual notification/sharing logic with Supabase
   };
 
   // Render the sticky navigation header
@@ -336,7 +378,7 @@ export default function CommunityFeed() {
                   <Text style={styles.actionText}>{post.comments_count}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.postActionButton}>
+                <TouchableOpacity style={styles.postActionButton} onPress={() => handleOpenShareModal(post.post_id)}> 
                   <Share2 size={24} color="#666" />
                 </TouchableOpacity>
 
@@ -349,6 +391,15 @@ export default function CommunityFeed() {
         )}
         </Animated.ScrollView>
       </View>
+      {sharingPostId && currentUserSession && (
+        <SharePostModal
+          isVisible={isShareModalVisible}
+          onClose={handleCloseShareModal}
+          postId={sharingPostId}
+          onShare={handleConfirmShare} // This will be updated later for notifications
+          currentUser={currentUserSession}
+        />
+      )}
     </View>
   );
 }
