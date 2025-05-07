@@ -528,9 +528,9 @@ export default function ProfileScreen() {
                   <Text style={styles.viewAllText}>View All Friends</Text>
                 </TouchableOpacity>
 
-                {friends.slice(0, 5).map((item) => (
+                {friends.slice(0, 5).map((item, index) => (
                   <TouchableOpacity
-                    key={item.id}
+                    key={item.id ?? index} 
                     style={styles.listCard}
                     onPress={() => router.push(`/profile/friends/${item.id}`)}
                   >
