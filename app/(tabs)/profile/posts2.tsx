@@ -16,7 +16,7 @@ import AppHeader from '../../../components/AppHeader';
 import { useIsFocused } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
-const SCROLL_THRESHOLD = 50;
+const SCROLL_TOP_THRESHOLD = 10; // Threshold to consider as "at the top"
 
 export default function UserPostsScreen2() {
   const params = useLocalSearchParams();
@@ -26,9 +26,9 @@ export default function UserPostsScreen2() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<any[]>([]); // Will be augmented with comments
   const [profile, setProfile] = useState<any>(null);
-  const [fabVisible, setFabVisible] = useState(false);
+  const [fabVisible, setFabVisible] = useState(true); // FAB visible by default
   const isFocused = useIsFocused();
 
   useEffect(() => {
@@ -43,8 +43,13 @@ export default function UserPostsScreen2() {
   }, [userId, navigation]);
 
   useEffect(() => {
-    console.log('[FAB DEBUG] isFocused listener. Value:', isFocused);
-    if (!isFocused) {
+    console.log('[FAB DEBUG] isFocused listener for FAB. Value:', isFocused);
+    if (isFocused) {
+      // When screen becomes focused, assume not scrolling and show FAB.
+      // Scroll events will hide it if user scrolls immediately.
+      setFabVisible(true); 
+    } else {
+      // If screen is not focused, always hide FAB.
       console.log('[FAB DEBUG] Screen not focused, hiding FAB.');
       setFabVisible(false);
     }
@@ -58,6 +63,7 @@ export default function UserPostsScreen2() {
         throw new Error('User ID is required');
       }
 
+      // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select('*')
@@ -67,6 +73,7 @@ export default function UserPostsScreen2() {
       if (profileError) throw profileError;
       setProfile(profileData);
 
+      // Fetch posts
       const { data: postsData, error: postsError } = await supabase
         .from('posts_with_users')
         .select('*')
@@ -74,7 +81,35 @@ export default function UserPostsScreen2() {
         .order('post_created_at', { ascending: false });
 
       if (postsError) throw postsError;
-      setPosts(postsData || []);
+
+      // Fetch comments for each post
+      if (postsData) {
+        const postsWithComments = await Promise.all(
+          postsData.map(async (post) => {
+            const { data: commentsData, error: commentsError } = await supabase
+              .from('comments')
+              .select(`
+                id,
+                content,
+                created_at,
+                user_id,
+                user_profiles ( username, avatar_url )
+              `)
+              .eq('post_id', post.post_id)
+              .order('created_at', { ascending: true })
+              .limit(2); // Fetch top 2 comments
+
+            if (commentsError) {
+              console.error(`Error fetching comments for post ${post.post_id}:`, commentsError.message);
+              return { ...post, comments: [] };
+            }
+            return { ...post, comments: commentsData || [] };
+          })
+        );
+        setPosts(postsWithComments);
+      } else {
+        setPosts([]);
+      }
 
     } catch (e: unknown) {
       console.error('Error loading posts:', e instanceof Error ? e.message : 'Unknown error');
@@ -89,30 +124,12 @@ export default function UserPostsScreen2() {
     await loadData();
   };
 
-  const handleScroll = (event: any) => {
-    const currentOffset = event.nativeEvent.contentOffset.y;
-    console.log('[FAB DEBUG] handleScroll - currentOffset:', currentOffset);
-    if (currentOffset > SCROLL_THRESHOLD) {
-      if (isFocused) {
-        console.log('[FAB DEBUG] Scroll threshold breached and screen focused, attempting to show FAB.');
-        setFabVisible(true);
-      } else {
-        console.log('[FAB DEBUG] Scroll threshold breached BUT screen NOT focused.');
-        setFabVisible(false); // Ensure it's false if not focused, even if scrolled
-      }
-    } else {
-      console.log('[FAB DEBUG] Scroll threshold NOT breached, attempting to hide FAB.');
-      setFabVisible(false);
-    }
-  };
-
   const handleGoBack = () => {
     router.push('/(tabs)/profile');
   };
 
   return (
     <View style={styles.container}>
-      <Text style={{fontSize: 24, color: 'purple', textAlign: 'center', padding: 20, fontWeight: 'bold'}}>!! POSTS2 TEST !!</Text>
       <View style={styles.customHeader}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
           <ArrowLeft size={24} color="#000" />
@@ -128,7 +145,24 @@ export default function UserPostsScreen2() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        onScroll={handleScroll}
+        onScrollBeginDrag={() => {
+          if (isFocused) {
+            console.log('[FAB DEBUG] onScrollBeginDrag - hiding FAB');
+            setFabVisible(false);
+          }
+        }}
+        onMomentumScrollEnd={() => {
+          if (isFocused) {
+            console.log('[FAB DEBUG] onMomentumScrollEnd - showing FAB');
+            setFabVisible(true);
+          }
+        }}
+        onScrollEndDrag={(e) => {
+          if (isFocused && e.nativeEvent.velocity?.y === 0) {
+            console.log('[FAB DEBUG] onScrollEndDrag (no momentum) - showing FAB');
+            setFabVisible(true);
+          }
+        }}
         scrollEventThrottle={16}
       >
         {loading ? (
@@ -175,7 +209,7 @@ export default function UserPostsScreen2() {
                       {profile?.username || 'User'}
                     </Text>
                     <Text style={styles.postDate}>
-                      {new Date(post.created_at).toLocaleDateString()}
+                      {new Date(post.post_created_at).toLocaleDateString()}
                     </Text>
                   </View>
                 </View>
@@ -199,6 +233,32 @@ export default function UserPostsScreen2() {
                     <Text style={styles.actionCount}>{post.comments_count || 0}</Text>
                   </View>
                 </View>
+
+                {/* Display Comments */}
+                {post.comments && post.comments.length > 0 && (
+                  <View style={styles.commentsContainer}>
+                    <Text style={styles.commentsHeader}>Comments:</Text>
+                    {post.comments.map((comment: any) => (
+                      <View key={comment.id} style={styles.commentItem}>
+                        {comment.user_profiles?.avatar_url ? (
+                          <Image 
+                            source={{ uri: comment.user_profiles.avatar_url }}
+                            style={styles.commentAvatar}
+                          />
+                        ) : (
+                          <View style={styles.commentAvatarPlaceholder} />
+                        )}
+                        <View style={styles.commentContentContainer}>
+                          <Text style={styles.commentUsername}>
+                            {comment.user_profiles?.username || 'User'}
+                          </Text>
+                          <Text style={styles.commentText}>{comment.content}</Text>
+                        </View>
+                      </View>
+                    ))}
+                    {/* Optionally, add a 'View all comments' button if post.comments_count > post.comments.length */}
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -231,28 +291,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   customHeader: {
-    paddingTop: 60,
-    paddingBottom: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    zIndex: 100,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#f8f8f8',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
+    padding: 5,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
+    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,
@@ -261,7 +314,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 50,
   },
   loadingText: {
     fontSize: 16,
@@ -271,93 +324,138 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingVertical: 50,
+    marginTop: 50, // Added margin for better visibility
   },
   emptyText: {
     fontSize: 16,
     color: '#666',
-    textAlign: 'center',
   },
   postsContainer: {
-    padding: 16,
+    padding: 10,
   },
   postsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 12,
-    marginBottom: 12,
+    marginBottom: 15,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eee',
   },
   postsCount: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
   },
   postCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    padding: 16,
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.00,
+    elevation: 1,
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   avatarImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 12,
+    marginRight: 10,
   },
   postHeaderText: {
     flex: 1,
   },
   username: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
   postDate: {
     fontSize: 12,
-    color: '#999',
-    marginTop: 2,
+    color: '#666',
   },
   postCaption: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 12,
-    lineHeight: 22,
+    fontSize: 15,
+    marginBottom: 10,
+    lineHeight: 20, 
   },
   postImage: {
     width: '100%',
-    height: width * 0.7,
+    height: undefined, // Let aspect ratio define height
+    aspectRatio: 16 / 9,
     borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: '#f5f5f5',
+    marginBottom: 10,
+    backgroundColor: '#e1e1e1', // Placeholder color
   },
   postActions: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 12,
+    borderTopColor: '#eee',
+    paddingTop: 10,
+    marginTop: 5,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 24,
+    marginRight: 15,
   },
   actionCount: {
+    marginLeft: 5,
     fontSize: 14,
     color: '#666',
-    marginLeft: 6,
+  },
+  commentsContainer: {
+    marginTop: 15,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  commentsHeader: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#444',
+  },
+  commentItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    padding: 8,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 6,
+  },
+  commentAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: '#e1e1e1',
+  },
+  commentAvatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: '#ccc',
+  },
+  commentContentContainer: {
+    flex: 1,
+  },
+  commentUsername: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#333',
+  },
+  commentText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
   },
   fab: {
     position: 'absolute',
@@ -371,7 +469,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     zIndex: 1000,
