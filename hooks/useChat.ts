@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../providers/AuthProvider';
+import * as Crypto from 'expo-crypto';
 import { 
   mockConversations, 
   mockConversationDetails,
@@ -136,15 +137,15 @@ export const useConversations = () => {
 
     try {
       // Create new conversation
-      const { data: conversationData, error: conversationError } = await supabase
+      const newConversationId = Crypto.randomUUID();
+
+      const { error: conversationError } = await supabase
         .from('chat_conversations')
-        .insert({})
-        .select()
-        .single();
+        .insert({ id: newConversationId });
 
       if (conversationError) throw conversationError;
 
-      const conversationId = conversationData.id;
+      const conversationId = newConversationId; // Use the generated ID
 
       // Add participants
       const participantsToInsert = participantIds.map(participantId => ({
@@ -161,7 +162,7 @@ export const useConversations = () => {
       // Refresh conversations list
       fetchConversations();
 
-      return { data: { conversationId } };
+      return { data: { conversationId } }; // Return the generated ID
     } catch (e: unknown) {
       console.error('Error creating conversation:', e instanceof Error ? e.message : 'Unknown error');
       return { error: e instanceof Error ? e.message : 'An unknown error occurred' };

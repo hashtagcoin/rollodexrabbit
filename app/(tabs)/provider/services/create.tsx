@@ -9,10 +9,15 @@ import {
   Switch,
   Image,
   Alert,
+  Platform,
+  ActivityIndicator, // Added ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
 import { useAuth } from '../../../../providers/AuthProvider';
+import ModernImagePicker from '../../../../components/ModernImagePicker';
+import { decode as base64ToArrayBuffer } from '../../../../lib/base64Utils';
+import * as FileSystem from 'expo-file-system';
 import {
   ArrowLeft,
   Camera,
@@ -26,7 +31,7 @@ export default function CreateServiceScreen() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth(); // Get authenticated user from AuthProvider
   const [hasProviderProfile, setHasProviderProfile] = useState(false);
-  
+
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -34,14 +39,15 @@ export default function CreateServiceScreen() {
   const [format, setFormat] = useState('');
   const [price, setPrice] = useState('');
   const [available, setAvailable] = useState(true);
-  
+
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [imageUploading, setImageUploading] = useState(false);
 
   // Check if user has a provider profile
   useEffect(() => {
     const checkProviderProfile = async () => {
       if (!user?.id) return;
-      
+
       try {
         console.log('Checking if user has provider profile, user ID:', user.id);
         const { data, error } = await supabase
@@ -49,19 +55,19 @@ export default function CreateServiceScreen() {
           .select('id')
           .eq('id', user.id)
           .single();
-          
+
         if (error) {
           console.error('Error checking provider profile:', error.message);
           return;
         }
-        
+
         setHasProviderProfile(!!data);
         console.log('Provider profile exists:', !!data);
       } catch (e) {
         console.error('Error checking provider profile:', e);
       }
     };
-    
+
     checkProviderProfile();
   }, [user]);
 
@@ -75,6 +81,89 @@ export default function CreateServiceScreen() {
     'in_person', 'online', 'hybrid', 'group'
   ];
 
+  const handleServiceImagePicked = async (uri: string | null) => {
+    if (!uri) {
+      return;
+    }
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to upload images.');
+      return;
+    }
+
+    try {
+      setImageUploading(true);
+      setError(null);
+
+      const extMatch = uri.match(/\.([a-zA-Z0-9]+)$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+      const baseFileName = `${user.id}_${Date.now()}.${ext}`;
+      const pathInBucket = baseFileName;
+
+      let uploadBody: FormData | ArrayBuffer;
+      let uploadContentType: string;
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const webBlob = await response.blob();
+        if (!webBlob || webBlob.size === 0) {
+          Alert.alert('Error', 'Web: Could not read image data or image is empty.');
+          setImageUploading(false);
+          return;
+        }
+        uploadContentType = webBlob.type || `image/${ext}`;
+        const formData = new FormData();
+        formData.append('file', webBlob, baseFileName);
+        uploadBody = formData;
+      } else {
+        const base64String = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        if (!base64String) {
+          Alert.alert('Error', 'Native: Failed to read file as base64 string.');
+          setImageUploading(false);
+          return;
+        }
+        try {
+          uploadBody = base64ToArrayBuffer(base64String);
+        } catch (e) {
+          console.error('Error converting base64 to ArrayBuffer:', e);
+          Alert.alert('Error', 'Native: Failed to convert image data.');
+          setImageUploading(false);
+          return;
+        }
+        uploadContentType = `image/${ext}`;
+        if (!uploadBody || uploadBody.byteLength === 0) {
+          Alert.alert('Error', 'Native: Could not process image data to ArrayBuffer or ArrayBuffer is empty.');
+          setImageUploading(false);
+          return;
+        }
+      }
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('providerimages')
+        .upload(pathInBucket, uploadBody, {
+          contentType: uploadContentType,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError);
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('providerimages').getPublicUrl(pathInBucket);
+      if (!publicUrlData?.publicUrl) throw new Error('Failed to get public URL for service image');
+
+      setUploadedImages(prevImages => [...prevImages, publicUrlData.publicUrl]);
+
+    } catch (e: any) {
+      setError(e.message || 'Failed to upload service image');
+      Alert.alert('Upload failed', e.message || 'Failed to upload service image');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const handleCreateService = async () => {
     try {
       // Validate form fields
@@ -82,7 +171,7 @@ export default function CreateServiceScreen() {
         setError('Please fill in all required fields');
         return;
       }
-      
+
       if (isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
         setError('Please enter a valid price');
         return;
@@ -94,11 +183,11 @@ export default function CreateServiceScreen() {
         Alert.alert(
           'Authentication Required',
           'Please sign in to create a service',
-          [{ text: 'OK', onPress: () => router.push('/login') }]
+          [{ text: 'OK', onPress: () => router.push('/login' as any) }]
         );
         return;
       }
-      
+
       // Check if user has a provider profile
       if (!hasProviderProfile) {
         const createProviderProfile = async () => {
@@ -114,12 +203,12 @@ export default function CreateServiceScreen() {
               })
               .select()
               .single();
-              
+
             if (profileError) {
               console.error('Error creating provider profile:', profileError);
               throw new Error(profileError.message);
             }
-            
+
             console.log('Provider profile created:', profile);
             setHasProviderProfile(true);
             return true;
@@ -128,34 +217,31 @@ export default function CreateServiceScreen() {
             return false;
           }
         };
-        
+
         Alert.alert(
           'Provider Profile Required',
           'You need a provider profile to create services. Would you like to create one now?',
           [
-            { 
-              text: 'Yes', 
+            {
+              text: 'Yes',
               onPress: async () => {
                 const success = await createProviderProfile();
                 if (success) {
                   Alert.alert(
-                    'Success', 
+                    'Success',
                     'Provider profile created. You can now create services.',
                     [{ text: 'OK' }]
                   );
                 } else {
                   Alert.alert(
-                    'Error', 
+                    'Error',
                     'Failed to create provider profile. Please try again later.',
                     [{ text: 'OK' }]
                   );
                 }
-              } 
+              }
             },
-            { 
-              text: 'No', 
-              style: 'cancel'
-            }
+            { text: 'No', style: 'cancel' }
           ]
         );
         return;
@@ -165,8 +251,8 @@ export default function CreateServiceScreen() {
       setError(null);
 
       console.log('Creating service with provider ID:', user.id);
-      
-      // Create service in database - removed media_urls field that doesn't exist in schema
+
+      // Create service in database
       const { data, error: insertError } = await supabase
         .from('services')
         .insert({
@@ -176,8 +262,8 @@ export default function CreateServiceScreen() {
           category,
           format,
           price: parseFloat(price),
-          available
-          // Removed media_urls field that doesn't exist in the database schema
+          available,
+          image_urls: uploadedImages
         })
         .select()
         .single();
@@ -199,14 +285,6 @@ export default function CreateServiceScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // For demo purposes, using a placeholder image
-  const handleAddImage = () => {
-    setUploadedImages([
-      ...uploadedImages,
-      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=2070&auto=format&fit=crop'
-    ]);
   };
 
   const handleRemoveImage = (index: number) => {
@@ -348,14 +426,16 @@ export default function CreateServiceScreen() {
                   </TouchableOpacity>
                 </View>
               ))}
-              
-              <TouchableOpacity
-                style={styles.addImageButton}
-                onPress={handleAddImage}
-              >
-                <Plus size={24} color="#666" />
-                <Text style={styles.addImageText}>Add Image</Text>
-              </TouchableOpacity>
+              <ModernImagePicker
+                onImagePicked={handleServiceImagePicked}
+                size={80} // Example size, adjust as needed
+                shape="square" // Example shape
+                label="Add Image"
+                crop={true} // Example, adjust as needed
+                aspect={[4, 3]} // Example aspect ratio for crop
+                disabled={imageUploading} // Disable if an image is currently uploading
+              />
+              {imageUploading && <ActivityIndicator style={{ marginTop: 10 }} />}
             </View>
           </View>
         </View>
@@ -517,21 +597,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  addImageButton: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#e1e1e1',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addImageText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
   },
   footer: {
     padding: 24,
