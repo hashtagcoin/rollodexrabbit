@@ -14,6 +14,9 @@ type Comment = {
 };
 
 export default function PostDetails() {
+  const params = useLocalSearchParams();
+  console.log("[SCREEN] Loaded community/post.tsx", { params });
+  console.log("[DEBUG] Params received in community/post.tsx", params);
   const { id } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,36 +26,45 @@ export default function PostDetails() {
   const [submitting, setSubmitting] = useState(false);
 
   async function loadPost() {
+    console.log('[loadPost] Called with id:', id);
     try {
       setLoading(true);
-      // Fetch post and author profile
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('post_id', id)
-        .single();
-      if (postError) throw postError;
+      setError(null); // Clear previous errors
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('full_name, avatar_url')
-        .eq('id', postData.user_id)
-        .maybeSingle();
+      console.log('[loadPost] Fetching from posts_with_users...');
+      const { data: enrichedPostData, error: postError } = await supabase
+        .from('posts_with_users') // Use the view
+        .select('*') // Select all columns from the view
+        .eq('post_id', id as string) // Ensure id is correctly typed/used for post_id
+        .single(); // Expect a single post
 
-      if (profileError) {
-        console.warn(`Could not fetch profile for user_id ${postData.user_id}:`, profileError);
+      if (postError) {
+        console.error('[loadPost] Supabase error fetching post:', postError);
+        throw postError;
+      }
+      if (!enrichedPostData) {
+        console.warn('[loadPost] Post not found in view for id:', id);
+        throw new Error('Post not found in view.');
       }
 
-      // Enrich postData with user profile info
-      const enrichedPost = {
-        ...postData,
-        full_name: profileData?.full_name,
-        avatar_url: profileData?.avatar_url,
-      };
-      setPost(enrichedPost);
+      console.log('[loadPost] enrichedPostData:', enrichedPostData);
 
-      // Join comments with user profiles for display
-      const { data, error: commentsError } = await supabase
+      // The enrichedPostData should now contain fields like author_full_name, author_avatar_url directly.
+      // Map them to the structure the rest of the component expects for 'post' state.
+      const postForState = {
+        ...enrichedPostData,
+        full_name: enrichedPostData.author_full_name, // Assuming view provides 'author_full_name'
+        avatar_url: enrichedPostData.author_avatar_url, // Assuming view provides 'author_avatar_url'
+        caption: enrichedPostData.content, // Assuming view provides 'content' for caption
+        media_urls: enrichedPostData.media_urls, // Assuming view provides 'media_urls'
+        created_at: enrichedPostData.post_created_at, // Assuming view provides 'post_created_at'
+        // Ensure all fields expected by the component's render logic for 'post' are present and correctly mapped.
+      };
+      setPost(postForState);
+
+      // --- Comment loading logic (remains largely the same) ---
+      console.log('[loadPost] Fetching comments...');
+      const { data: commentsData, error: commentsError } = await supabase
         .from('comments')
         .select(`
           id,
@@ -63,12 +75,16 @@ export default function PostDetails() {
         .eq('post_id', id)
         .order('created_at', { ascending: false });
 
-      if (commentsError) throw commentsError;
+      if (commentsError) {
+        console.error('[loadPost] Supabase error fetching comments:', commentsError);
+        throw commentsError;
+      }
       
-      // Fetch user profiles separately and join manually
-      if (data && data.length > 0) {
+      console.log('[loadPost] commentsData:', commentsData);
+      // Fetch user profiles separately and join manually for comments
+      if (commentsData && commentsData.length > 0) {
         // Get unique user IDs
-        const userIds = [...new Set(data.map((comment) => comment.user_id))];
+        const userIds = [...new Set(commentsData.map((comment) => comment.user_id))];
         
         // Fetch user profiles
         const { data: userProfiles, error: userError } = await supabase
@@ -76,7 +92,10 @@ export default function PostDetails() {
           .select('id, full_name, avatar_url')
           .in('id', userIds);
         
-        if (userError) throw userError;
+        if (userError) {
+          console.error('[loadPost] Supabase error fetching user profiles:', userError);
+          throw userError;
+        }
         
         // Create a lookup map for user profiles
         const userMap: { [key: string]: { id: string, full_name: string, avatar_url: string | null } } = {};
@@ -85,26 +104,37 @@ export default function PostDetails() {
         });
         
         // Join the data manually
-        const enrichedComments = data.map(comment => ({
+        const enrichedComments = commentsData.map(comment => ({
           ...comment,
           full_name: userMap[comment.user_id]?.full_name || 'Unknown User',
           avatar_url: userMap[comment.user_id]?.avatar_url || null
         }));
         
+        console.log('[loadPost] Enriched comments:', enrichedComments);
         setComments(enrichedComments);
       } else {
+        console.log('[loadPost] No comments found.');
         setComments([]);
       }
     } catch (e: unknown) {
-      console.error('Error loading post:', e);
-      setError(e instanceof Error ? e.message : 'Failed to load post');
+      console.error('Error loading post and comments:', e); // Updated error message
+      const errorMessage = e instanceof Error ? e.message : 'Failed to load post details';
+      setError(errorMessage);
     } finally {
+      console.log('[loadPost] Finally block reached, setLoading to false.');
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadPost();
+    console.log('[useEffect] Detected id:', id);
+    if (id && typeof id === 'string') { // Ensure id is a string as expected by Supabase
+      loadPost();
+    } else {
+      console.warn('[useEffect] Post ID is missing or not a string. ID:', id);
+      setError("Post ID is missing or invalid.");
+      setLoading(false); // Stop loading if ID is missing/invalid
+    }
   }, [id]);
 
   const handleComment = async () => {

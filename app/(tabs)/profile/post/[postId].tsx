@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+                  import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { supabase } from '../../../../lib/supabase';
 import { ArrowLeft, Heart } from 'lucide-react-native';
 
 export default function PostDetailScreen() {
+  const params = useLocalSearchParams();
+  console.log("[SCREEN] Loaded profile/post/[postId].tsx", { params });
   const { postId: rawPostId } = useLocalSearchParams();
   const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
 

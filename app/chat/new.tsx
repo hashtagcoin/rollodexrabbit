@@ -147,6 +147,13 @@ export default function ChatScreen() {
     setError(null);
     // 1. Try to find an existing 1:1 conversation
     const findOrCreateConversation = async () => {
+      console.log('[ChatScreen] Attempting to find/create conversation. Current userId:', userId, 'Target friendId:', friendId);
+      if (!userId || !friendId) {
+        console.error('[ChatScreen] Missing userId or friendId. Cannot proceed.');
+        setError('User ID or Friend ID is missing.');
+        setLoading(false);
+        return;
+      }
       // Find conversations with exactly these two participants
       const { data: participantRows, error: partErr } = await supabase
         .from('chat_participants')
@@ -179,15 +186,24 @@ export default function ChatScreen() {
         .select()
         .single();
       if (convErr || !conv) {
+        console.error('[ChatScreen] Failed to create conversation. Supabase error:', convErr);
         setError('Failed to create conversation');
         setLoading(false);
         return;
       }
       const cid = conv.id;
-      await supabase.from('chat_participants').insert([
+      const { error: participantInsertErr } = await supabase.from('chat_participants').insert([
         { conversation_id: cid, user_id: userId },
         { conversation_id: cid, user_id: friendId },
       ]);
+
+      if (participantInsertErr) {
+        console.error('[ChatScreen] Failed to insert chat participants. Supabase error:', participantInsertErr);
+        setError('Failed to add participants to conversation');
+        setLoading(false);
+        return;
+      }
+
       setConversationId(cid);
       setLoading(false);
     };

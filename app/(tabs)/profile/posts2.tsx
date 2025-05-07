@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,40 +11,53 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { ArrowLeft, Heart, MessageSquare } from 'lucide-react-native';
+import { ArrowLeft, Heart, MessageSquare, Plus } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
+import { useIsFocused } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
+const SCROLL_THRESHOLD = 50;
 
-export default function UserPostsScreen() {
+export default function UserPostsScreen2() {
+  const params = useLocalSearchParams();
+  console.log("[SCREEN] Loaded profile/posts.tsx", { params });
+  console.log('[FAB DEBUG] UserPostsScreen component rendered'); // Basic render log
   const { userId } = useLocalSearchParams();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [fabVisible, setFabVisible] = useState(false);
+  const isFocused = useIsFocused();
 
   useEffect(() => {
+    console.log('[FAB DEBUG] isFocused effect triggered. isFocused:', isFocused);
     loadData();
-    
-    // Set up custom back handler
+
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // If going back to profile tab, prevent default and use router
       router.push('/(tabs)/profile');
     });
-    
+
     return unsubscribe;
   }, [userId, navigation]);
+
+  useEffect(() => {
+    console.log('[FAB DEBUG] isFocused listener. Value:', isFocused);
+    if (!isFocused) {
+      console.log('[FAB DEBUG] Screen not focused, hiding FAB.');
+      setFabVisible(false);
+    }
+  }, [isFocused]);
 
   async function loadData() {
     try {
       setLoading(true);
-      
+
       if (!userId) {
         throw new Error('User ID is required');
       }
 
-      // Load user profile
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select('*')
@@ -54,13 +67,12 @@ export default function UserPostsScreen() {
       if (profileError) throw profileError;
       setProfile(profileData);
 
-      // Load user posts
       const { data: postsData, error: postsError } = await supabase
         .from('posts_with_users')
         .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      
+        .eq('author_profile_id', userId)
+        .order('post_created_at', { ascending: false });
+
       if (postsError) throw postsError;
       setPosts(postsData || []);
 
@@ -77,12 +89,30 @@ export default function UserPostsScreen() {
     await loadData();
   };
 
+  const handleScroll = (event: any) => {
+    const currentOffset = event.nativeEvent.contentOffset.y;
+    console.log('[FAB DEBUG] handleScroll - currentOffset:', currentOffset);
+    if (currentOffset > SCROLL_THRESHOLD) {
+      if (isFocused) {
+        console.log('[FAB DEBUG] Scroll threshold breached and screen focused, attempting to show FAB.');
+        setFabVisible(true);
+      } else {
+        console.log('[FAB DEBUG] Scroll threshold breached BUT screen NOT focused.');
+        setFabVisible(false); // Ensure it's false if not focused, even if scrolled
+      }
+    } else {
+      console.log('[FAB DEBUG] Scroll threshold NOT breached, attempting to hide FAB.');
+      setFabVisible(false);
+    }
+  };
+
   const handleGoBack = () => {
     router.push('/(tabs)/profile');
   };
 
   return (
     <View style={styles.container}>
+      <Text style={{fontSize: 24, color: 'purple', textAlign: 'center', padding: 20, fontWeight: 'bold'}}>!! POSTS2 TEST !!</Text>
       <View style={styles.customHeader}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
           <ArrowLeft size={24} color="#000" />
@@ -98,6 +128,8 @@ export default function UserPostsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -115,12 +147,21 @@ export default function UserPostsScreen() {
 
             {posts.map((post) => (
               <TouchableOpacity 
-                key={post.id} 
+                key={post.post_id} 
                 style={styles.postCard}
-                onPress={() => router.push({
-                  pathname: '/(tabs)/profile/post/[postId]',
-                  params: { postId: post.id }
-                })}
+                onPress={() => {
+                  console.log(`[ProfilePosts] Tapped post_id: ${post.post_id}, for author_profile_id: ${post.author_profile_id}. Navigating to user's post list.`);
+                  if (post.author_profile_id) {
+                    console.log("[DEBUG] About to navigate to /profile/posts", { userId: post.author_profile_id });
+                    console.trace();
+                    router.push({
+                      pathname: '/profile/posts2', 
+                      params: { userId: post.author_profile_id } 
+                    });
+                  } else {
+                    console.error('[ProfilePosts] Cannot navigate: author_profile_id is missing from post object for post_id:', post.post_id);
+                  }
+                }}
               >
                 <View style={styles.postHeader}>
                   <Image
@@ -163,6 +204,23 @@ export default function UserPostsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      {(() => {
+        console.log('[FAB DEBUG] Rendering check: fabVisible =', fabVisible, ', isFocused =', isFocused);
+        if (fabVisible && isFocused) {
+          return (
+            <TouchableOpacity
+              style={styles.fab}
+              onPress={() => router.push('/community/create')}
+              activeOpacity={0.8}
+            >
+              <Plus size={28} color="#fff" />
+            </TouchableOpacity>
+          );
+        }
+        return null;
+      })()}
     </View>
   );
 }
@@ -300,5 +358,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginLeft: 6,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    backgroundColor: '#007AFF',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    zIndex: 1000,
   },
 });

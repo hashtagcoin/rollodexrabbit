@@ -360,7 +360,7 @@ export default function ProfileScreen() {
                 <TouchableOpacity 
                   style={styles.viewAllButton}
                   onPress={() => router.push({
-                    pathname: '/profile/posts' as any,
+                    pathname: '/profile/posts2' as any,
                     params: { userId: profile?.id }
                   })}
                 >
@@ -371,8 +371,8 @@ export default function ProfileScreen() {
                     key={post.post_id} 
                     style={styles.gridPostCard}
                     onPress={() => router.push({
-                      pathname: '/(tabs)/community/post' as any,
-                      params: { id: post.id }
+                      pathname: '/profile/posts2' as any,
+                      params: { userId: profile?.id, postId: post.post_id }
                     })}
                   >
                     {post.media_urls && post.media_urls[0] ? (
