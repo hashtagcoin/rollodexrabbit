@@ -282,9 +282,8 @@ export class RewardsService {
     try {
       const { data, error } = await supabase.rpc('update_achievement_progress', {
         p_user_id: userId,
-        p_achievement_type: achievementType,
-        p_progress_increment: progressIncrement,
-        p_target: target || null
+        p_achievement_key: achievementType,
+        p_progress_increment: progressIncrement
       });
 
       if (error) throw new RewardsError(error.message);

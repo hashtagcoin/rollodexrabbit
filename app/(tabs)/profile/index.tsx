@@ -142,7 +142,7 @@ export default function ProfileScreen() {
         .from('service_providers')
         .select('id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       
       setIsProvider(!!providerData);
 
