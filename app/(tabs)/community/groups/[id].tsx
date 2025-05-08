@@ -95,14 +95,15 @@ type GroupEvent = {
   description: string | null;
   start_time: string;
   end_time: string;
-  location: { address: string } | null;
-  cover_image_url: string | null;
+  location: { city?: string; full_address: string; [key: string]: any; } | null;
   max_participants: number | null;
   created_by: string;
   created_at: string;
-  status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  event_status: string; // Changed from 'status', type is string from view
   organizer: ProfileBase | null;
   participants: GroupEventParticipant[];
+  creator_name: string | null;
+  participants_going_count: number; // Added for the count from the view
 };
 
 type Group = {
@@ -134,7 +135,7 @@ interface NewEventState {
   description: string;
   startTime: Date;
   endTime: Date;
-  location: { address: string } | null;
+  location: { city?: string; full_address: string; [key: string]: any; } | null;
   maxParticipants: string;
 }
 
@@ -243,7 +244,7 @@ export default function GroupDetails() {
 
   useEffect(() => {
     loadGroup();
-    loadEvents(1);
+    loadGroupEvents(groupId, 1);
     loadPosts(1);
   }, [loadGroup, id]);
 
@@ -727,7 +728,7 @@ export default function GroupDetails() {
         location: null,
         maxParticipants: ''
       });
-      loadEvents(); // Refresh events list
+      loadGroupEvents(groupId); // Refresh events list
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -752,7 +753,7 @@ export default function GroupDetails() {
       // Check if user already has an RSVP for this event
       const { data: existingRSVP, error: checkError } = await supabase
         .from('group_event_participants')
-        .select('*')
+        .select('event_id') // Changed from '*' to 'event_id'
         .eq('event_id', eventId)
         .eq('user_id', currentUser.id)
         .single();
@@ -789,7 +790,7 @@ export default function GroupDetails() {
         throw new Error(rsvpError.message);
       }
 
-      loadEvents(); // Refresh events list
+      loadGroupEvents(groupId); // Refresh events list
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -801,41 +802,41 @@ export default function GroupDetails() {
     }
   };
 
-  const loadEvents = async (page = 1) => {
-    try {
-      setLoadingEvents(true);
-      setError(null);
+  const loadGroupEvents = useCallback(async (currentGroupId: string, page: number = 1, isRefreshing: boolean = false) => {
+    if (!currentGroupId || loadingMoreEvents || (page > 1 && !hasMoreEvents)) return;
 
-      // Skip real database queries for demo build
-      console.log('Using test events data only');
-      
-      // Create test events for the group
-      const allowedStatuses = ['upcoming', 'ongoing', 'completed', 'cancelled'] as const;
-      type AllowedStatus = typeof allowedStatuses[number];
-      const testEvents = createTestGroupEvents(id as string).map(evt => ({
-        ...evt,
-        cover_image_url: null, // Corrected: Assign null directly as test data lacks this field
-        location: typeof evt.location === 'string' ? { address: evt.location } : evt.location,
-        created_by: typeof evt.created_by === 'object' && evt.created_by !== null ? evt.created_by.id : evt.created_by,
-        status: allowedStatuses.includes(evt.status as AllowedStatus) ? evt.status as AllowedStatus : 'upcoming',
-        organizer: evt.organizer || null, // Correct: Assign object or null, remove array wrap
-        participants: Array.isArray(evt.participants)
-          ? evt.participants.map(p => ({
-              user: p.user || null, // Correct: Assign object or null, remove array wrap
-              status: ['going', 'maybe', 'not_going'].includes(p.status) ? p.status as 'going' | 'maybe' | 'not_going' : 'going'
-            }))
-          : []
-      }));
-      
-      // Set the events in state
-      setEvents(testEvents);
-      setHasMoreEvents(false); // No more events to load in test mode
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to load events');
-    } finally {
-      setLoadingEvents(false);
+    if (page === 1) {
+      setLoadingEvents(true);
     }
-  };
+    setLoadingMoreEvents(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('group_events_with_details') // Assuming this view exists and is preferred
+        .select('*')
+        .eq('group_id', currentGroupId)
+        .order('start_time', { ascending: true })
+        .range((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE - 1);
+
+      if (error) {
+        console.error('Error fetching group events:', error.message);
+        Alert.alert('Error', 'Failed to load group events.');
+        setHasMoreEvents(false); // Stop trying if there's an error
+      } else if (data) {
+        setEvents(prevEvents => (page === 1 || isRefreshing) ? (data as GroupEvent[]) : [...prevEvents, ...(data as GroupEvent[])]);
+        setEventsPage(page);
+        setHasMoreEvents(data.length === ITEMS_PER_PAGE);
+      }
+    } catch (e) {
+      console.error('Exception fetching group events:', e);
+      setHasMoreEvents(false);
+    } finally {
+      if (page === 1) {
+        setLoadingEvents(false);
+      }
+      setLoadingMoreEvents(false);
+    }
+  }, [ITEMS_PER_PAGE, loadingMoreEvents, hasMoreEvents]); // Dependencies for useCallback
 
   const loadPosts = async (page = 1) => {
     try {
@@ -896,7 +897,7 @@ export default function GroupDetails() {
 
   const handleLoadMoreEvents = () => {
     if (!loadingMoreEvents && hasMoreEvents) {
-      loadEvents(eventsPage + 1);
+      loadGroupEvents(groupId, eventsPage + 1);
     }
   };
 
@@ -1162,17 +1163,25 @@ export default function GroupDetails() {
   };
 
   const renderEvent = (event: GroupEvent) => {
+    console.log(`[Event ID: ${event.id}] Current User ID: ${currentUser?.id}`);
+    console.log(`[Event ID: ${event.id}] Event Participants Array:`, JSON.stringify(event.participants, null, 2));
+
     const userRSVP = event.participants?.find(p => p.user?.id === currentUser?.id);
-    const goingCount = event.participants?.filter(p => p.status === 'going').length || 0;
+    console.log(`[Event ID: ${event.id}] Calculated userRSVP:`, JSON.stringify(userRSVP, null, 2));
+
+    const goingCount = event.participants_going_count !== undefined ? event.participants_going_count : 0;
     const isFull = event.max_participants !== null && goingCount >= event.max_participants;
 
     return (
-      <View style={styles.eventContainer} key={event.id}>
+      <View style={styles.eventContainer}>
         <View style={styles.eventHeader}>
           <Text style={styles.eventTitle}>{event.title}</Text>
-          <Text style={[styles.eventStatus, styles[`status${event.status}`]]}>
-            {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
-          </Text>
+          {/* Revert to using getEventStatusBadge for safer style and text determination */}
+          {event.event_status && (
+            <View style={[styles.eventStatusBadge, getEventStatusBadge(event.event_status).style]}>
+              <Text style={styles.eventStatusBadgeText}>{getEventStatusBadge(event.event_status).text}</Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.eventDescription}>{event.description}</Text>
@@ -1188,7 +1197,7 @@ export default function GroupDetails() {
           {event.location && (
             <View style={styles.eventDetailRow}>
               <Ionicons name="location-outline" size={16} color="#666" />
-              <Text style={styles.eventDetailText}>{event.location.address}</Text>
+              <Text style={styles.eventDetailText}>{event.location.full_address}</Text>
             </View>
           )}
 
@@ -1203,12 +1212,12 @@ export default function GroupDetails() {
           <View style={styles.eventDetailRow}>
             <Ionicons name="person-outline" size={16} color="#666" />
             <Text style={styles.eventDetailText}>
-              Organized by {event.organizer?.full_name || 'Unknown'}
+              Organized by {event.organizer?.full_name || event.creator_name || 'Unknown'}
             </Text>
           </View>
         </View>
 
-        {event.status === 'upcoming' && (
+        {event.event_status === 'upcoming' && (
           <View style={styles.rsvpButtons}>
             <TouchableOpacity
               style={[
@@ -1319,7 +1328,7 @@ export default function GroupDetails() {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => loadEvents(0)}>
+        <TouchableOpacity style={styles.retryButton} onPress={() => { loadGroup(); loadGroupEvents(groupId, 1); loadPosts(1); }}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -1494,7 +1503,7 @@ export default function GroupDetails() {
             <View style={styles.tabContent}>
               {isGroupAdmin && (
                 <TouchableOpacity
-                  style={styles.createButton}
+                  style={styles.createButton} 
                   onPress={() => setShowCreateEvent(true)}
                 >
                   <Ionicons name="add-circle-outline" size={24} color="#007AFF" />
@@ -1502,22 +1511,34 @@ export default function GroupDetails() {
                 </TouchableOpacity>
               )}
 
-              {loadingEvents ? (
-                <View style={styles.center}>
-                  <ActivityIndicator size="large" color="#007AFF" />
-                </View>
+              {loadingEvents && events.length === 0 ? (
+                <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
+              ) : events.length === 0 ? (
+                <Text style={styles.emptyText}>No events found for this group.</Text>
               ) : (
-                <>
-                  {events.map(event => renderEvent(event))}
-                  {loadingMoreEvents && (
-                    <View style={styles.loadingMore}>
-                      <ActivityIndicator size="small" color="#007AFF" />
-                    </View>
-                  )}
-                  {!hasMoreEvents && events.length > 0 && (
-                    <Text style={styles.noMoreItems}>No more events</Text>
-                  )}
-                </>
+                <FlatList
+                  data={events}
+                  renderItem={({ item }) => renderEvent(item)} // renderEvent should already be defined
+                  keyExtractor={(item) => item.id}
+                  // scrollEnabled={false} // If main ScrollView handles pagination scrolling
+                  // To let FlatList handle its own pagination if preferred:
+                  // onEndReached={handleLoadMoreEvents} 
+                  // onEndReachedThreshold={0.5}
+                  // ListFooterComponent={loadingMoreEvents ? <ActivityIndicator size="small" color="#007AFF" /> : null}
+                  // For now, relying on parent ScrollView's onScroll + handleScroll for pagination
+                />
+              )}
+              {/* The ListFooterComponent for loadingMoreEvents will be implicitly handled by handleScroll 
+                  if the main ScrollView is what triggers loading more. 
+                  If FlatList were to be primary scroller for events, it would need its own footer.*/}
+               {/* Display loading more indicator at the bottom if events are not empty and more are loading via main scroll */} 
+              {events.length > 0 && loadingMoreEvents && (
+                <View style={styles.loadingMoreContainer}> 
+                  <ActivityIndicator size="small" color="#007AFF" />
+                </View>
+              )}
+              {!loadingMoreEvents && !hasMoreEvents && events.length > 0 && (
+                <Text style={styles.noMoreItems}>No more events to load.</Text>
               )}
             </View>
           )}
@@ -1653,12 +1674,11 @@ export default function GroupDetails() {
 
               <TextInput
                 style={styles.input}
-                value={newEvent.location?.address || ''}
+                value={newEvent.location?.full_address || ''}
                 onChangeText={(text) => setNewEvent(prev => ({ 
                   ...prev, 
                   location: { 
-                    address: text,
-                    venue_name: text 
+                    full_address: text
                   } 
                 }))}
                 placeholder="Location (optional)"
@@ -2093,29 +2113,61 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  eventStatus: {
-    fontSize: 14,
-    color: '#666',
+  eventStatusBadge: {
+    padding: 4,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  statusupcoming: {
-    color: '#007AFF',
+  eventStatusBadgeText: {
+    fontSize: 12,
+    color: '#fff',
   },
-  statusongoing: {
-    color: '#28a745',
+  // Re-add specific status styles referenced by getEventStatusBadge
+  statusUpcoming: {
+    backgroundColor: '#007bff', // Blue for upcoming
   },
-  statuscompleted: {
-    color: '#6c757d',
+  statusOngoing: {
+    backgroundColor: '#28a745', // Green for ongoing
   },
-  statuscancelled: {
-    color: '#dc3545',
+  statusCompleted: {
+    backgroundColor: '#6c757d', // Grey for completed
+  },
+  statusCancelled: {
+    backgroundColor: '#dc3545', // Red for cancelled
+  },
+  statusUnknown: {
+    backgroundColor: '#f0f0f0', // Light grey for unknown
+    // For unknown, text color might need adjustment if it's not white by default
+    // However, eventStatusBadgeText already sets color: '#fff', so this might be okay
+    // or we might need a specific text color for unknown if #fff doesn't show well on #f0f0f0
   },
   eventDescription: {
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 12,
   },
+  eventCoverImage: {
+    width: '100%',
+    height: 150, // Adjust as needed
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  eventCoverImagePlaceholder: {
+    width: '100%',
+    height: 150,
+    borderRadius: 6,
+    marginBottom: 10,
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventCoverImagePlaceholderText: {
+    color: '#999',
+    fontSize: 14,
+  },
   eventDetails: {
-    marginBottom: 12,
+    marginTop: 10,
   },
   eventDetailRow: {
     flexDirection: 'row',
@@ -2139,19 +2191,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginHorizontal: 5,
+    backgroundColor: '#f8f9fa', 
+    borderColor: '#dee2e6',    
+    borderWidth: 1,             
   },
   rsvpButtonActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#007AFF', 
+    borderColor: '#0056b3',    
   },
   rsvpButtonText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666', 
   },
   rsvpButtonTextActive: {
-    color: '#fff',
+    color: '#fff', 
   },
   rsvpButtonDisabled: {
     backgroundColor: '#e9ecef',
+    borderColor: '#ced4da', 
+    borderWidth: 1,
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -2309,7 +2367,11 @@ const styles = StyleSheet.create({
   noMoreItems: {
     textAlign: 'center',
     color: '#666',
+    paddingVertical: 20,
+  },
+  loadingMoreContainer: {
     padding: 20,
+    alignItems: 'center',
   },
 });
 
@@ -2323,7 +2385,7 @@ const createTestGroupEvents = (groupId: string) => {
       id: `test-event-1-${groupId}`,
       title: 'Weekly Meetup',
       description: 'Join us for our weekly community meetup! We\'ll discuss upcoming events and opportunities.',
-      location: 'Community Center, 123 Main St',
+      location: { full_address: 'Community Center, 123 Main St' },
       group_id: groupId,
       start_time: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
       end_time: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
@@ -2365,7 +2427,7 @@ const createTestGroupEvents = (groupId: string) => {
       id: `test-event-2-${groupId}`,
       title: 'Coffee Chat',
       description: 'Casual coffee meet-up for members to connect and share experiences.',
-      location: 'Brew & Bean Cafe, 456 Oak Ave',
+      location: { full_address: 'Brew & Bean Cafe, 456 Oak Ave' },
       group_id: groupId,
       start_time: new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
       end_time: new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000 + 1.5 * 60 * 60 * 1000).toISOString(), // 1.5 hours later
@@ -2399,7 +2461,7 @@ const createTestGroupEvents = (groupId: string) => {
       id: `test-event-3-${groupId}`,
       title: 'Workshop: Building Community Connections',
       description: 'Interactive workshop focused on strengthening community bonds and support networks.',
-      location: 'Community Hub, 789 Pine Street',
+      location: { full_address: 'Community Hub, 789 Pine Street' },
       group_id: groupId,
       start_time: new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
       end_time: new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000).toISOString(), // 3 hours later
@@ -2446,4 +2508,20 @@ const createTestGroupEvents = (groupId: string) => {
       }
     }
   ];
+};
+
+// Helper function to get event status badge style and text
+const getEventStatusBadge = (status: string) => {
+  switch (status) {
+    case 'upcoming':
+      return { style: styles.statusUpcoming, text: 'Upcoming' };
+    case 'ongoing':
+      return { style: styles.statusOngoing, text: 'Ongoing' };
+    case 'completed':
+      return { style: styles.statusCompleted, text: 'Completed' };
+    case 'cancelled':
+      return { style: styles.statusCancelled, text: 'Cancelled' };
+    default:
+      return { style: styles.statusUnknown, text: 'Unknown' };
+  }
 };

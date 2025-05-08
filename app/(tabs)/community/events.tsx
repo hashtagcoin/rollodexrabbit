@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import AppHeader from '../../../components/AppHeader';
 import { useRouter } from 'expo-router';
+
+// Expo Router screen options
+export const options = {
+  headerShown: false,
+};
+
+// Define EventCategory type
+type EventCategory = 'Interest' | 'Social' | 'Support' | 'Housing';
+const ALL_CATEGORIES: (EventCategory | 'All')[] = ['All', 'Interest', 'Social', 'Support', 'Housing'];
 
 // Define a placeholder for the location structure until clarified
 // Example: type EventLocation = { address?: string; city?: string; venue?: string; coordinates?: { lat: number; lng: number } };
@@ -27,125 +36,111 @@ type Event = {
   group_name?: string; // This is an enrichment, keep it
   creator_name?: string | null; // New field for creator's name
   creator_avatar_url?: string | null; // New field for creator's avatar
+  category?: EventCategory | null; // Added category field
 };
 
 export default function EventsScreen() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
   const [events, setEvents] = useState<Event[]>([]);
-  const [filtered, setFiltered] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true); // Set initial loading to true
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<EventCategory | 'All'>('All'); // Added state for selected category
 
   useEffect(() => {
-    loadEvents();
-  }, []);
+    fetchEvents();
+  }, [searchTerm, selectedCategory]);
 
-  useEffect(() => {
-    console.log('CASCADE_DEBUG: Search term changed:', search);
-    if (!search.trim()) {
-      console.log('CASCADE_DEBUG: Search is empty, showing all events.');
-      setFiltered(events);
-    } else {
-      const q = search.toLowerCase();
-      const filteredEvents = events.filter(
-        (e) =>
-          e.title.toLowerCase().includes(q) ||
-          e.description?.toLowerCase().includes(q) ||
-          e.group_name?.toLowerCase().includes(q)
-      );
-      console.log('CASCADE_DEBUG: Filtered events based on search:', JSON.stringify(filteredEvents, null, 2));
-      setFiltered(filteredEvents);
-    }
-  }, [search, events]);
-
-  async function loadEvents() {
+  const fetchEvents = async () => {
     setLoading(true);
     try {
-      console.log('CASCADE_DEBUG: Starting loadEvents...');
-      const { data: evs, error } = await supabase
-        .from('group_events')
-        .select('id, group_id, subgroup_id, title, description, start_time, end_time, location, max_participants, created_by, image_url, admission_fee');
-      console.log('CASCADE_DEBUG: Fetched raw events (evs):', JSON.stringify(evs, null, 2));
+      let query = supabase
+        .from('group_events_with_details') // Assuming this view exists and includes category, or adjust to 'group_events'
+        .select(`
+          id,
+          group_id,
+          subgroup_id,
+          title,
+          description,
+          start_time,
+          end_time,
+          location,
+          max_participants,
+          created_by,
+          image_url,
+          admission_fee,
+          group_name,
+          creator_name,
+          creator_avatar_url,
+          category
+        `)
+        .order('start_time', { ascending: true });
+
+      if (searchTerm) {
+        query = query.ilike('title', `%${searchTerm}%`);
+      }
+
+      if (selectedCategory !== 'All') {
+        query = query.eq('category', selectedCategory);
+      }
+
+      const { data, error } = await query;
+
       if (error) {
-        console.error('CASCADE_DEBUG: Error fetching group_events:', error);
-        throw error;
+        console.error('Error fetching events:', error);
+        // Handle error (e.g., show a message to the user)
+        setEvents([]);
+      } else {
+        console.log('Fetched events:', data);
+        // Map data to Event type if necessary, ensuring category is correctly typed
+        setEvents(data as Event[] || []);
       }
-      const eventsData: Event[] = (evs || []) as Event[];
-
-      const groupIds = [...new Set(eventsData.filter(e => e.group_id).map((e) => e.group_id as string))];
-      console.log('CASCADE_DEBUG: Group IDs for fetching names:', groupIds);
-      let grpMap: Record<string, string> = {};
-      if (groupIds.length > 0) {
-        const { data: groups, error: grpErr } = await supabase
-          .from('groups')
-          .select('id, name')
-          .in('id', groupIds);
-        console.log('CASCADE_DEBUG: Fetched groups data:', JSON.stringify(groups, null, 2));
-        if (grpErr) {
-          console.error('CASCADE_DEBUG: Error fetching groups:', grpErr);
-          throw grpErr;
-        }
-        (groups || []).forEach((g) => {
-          grpMap[g.id] = g.name;
-        });
-      }
-      console.log('CASCADE_DEBUG: Group map created:', grpMap);
-
-      // Fetch creator names
-      const creatorIds = [...new Set(eventsData.map(e => e.created_by).filter(Boolean) as string[])];
-      console.log('CASCADE_DEBUG: Creator IDs for fetching names:', creatorIds);
-      let creatorMap: Record<string, { full_name?: string | null, avatar_url?: string | null }> = {};
-      if (creatorIds.length > 0) {
-        const { data: creators, error: creatorsError } = await supabase
-          .from('user_profiles')
-          .select('id, full_name, avatar_url') // Added avatar_url
-          .in('id', creatorIds);
-
-        console.log('CASCADE_DEBUG: Fetched creators data:', JSON.stringify(creators, null, 2));
-        if (creatorsError) {
-          console.error('CASCADE_DEBUG: Error fetching creators:', creatorsError);
-        } else {
-          (creators || []).forEach(c => {
-            if (c.id) {
-              creatorMap[c.id] = { full_name: c.full_name, avatar_url: c.avatar_url };
-            }
-          });
-        }
-      }
-      console.log('CASCADE_DEBUG: Creator map created:', creatorMap);
-
-      const enriched = eventsData.map((e) => ({
-        ...e,
-        group_name: e.group_id ? grpMap[e.group_id] : 'N/A',
-        creator_name: e.created_by ? creatorMap[e.created_by]?.full_name : 'Unknown Creator',
-        creator_avatar_url: e.created_by ? creatorMap[e.created_by]?.avatar_url : null
-      }));
-      console.log('CASCADE_DEBUG: Enriched events before setEvents:', JSON.stringify(enriched, null, 2));
-
-      setEvents(enriched);
-      setFiltered(enriched);
-    } catch (err) {
-      console.error('CASCADE_DEBUG: Error in loadEvents function:', err);
-    } finally {
-      setLoading(false);
-      console.log('CASCADE_DEBUG: loadEvents finished.');
+    } catch (e) {
+      console.error('Exception fetching events:', e);
+      setEvents([]);
     }
-  }
+    setLoading(false);
+  };
+
+  // Function to render category buttons
+  const renderCategoryButtons = () => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
+      {ALL_CATEGORIES.map((category) => (
+        <TouchableOpacity
+          key={category}
+          style={[
+            styles.categoryButton,
+            selectedCategory === category && styles.categoryButtonSelected,
+          ]}
+          onPress={() => setSelectedCategory(category)}
+        >
+          <Text
+            style={[
+              styles.categoryButtonText,
+              selectedCategory === category && styles.categoryButtonTextSelected,
+            ]}
+          >
+            {category}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
 
   return (
     <View style={styles.container}>
       <AppHeader title="Events" showBackButton />
       <TextInput
         style={styles.search}
-        placeholder="Search events..."
-        value={search}
-        onChangeText={setSearch}
+        placeholder="Search events by title..." // Updated placeholder for clarity
+        value={searchTerm}
+        onChangeText={setSearchTerm}
       />
+      {renderCategoryButtons()} {/* Add category buttons here */}
       <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
+        data={events} // Changed from filtered to events
+        keyExtractor={(item) => item.id.toString()}
         refreshing={loading}
-        onRefresh={loadEvents}
+        onRefresh={fetchEvents}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {
           console.log(`Rendering event: ${item.title}, event_image_url: ${item.image_url}, creator_avatar_url: ${item.creator_avatar_url}`);
@@ -197,7 +192,7 @@ export default function EventsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f2f5' }, // Changed background color
+  container: { flex: 1, backgroundColor: '#f0f2f5' },
   search: {
     margin: 16,
     padding: 12, // Increased padding
@@ -207,7 +202,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', // White background for search input
     fontSize: 16, // Increased font size
   },
-  list: { paddingHorizontal: 16, paddingBottom: 16 },
+  categoriesContainer: { // Styles for the categories scroll view
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxHeight: 60, // Adjust as needed
+  },
+  categoryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#e0e0e0',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryButtonSelected: {
+    backgroundColor: '#007bff',
+  },
+  categoryButtonText: {
+    color: '#333',
+    fontWeight: '500',
+  },
+  categoryButtonTextSelected: {
+    color: '#fff',
+  },
+  list: { paddingHorizontal: 16, paddingBottom: 16, flex: 1 }, // Added flex: 1
   card: {
     backgroundColor: '#ffffff', // White card background
     borderRadius: 12, // More rounded corners
