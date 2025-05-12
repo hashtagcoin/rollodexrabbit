@@ -50,6 +50,7 @@ export class MediaError extends Error {
 // Media bucket types
 export type BucketName = 
   | 'avatars'
+  | 'postsimages'
   | 'group-avatars'
   | 'group-posts'
   | 'housing-listings'

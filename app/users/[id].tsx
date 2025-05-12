@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, Alert } f
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase'; // Adjust path as needed
 import { Stack } from 'expo-router';
+import AppHeader from '../../components/AppHeader'; // Import AppHeader
 
 type Profile = {
   id: string;
@@ -30,7 +31,7 @@ const UserProfileScreen = () => {
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('profiles')
+          .from('user_profiles')
           .select('id, full_name, avatar_url, bio') // Select desired fields
           .eq('id', userId)
           .single();
@@ -71,21 +72,24 @@ const UserProfileScreen = () => {
   const avatarUrl = profile.avatar_url || 'https://placehold.co/150x150/e1f0ff/333333?text=Usr';
 
   return (
-    <ScrollView style={styles.container}>
-      <Stack.Screen options={{ title: profile.full_name || 'User Profile' }} />
-      <View style={styles.header}>
-        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        <Text style={styles.name}>{profile.full_name || 'No Name'}</Text>
-      </View>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader title={profile.full_name || 'User Profile'} showBackButton={true} />
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          <Text style={styles.name}>{profile.full_name || 'No Name'}</Text>
+        </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Bio</Text>
-        <Text style={styles.bio}>{profile.bio || 'No bio available.'}</Text>
-      </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Bio</Text>
+          <Text style={styles.bio}>{profile.bio || 'No bio available.'}</Text>
+        </View>
 
-      {/* Add more sections here for posts, groups, etc. later */}
+        {/* Add more sections here for posts, groups, etc. later */}
 
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 };
 

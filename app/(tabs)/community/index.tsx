@@ -30,9 +30,12 @@ import { User } from '@supabase/supabase-js'; // Added import
 import { Alert } from 'react-native'; // Added import
 import { AntDesign } from '@expo/vector-icons'; // Changed import for AntDesign
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Constants for header heights
-const APP_HEADER_HEIGHT = 100; // Further increased app header height to prevent overlap
+const BASE_APP_HEADER_HEIGHT = 60; // base height of AppHeader content (excluding safe area)
 const NAV_HEADER_HEIGHT = 70; // Navigation header height
+// We'll compute APP_HEADER_HEIGHT dynamically in the component using insets.top + BASE_APP_HEADER_HEIGHT
+
 
 type Post = {
   post_id: string;
@@ -48,6 +51,9 @@ type Post = {
 };
 
 export default function CommunityFeed() {
+  const insets = useSafeAreaInsets();
+  const APP_HEADER_HEIGHT = insets.top + BASE_APP_HEADER_HEIGHT; // dynamic height for AppHeader including safe area
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -94,7 +100,7 @@ export default function CommunityFeed() {
       setLoading(true);
       // Fetch posts with user details and counts from the view
       const { data: enrichedPostsData, error: postsError } = await supabase
-        .from('posts_with_users') // Query the view
+        .from('posts_with_users') // Use posts_with_users for main community feed
         .select('*') // Select all columns from the view (adjust if specific columns needed)
         .order('post_created_at', { ascending: false }); // CORRECTED: Use post_created_at
 
@@ -106,7 +112,7 @@ export default function CommunityFeed() {
       // For now, let's assume the view provides compatible names or we adjust the Post type/mapping here.
       
       // Map data if necessary to match the Post type structure, especially for created_at if names differ.
-      // For simplicity, if posts_with_users provides fields like post_id, content, media_urls, author_profile_id, 
+      // For group-specific posts, use group_posts_with_users. For the general feed, posts_with_users is correct.
       // author_full_name, author_avatar_url, likes_count, comments_count, and created_at (for post_created_at)
       // then the mapping can be direct or minimal.
 
@@ -269,7 +275,7 @@ export default function CommunityFeed() {
         {
           transform: [{ translateY: headerTranslateY }],
           shadowOpacity: scrollYValue.current > 0 ? 0.3 : 0,
-          top: APP_HEADER_HEIGHT // Position it with more space below the main header
+          top: APP_HEADER_HEIGHT // Dynamically offset sticky header below AppHeader (safe area + base height)
         }
       ]}
     >
@@ -335,7 +341,7 @@ export default function CommunityFeed() {
           }
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: APP_HEADER_HEIGHT } // Padding only for main header
+            { paddingTop: APP_HEADER_HEIGHT } // Padding matches dynamic AppHeader height (safe area + base height)
           ]}
         >
         {loading ? (

@@ -108,7 +108,7 @@ export default function ProfileScreen() {
 
       // Load user posts
       const { data: postsData } = await supabase
-        .from('posts_with_users')
+        .from('group_posts_with_users') // Use group_posts_with_users for group-specific posts
         .select('*')
         .eq('author_profile_id', user.id)
         .order('post_created_at', { ascending: false });

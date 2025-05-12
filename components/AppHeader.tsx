@@ -1,23 +1,34 @@
 import { TouchableOpacity, View, Text, StyleSheet, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState, useCallback } from 'react';
 import { router, useNavigation, usePathname } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Bell } from 'lucide-react-native';
+import { ArrowLeft, Bell, type LucideIcon } from 'lucide-react-native'; 
+import * as LucideIcons from 'lucide-react-native'; 
 import NotificationBell from './NotificationBell';
+
+export interface HeaderAction {
+  iconName: keyof Omit<typeof LucideIcons, 'createLucideIcon' | 'Icon' | 'LucideIcon'>; 
+  onPress: () => void;
+  isVisible?: boolean;
+  iconSize?: number;
+  iconColor?: string;
+}
 
 interface AppHeaderProps {
   title?: string;
   showBackButton?: boolean;
   onBackPress?: () => void;
-  rightElement?: React.ReactNode;
+  rightActions?: HeaderAction[];
 }
 
 export default function AppHeader({
   title,
   showBackButton = true,
   onBackPress,
-  rightElement,
+  rightActions,
 }: AppHeaderProps) {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const pathname = usePathname();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -31,7 +42,6 @@ export default function AppHeader({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get user profile to retrieve avatar
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('avatar_url')
@@ -46,43 +56,28 @@ export default function AppHeader({
     }
   };
 
-  // Custom back navigation handler
   const handleBackPress = useCallback(() => {
     if (onBackPress) {
-      // Use custom back handler if provided
       onBackPress();
       return;
     }
-
-    // Check if we can go back in navigation history
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      // If we can't go back, determine what tab we're in and go to its main screen
-      if (pathname.includes('/community')) {
-        router.replace('/(tabs)/community');
-      } else if (pathname.includes('/discover')) {
-        router.replace('/(tabs)/discover');
-      } else if (pathname.includes('/wallet')) {
-        router.replace('/(tabs)/wallet');
-      } else if (pathname.includes('/profile')) {
-        router.replace('/(tabs)/profile');
-      } else if (pathname.includes('/housing')) {
-        router.replace('/(tabs)/housing');
-      } else {
-        // Default to home
-        router.replace('/');
-      }
+      if (pathname.includes('/community')) router.replace('/(tabs)/community');
+      else if (pathname.includes('/discover')) router.replace('/(tabs)/discover');
+      else if (pathname.includes('/wallet')) router.replace('/(tabs)/wallet');
+      else if (pathname.includes('/profile')) router.replace('/(tabs)/profile');
+      else if (pathname.includes('/housing')) router.replace('/(tabs)/housing');
+      else router.replace('/');
     }
-    
-    // Reset scroll position
     setTimeout(() => {
       window.scrollTo?.(0, 0);
     }, 50);
   }, [navigation, pathname, onBackPress]);
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
       <View style={styles.headerContent}>
         <View style={styles.leftSection}>
           {showBackButton && (
@@ -98,32 +93,48 @@ export default function AppHeader({
         </View>
         
         <View style={styles.titleSection}>
-          {title ? <Text style={styles.title}>{title}</Text> : null}
+          {title ? <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{title}</Text> : null}
         </View>
 
         <View style={styles.rightSection}>
-          {rightElement ? (
-            rightElement
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <NotificationBell />
+          {rightActions && rightActions.map((action, index) => {
+            if (action.isVisible === false) return null; 
+            
+            const IconComponent = LucideIcons[action.iconName] as LucideIcon | undefined;
+            if (!IconComponent) {
+              console.warn(`Icon not found: ${action.iconName}`);
+              return <Text key={`action-${index}-fallback`}>?</Text>; 
+            }
+
+            return (
               <TouchableOpacity
-                style={styles.profileButton}
-                onPress={() => router.replace('/(tabs)/profile')}
-                accessibilityLabel="Profile"
-                accessibilityHint="Navigate to your profile"
+                key={`action-${index}`}
+                style={styles.actionButton}
+                onPress={action.onPress}
+                accessibilityLabel={action.iconName}
               >
-                {avatarUrl ? (
-                  <Image 
-                    source={{ uri: avatarUrl }} 
-                    style={styles.profileImage} 
-                  />
-                ) : (
-                  <View style={styles.profilePlaceholder} />
-                )}
+                <IconComponent 
+                  size={action.iconSize || 24} 
+                  color={action.iconColor || '#1a1a1a'} 
+                />
               </TouchableOpacity>
-            </View>
-          )}
+            );
+          })}
+          {/* User Avatar */}
+          <TouchableOpacity
+            style={styles.avatarButton}
+            onPress={() => router.push('/(tabs)/profile') }
+            accessibilityLabel="Go to profile"
+          >
+            <Image
+              source={avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 0 && !avatarUrl.startsWith('file:///')
+                ? { uri: avatarUrl }
+                : require('../assets/default-avatar.png')}
+              style={styles.avatar}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+          <NotificationBell />
         </View>
       </View>
     </View>
@@ -132,59 +143,67 @@ export default function AppHeader({
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 60,
+    backgroundColor: '#FFFFFF',
+    // paddingTop is now handled dynamically with safe area insets
+    // paddingTop: безопаснаяЗонаСверху(), 
     paddingBottom: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    zIndex: 100,
+    paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
+    borderBottomColor: '#E0E0E0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    height: 50, 
   },
   leftSection: {
-    width: 40,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   titleSection: {
-    flex: 1,
-    alignItems: 'center',
+    flex: 3, 
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5, 
   },
   rightSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: 80,
+    flex: 1,
+    flexDirection: 'row', 
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 5, 
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600', 
     color: '#1a1a1a',
+    textAlign: 'center',
   },
-  profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#333',
+  actionButton: {
+    padding: 8, 
+    marginLeft: 8, 
   },
-  profileImage: {
-    width: '100%',
-    height: '100%',
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
-  profilePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#444',
+  avatarButton: {
+    padding: 4,
+    marginRight: 8,
   },
 });
+
+function безопаснаяЗонаСверху() {
+  const { Platform, StatusBar } = require('react-native');
+  return Platform.OS === 'android' ? StatusBar.currentHeight || 10 : (Platform.OS === 'ios' ? 20 : 10);
+}

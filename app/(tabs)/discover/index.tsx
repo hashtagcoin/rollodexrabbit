@@ -45,6 +45,8 @@ import HousingCard from './components/HousingCard';
 // Import Bottom Sheet components
 import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 
+import { useAuth } from '../../../providers/AuthProvider'; // Add AuthProvider import
+
 // --- Configuration ---
 // TODO: Replace with your actual Supabase project reference
 const SUPABASE_PROJECT_REF = 'smtckdlpdfvdycocwoip'; 
@@ -81,6 +83,9 @@ export default function DiscoverScreen() {
     category: string;
   }>();
   
+  const { session } = useAuth(); // Get session from Auth context
+  const userId = session?.user?.id; // Extract user ID
+
   const localParams = useLocalSearchParams();
   
   const [loading, setLoading] = useState(true);
@@ -188,7 +193,11 @@ export default function DiscoverScreen() {
         // Add empty provider object to housing listings to maintain consistent structure
         const transformedData = data?.map(item => ({
           ...item,
-          provider: { business_name: 'Housing Provider', verified: false },
+          provider: { 
+            id: null, // Add null ID here
+            business_name: 'Housing Provider', 
+            verified: false 
+          },
           has_housing_group: false // Initialize this property
         })) as HousingListing[];
         
@@ -211,7 +220,8 @@ export default function DiscoverScreen() {
             format,
             price,
             media_urls,
-            provider:service_providers (
+            service_providers (
+              id,
               business_name,
               verified
             )
@@ -221,21 +231,35 @@ export default function DiscoverScreen() {
           
         if (error) throw error;
         
-        // Fix provider property structure if needed
+        // Fix provider property structure and ensure provider ID is captured
         const transformedData = data?.map(item => {
-          // Ensure provider exists and has proper structure
-          if (!item.provider || (Array.isArray(item.provider) && item.provider.length === 0)) {
-            return {
-              ...item,
-              provider: { business_name: 'Service Provider', verified: false }
-            };
-          } else if (Array.isArray(item.provider) && item.provider.length > 0) {
-            return {
-              ...item,
-              provider: item.provider[0]
-            };
+          let providerObj: { id: string; business_name: string; verified: boolean } | null = null;
+
+          // Handle potential array or object from Supabase join
+          if (item.service_providers) {
+            if (Array.isArray(item.service_providers) && item.service_providers.length > 0) {
+              // If it's an array, take the first element
+              providerObj = item.service_providers[0]; 
+            } else if (!Array.isArray(item.service_providers)) {
+              // If it's already an object, use it directly (cast might be needed if TS still unsure)
+              providerObj = item.service_providers as any; // Use 'as any' for now to bypass TS if needed, refine later
+            }
           }
-          return item;
+
+          // Use the extracted providerObj, checking if it and its id exist
+          const finalProviderData = providerObj && providerObj.id
+            ? providerObj
+            : { id: null, business_name: 'Service Provider', verified: false }; // Default/fallback
+
+          return {
+            ...item, // Spread the original service data (id is service.id)
+            provider: { // Create a nested provider object
+              id: finalProviderData.id, // <-- Provider's ID!
+              business_name: finalProviderData.business_name,
+              verified: finalProviderData.verified,
+            },
+            service_providers: undefined, // Clean up the original flat structure
+          };
         }) as Service[];
         
         setListings(transformedData || []);
@@ -247,6 +271,109 @@ export default function DiscoverScreen() {
       setRefreshing(false);
     }
   }
+
+  // ---> START: Favorites Logic <--- 
+  const fetchFavorites = useCallback(async () => {
+    if (!userId) return; // Don't fetch if user ID is not available
+
+    console.log("Fetching user favorites...");
+    setLoading(true); // Indicate loading while fetching favorites initially
+    try {
+      const { data, error } = await supabase
+        .from('favorites') // Use correct table name
+        .select('item_id') // Select the item ID column
+        .eq('user_id', userId); 
+
+      if (error) {
+        console.error("Error fetching favorites:", error);
+        // Optionally set an error state here
+      } else if (data) {
+        console.log(`Fetched ${data.length} favorites.`);
+        setFavorites(new Set(data.map(fav => fav.item_id)));
+      } else {
+        setFavorites(new Set()); // Ensure it's reset if no data
+      }
+    } catch (err) {
+      console.error("Exception fetching favorites:", err);
+      setFavorites(new Set()); // Reset on exception
+    } finally {
+      // Consider if setLoading(false) should happen here or after listings load
+      // For now, let loadListings handle the final setLoading(false)
+    }
+  }, [userId]); // Dependency: re-fetch if userId changes
+
+  const toggleFavorite = async (item: ListingItem) => {
+    if (!userId) {
+      console.error("Cannot toggle favorite: User not logged in.");
+      // Optionally show a message to the user
+      return;
+    }
+
+    const currentFavorites = new Set(favorites);
+    const itemType = isHousingListing(item) ? 'housing_listing' : 'service_provider'; // Determine correct type
+    
+    // ---> Determine the correct ID to save based on type <--- 
+    const itemIdToSave = itemType === 'service_provider' 
+      ? (item as Service).provider?.id // Use provider's ID for services
+      : item.id; // Use direct item ID for housing (and potentially others)
+
+    // Check if we have a valid ID to save
+    if (!itemIdToSave) {
+      console.error(`Cannot toggle favorite: Invalid item ID for type ${itemType}`, item);
+      return; // Prevent saving favorite with null/undefined ID
+    }
+
+    // Optimistic UI update (using itemIdToSave for consistency in the Set)
+    if (currentFavorites.has(itemIdToSave)) {
+      currentFavorites.delete(itemIdToSave);
+    } else {
+      currentFavorites.add(itemIdToSave);
+    }
+    setFavorites(currentFavorites);
+
+    // Perform Supabase operation
+    try {
+      // Check ORIGINAL state before optimistic update using itemIdToSave
+      if (favorites.has(itemIdToSave)) { 
+        // --- Remove from Favorites --- 
+        console.log(`Removing favorite: ${itemIdToSave}`);
+        const { error } = await supabase
+          .from('favorites') // Correct table
+          .delete()
+          .match({ user_id: userId, item_id: itemIdToSave }); // Use correct ID
+        if (error) {
+          console.error("Error removing favorite:", error);
+          // Revert optimistic update on error
+          setFavorites(prev => new Set(prev).add(itemIdToSave)); 
+        }
+      } else {
+        // --- Add to Favorites --- 
+        console.log(`Adding favorite: ${itemIdToSave}, type: ${itemType}`);
+        const { error } = await supabase
+          .from('favorites') // Correct table
+          .insert({ user_id: userId, item_id: itemIdToSave, item_type: itemType }); // Use correct ID
+        if (error) {
+          console.error("Error adding favorite:", error);
+          // Revert optimistic update on error
+          setFavorites(prev => {
+            const reverted = new Set(prev);
+            reverted.delete(itemIdToSave);
+            return reverted;
+          });
+        }
+      }
+    } catch (err) {
+       console.error("Exception toggling favorite:", err);
+       // Revert optimistic update on exception
+       setFavorites(prev => {
+         const reverted = new Set(prev);
+         // Make sure to check using the correct ID
+         if (reverted.has(itemIdToSave)) reverted.delete(itemIdToSave); else reverted.add(itemIdToSave); 
+         return reverted;
+       });
+    }
+  };
+  // ---> END: Favorites Logic <--- 
 
   // ---> START Sort State & Refs <---
   const [sortOption, setSortOption] = useState<{ field: string; direction: 'asc' | 'desc' }>({ 
@@ -279,7 +406,9 @@ export default function DiscoverScreen() {
     console.log('Effect: Loading listings due to category/search change');
     setCurrentIndex(0); // Reset index when category/search changes
     loadListings();
-  }, [selectedCategory, searchQuery, sortOption]); // Runs on mount and when these change
+    // Also fetch favorites when category changes, as listings are new
+    fetchFavorites(); 
+  }, [selectedCategory, searchQuery, sortOption, fetchFavorites]); // Add fetchFavorites dependency
 
   // Effect 2: Handle initialization from URL category param (run once or if param provided later)
   useEffect(() => {
@@ -337,9 +466,18 @@ export default function DiscoverScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localParams?.returnIndex, localParams?.returnViewMode]); // Depend on return params AND listings.length for validation. Lint disabled as adding viewMode/currentIndex would cause loops.
 
+  // Effect 4: Fetch initial favorites when userId is available (runs once after login)
+  useEffect(() => {
+    if (userId) {
+      console.log("Effect: Fetching initial favorites as userId is available.");
+      fetchFavorites();
+    }
+  }, [userId, fetchFavorites]); // Depend on userId and the fetch function itself
+
   async function onRefresh() {
     setRefreshing(true);
-    await loadListings();
+    // Fetch favorites again on refresh along with listings
+    await Promise.all([loadListings(), fetchFavorites()]);
     setRefreshing(false);
   };
 
@@ -354,6 +492,18 @@ export default function DiscoverScreen() {
   // Type guard for HousingListing
   const isHousingListing = (item: ListingItem): item is HousingListing => {
     return 'weekly_rent' in item; // Check for a property unique to HousingListing
+  };
+
+  // Helper to determine if an item is favorited
+  const isItemFavorited = (item: ListingItem): boolean => {
+    if (isServiceListing(item) && item.provider?.id) {
+      return favorites.has(item.provider.id);
+    } else if (isHousingListing(item)) {
+      return favorites.has(item.id);
+    }
+    // Assuming group_events would use item.id similar to housing
+    // Add more conditions here if other types are favoritable differently
+    return false;
   };
 
   // Helper to get item price (uses property from specific type)
@@ -462,50 +612,6 @@ export default function DiscoverScreen() {
     navigateToDetails(item); 
   }, [router, navigateToDetails]); // Add navigateToDetails to dependency array
 
-  // Favorite Logic (Placeholders)
-  const fetchFavorites = async () => {
-    // TODO: Replace with actual Supabase query and user ID retrieval
-    console.log("Fetching user favorites...");
-    // const { data, error } = await supabase
-    //   .from('user_favorites')
-    //   .select('listing_id')
-    //   .eq('user_id', userId); 
-    // if (data) {
-    //   setFavorites(new Set(data.map(fav => fav.listing_id)));
-    // }
-    // Mock data for now:
-    // setFavorites(new Set(['service-1', 'housing-3'])); 
-  };
-
-  const toggleFavorite = async (item: ListingItem) => {
-    const currentFavorites = new Set(favorites);
-    const listingId = item.id;
-    // TODO: Get actual userId
-    const userId = 'user-placeholder-id'; 
-
-    if (currentFavorites.has(listingId)) {
-      // --- Remove from Favorites ---
-      currentFavorites.delete(listingId);
-      // TODO: Supabase delete
-      // const { error } = await supabase
-      //   .from('user_favorites')
-      //   .delete()
-      //   .match({ user_id: userId, listing_id: listingId });
-      console.log(`Removing favorite: ${listingId}`);
-      // if (error) console.error("Error removing favorite:", error);
-    } else {
-      // --- Add to Favorites ---
-      currentFavorites.add(listingId);
-      // TODO: Supabase insert
-      // const { error } = await supabase
-      //   .from('user_favorites')
-      //   .insert({ user_id: userId, listing_id: listingId, listing_type: isHousingListing(item) ? 'housing' : 'service' });
-      console.log(`Adding favorite: ${listingId}`);
-      // if (error) console.error("Error adding favorite:", error);
-    }
-    setFavorites(currentFavorites);
-  };
-
   const renderGridView = () => {
     if (listings.length === 0) {
       return (
@@ -566,8 +672,8 @@ export default function DiscoverScreen() {
                   <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
                     <Heart 
                       size={20} 
-                      color={favorites.has(item.id) ? "#ff4081" : "#ccc"} 
-                      fill={favorites.has(item.id) ? "#ff4081" : "none"} 
+                      color={isItemFavorited(item) ? "#ff4081" : "#ccc"} 
+                      fill={isItemFavorited(item) ? "#ff4081" : "none"} 
                     />
                   </Pressable>
                 </View>
@@ -640,8 +746,8 @@ export default function DiscoverScreen() {
                   <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
                     <Heart 
                       size={20} 
-                      color={favorites.has(item.id) ? "#ff4081" : "#ccc"} 
-                      fill={favorites.has(item.id) ? "#ff4081" : "none"} 
+                      color={isItemFavorited(item) ? "#ff4081" : "#ccc"} 
+                      fill={isItemFavorited(item) ? "#ff4081" : "none"} 
                     />
                   </Pressable>
                 </View>

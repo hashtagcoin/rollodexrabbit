@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export interface ModernImagePickerProps {
   imageUri?: string | null;
-  onImagePicked: (uri: string | null) => void;
+  onImagePicked: (data: { uri: string; mimeType: string }) => void;
   size?: number;
   shape?: 'circle' | 'rounded' | 'square';
   label?: string;
@@ -54,7 +54,18 @@ export default function ModernImagePicker({
         allowsMultipleSelection: false,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        onImagePicked(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        // Detect MIME type from extension
+        let mimeType = 'image/jpeg'; // Default to JPEG
+        const extensionMatch = uri.match(/\.([0-9a-z]+)(?:[?#]|$)/i);
+        if (extensionMatch) {
+          const ext = extensionMatch[1].toLowerCase();
+          if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else if (ext === 'gif') mimeType = 'image/gif';
+        }
+        onImagePicked({ uri, mimeType });
       }
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to pick image');

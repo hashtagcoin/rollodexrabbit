@@ -58,7 +58,6 @@ export default function EventsScreen() {
         .select(`
           id,
           group_id,
-          subgroup_id,
           title,
           description,
           start_time,
@@ -66,7 +65,6 @@ export default function EventsScreen() {
           location,
           max_participants,
           created_by,
-          image_url,
           admission_fee,
           group_name,
           creator_name,
@@ -135,7 +133,7 @@ export default function EventsScreen() {
         value={searchTerm}
         onChangeText={setSearchTerm}
       />
-      {renderCategoryButtons()} {/* Add category buttons here */}
+      {renderCategoryButtons()}
       <FlatList
         data={events} // Changed from filtered to events
         keyExtractor={(item) => item.id.toString()}

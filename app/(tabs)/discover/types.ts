@@ -6,6 +6,7 @@ export type Service = {
   format: string;
   price: number;
   provider: {
+    id: string | null;
     business_name: string;
     verified: boolean;
   };
@@ -24,6 +25,7 @@ export type HousingListing = {
   sda_category: string;
   media_urls: string[];
   provider: {
+    id: string | null;
     business_name: string;
     verified: boolean;
   };

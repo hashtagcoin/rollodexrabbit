@@ -33,7 +33,7 @@ export default function PostDetails() {
 
       console.log('[loadPost] Fetching from posts_with_users...');
       const { data: enrichedPostData, error: postError } = await supabase
-        .from('posts_with_users') // Use the view
+        .from('posts_with_users') // Use posts_with_users for community feed post details
         .select('*') // Select all columns from the view
         .eq('post_id', id as string) // Ensure id is correctly typed/used for post_id
         .single(); // Expect a single post
