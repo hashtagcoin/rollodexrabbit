@@ -36,7 +36,7 @@ type Event = {
   group_name?: string; // This is an enrichment, keep it
   creator_name?: string | null; // Restored field for creator's name
   category?: EventCategory | null; // Added category field
-  admission_fee?: number | null; // Changed from admission_cost
+  admission_fee?: string | null; // Changed from number | null to string | null
   participants_going_count?: number | null; // Changed from attendee_count
 };
 
@@ -330,8 +330,8 @@ export default function EventsScreen() {
                 <View style={styles.detailRow}>
                   <Ionicons name="cash-outline" size={16} color="#4CAF50" style={styles.iconStyle} />
                   <Text style={styles.detailText}>
-                    {item.admission_fee && item.admission_fee > 0 
-                      ? `$${item.admission_fee.toFixed(2)}` 
+                    {item.admission_fee && item.admission_fee.replace(/^\$/, '') !== "0" && item.admission_fee.trim() !== ""
+                      ? item.admission_fee 
                       : 'Free'}
                   </Text>
                 </View>
