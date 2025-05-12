@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import AppHeader from '../../../components/AppHeader';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons'; // Import Ionicons
 
 // Expo Router screen options
 export const options = {
@@ -32,11 +33,18 @@ type Event = {
   max_participants?: number | null;
   created_by?: string | null; // Assuming this is a UUID referring to user_profiles.id
   image_url?: string | null; // Added new image_url field
-  admission_fee?: string | null; // Added admission_fee
   group_name?: string; // This is an enrichment, keep it
   creator_name?: string | null; // New field for creator's name
-  creator_avatar_url?: string | null; // New field for creator's avatar
   category?: EventCategory | null; // Added category field
+};
+
+// TODO: Replace with your actual way of getting the user ID (e.g., from auth context)
+const getCurrentUserId = (): string | undefined => {
+  // Placeholder implementation - replace this!
+  // Example: const { session } = useAuth(); return session?.user?.id;
+  console.warn('Placeholder getCurrentUserId used. Replace with actual implementation.');
+  // For testing, returning a hardcoded ID - REMOVE THIS IN PRODUCTION
+  return 'd5414a0d-5c3c-4d2e-80e0-81e1b1159b1e';
 };
 
 export default function EventsScreen() {
@@ -45,12 +53,47 @@ export default function EventsScreen() {
   const [loading, setLoading] = useState(true); // Set initial loading to true
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<EventCategory | 'All'>('All'); // Added state for selected category
+  const [favoritedEventIds, setFavoritedEventIds] = useState<Set<string>>(new Set());
+  const [favoritesLoading, setFavoritesLoading] = useState(true);
+
+  // TODO: Replace this with your actual user ID from auth context/state
+  const currentUserId = getCurrentUserId();
 
   useEffect(() => {
     fetchEvents();
   }, [searchTerm, selectedCategory]);
 
-  const fetchEvents = async () => {
+  useEffect(() => {
+    const fetchFavorites = async () => {
+      if (!currentUserId) {
+        setFavoritesLoading(false);
+        return; // No user logged in
+      }
+      setFavoritesLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('item_id')
+          .eq('user_id', currentUserId)
+          .eq('item_type', 'group_event');
+
+        if (error) {
+          console.error('Error fetching favorites:', error);
+        } else {
+          const ids = new Set(data.map(fav => fav.item_id));
+          setFavoritedEventIds(ids);
+        }
+      } catch (e) {
+        console.error('Exception fetching favorites:', e);
+      } finally {
+        setFavoritesLoading(false);
+      }
+    };
+
+    fetchFavorites();
+  }, [currentUserId]); // Re-fetch if user changes
+
+  const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase
@@ -65,10 +108,9 @@ export default function EventsScreen() {
           location,
           max_participants,
           created_by,
-          admission_fee,
+          image_url,
           group_name,
           creator_name,
-          creator_avatar_url,
           category
         `)
         .order('start_time', { ascending: true });
@@ -87,21 +129,68 @@ export default function EventsScreen() {
         console.error('Error fetching events:', error);
         // Handle error (e.g., show a message to the user)
         setEvents([]);
+        setLoading(false);
       } else {
         console.log('Fetched events:', data);
-        // Map data to Event type if necessary, ensuring category is correctly typed
+        // Explicitly cast data to Event[] to satisfy TypeScript
         setEvents(data as Event[] || []);
+        setLoading(false);
       }
     } catch (e) {
       console.error('Exception fetching events:', e);
       setEvents([]);
+      setLoading(false);
     }
-    setLoading(false);
+  }, [searchTerm, selectedCategory]);
+
+  // Toggle favorite status
+  const toggleFavorite = async (eventId: string) => {
+    if (!currentUserId || favoritesLoading) return; // Need user ID and ensure initial load is done
+
+    const isCurrentlyFavorited = favoritedEventIds.has(eventId);
+    const originalFavorites = new Set(favoritedEventIds);
+
+    // Optimistic UI update
+    const updatedFavorites = new Set(originalFavorites);
+    if (isCurrentlyFavorited) {
+      updatedFavorites.delete(eventId);
+    } else {
+      updatedFavorites.add(eventId);
+    }
+    setFavoritedEventIds(updatedFavorites);
+
+    try {
+      if (isCurrentlyFavorited) {
+        // Remove from favorites
+        const { error } = await supabase
+          .from('favorites')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('item_id', eventId)
+          .eq('item_type', 'group_event');
+        if (error) throw error;
+      } else {
+        // Add to favorites
+        const { error } = await supabase
+          .from('favorites')
+          .insert({
+            user_id: currentUserId,
+            item_id: eventId,
+            item_type: 'group_event',
+          });
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      // Revert optimistic update on error
+      setFavoritedEventIds(originalFavorites);
+      // Optionally show an error message to the user
+    }
   };
 
   // Function to render category buttons
   const renderCategoryButtons = () => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
       {ALL_CATEGORIES.map((category) => (
         <TouchableOpacity
           key={category}
@@ -127,12 +216,14 @@ export default function EventsScreen() {
   return (
     <View style={styles.container}>
       <AppHeader title="Events" showBackButton />
-      <TextInput
-        style={styles.search}
-        placeholder="Search events by title..." // Updated placeholder for clarity
-        value={searchTerm}
-        onChangeText={setSearchTerm}
-      />
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.search}
+          placeholder="Search events by title..." // Updated placeholder for clarity
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
+      </View>
       {renderCategoryButtons()}
       <FlatList
         data={events} // Changed from filtered to events
@@ -141,7 +232,7 @@ export default function EventsScreen() {
         onRefresh={fetchEvents}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {
-          console.log(`Rendering event: ${item.title}, event_image_url: ${item.image_url}, creator_avatar_url: ${item.creator_avatar_url}`);
+          const isFavorited = favoritedEventIds.has(item.id);
           return (
             <TouchableOpacity
               style={styles.card}
@@ -149,8 +240,21 @@ export default function EventsScreen() {
                 // Navigate to event details if needed - router.push(`/event/${item.id}`);
               }}
             >
-              {item.image_url && (
-                <Image source={{ uri: item.image_url }} style={styles.eventImage} resizeMode="cover" />
+              <TouchableOpacity
+                style={styles.favoriteButton}
+                onPress={() => toggleFavorite(item.id)}
+                disabled={favoritesLoading} // Disable while loading initial favorites
+              >
+                <Ionicons
+                  name={isFavorited ? 'heart' : 'heart-outline'}
+                  size={26} // Slightly larger icon
+                  color={isFavorited ? '#FF6347' : '#ccc'} // Tomato color when favorited
+                />
+              </TouchableOpacity>
+              {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
+              ) : (
+                <View style={styles.imagePlaceholder} /> // Placeholder if no image
               )}
               <View style={styles.cardContent}>
                 <Text style={styles.title}>{item.title}</Text>
@@ -161,15 +265,9 @@ export default function EventsScreen() {
                 {item.location?.full_address && (
                   <Text style={styles.location}>Location: {item.location.full_address}</Text>
                 )}
-                {item.admission_fee && (
-                  <Text style={styles.admissionFee}>Admission: {item.admission_fee}</Text>
-                )}
                 <Text style={styles.desc} numberOfLines={3}>{item.description}</Text>
                 {item.creator_name && item.creator_name !== 'Unknown Creator' && (
                   <View style={styles.creatorContainer}>
-                    {item.creator_avatar_url ? (
-                      <Image source={{ uri: item.creator_avatar_url }} style={styles.creatorAvatar} />
-                    ) : null}
                     <Text style={styles.creatorInfo}>Created by: {item.creator_name}</Text>
                   </View>
                 )}
@@ -191,8 +289,13 @@ export default function EventsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f2f5' },
+  searchContainer: {
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    paddingBottom: 5, // Reduced bottom padding
+  },
   search: {
-    margin: 16,
+    margin: 0,
     padding: 12, // Increased padding
     borderWidth: 1,
     borderColor: '#e0e0e0', // Lighter border
@@ -200,10 +303,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', // White background for search input
     fontSize: 16, // Increased font size
   },
-  categoriesContainer: { // Styles for the categories scroll view
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    maxHeight: 60, // Adjust as needed
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    marginTop: 5, // Reduced top margin to bring filters closer to search
   },
   categoryButton: {
     paddingHorizontal: 16,
@@ -234,13 +339,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3, // Added elevation for Android shadow
+    position: 'relative', // Needed for absolute positioning of favorite button
   },
-  eventImage: {
+  image: {
     width: '100%',
-    height: 180, // Increased image height
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    backgroundColor: '#e0e0e0', // Placeholder background for image
+    height: 150, // Adjust height as needed
+    marginBottom: 12,
+    backgroundColor: '#eee', // Placeholder bg while loading
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: 150,
+    marginBottom: 12,
+    backgroundColor: '#e0e0e0', // Distinct placeholder color
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Optional: Add an icon or text for placeholder
+    // For example: <Icon name="image-off-outline" size={40} color="#a0a0a0" />
   },
   cardContent: { // Style for the content part of the card
     padding: 15, // Increased padding
@@ -249,21 +364,24 @@ const styles = StyleSheet.create({
   group: { fontSize: 14, color: '#555', marginBottom: 4 }, // Adjusted group text
   date: { fontSize: 13, color: '#777', marginBottom: 8 }, // Adjusted date text
   location: { fontSize: 13, color: '#777', marginBottom: 4 }, // Added location style
-  admissionFee: { fontSize: 13, color: '#777', marginBottom: 4, fontWeight: '500' }, // Added admission fee style
   creatorContainer: { // Container for avatar and name
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8, // Increased margin
-    marginBottom: 4, // Added margin bottom
+    marginTop: 10, // Add some space above creator info
   },
-  creatorAvatar: {
-    width: 24, // Smaller avatar size
-    height: 24,
-    borderRadius: 12, // Circular avatar
-    marginRight: 8,
-    backgroundColor: '#ccc', // Placeholder bg
+  creatorInfo: { // Styles for creator text
+    fontSize: 13,
+    color: '#555',
   },
-  creatorInfo: { fontSize: 12, color: '#888', fontStyle: 'italic' }, // Style for creator info
   desc: { fontSize: 14, color: '#444', lineHeight: 20 }, // Adjusted description
   empty: { textAlign: 'center', marginTop: 32, color: '#666', fontSize: 16 }, // Adjusted empty text
+  favoriteButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1, // Ensure it's above the image
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent background
+    padding: 6,
+    borderRadius: 20, // Circular background
+  },
 });
