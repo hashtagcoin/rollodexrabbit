@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'; // Import Ionicons
 
 // Expo Router screen options
 export const options = {
-  headerShown: false,
+  headerShown: false, // Hide the default navigator header
 };
 
 // Define EventCategory type
@@ -36,6 +36,8 @@ type Event = {
   group_name?: string; // This is an enrichment, keep it
   creator_name?: string | null; // Restored field for creator's name
   category?: EventCategory | null; // Added category field
+  admission_fee?: number | null; // Changed from admission_cost
+  participants_going_count?: number | null; // Changed from attendee_count
 };
 
 export default function EventsScreen() {
@@ -115,7 +117,9 @@ export default function EventsScreen() {
           created_by,
           image_url,
           group_name,
-          category
+          category,
+          admission_fee,
+          participants_going_count
         `)
         .order('start_time', { ascending: true });
 
@@ -234,32 +238,34 @@ export default function EventsScreen() {
 
   // Function to render category buttons
   const renderCategoryButtons = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false} 
-      style={styles.filterContainer} 
-      contentContainerStyle={styles.filterContentContainer}
-    >
-      {ALL_CATEGORIES.map((category) => (
-        <TouchableOpacity
-          key={category}
-          style={[
-            styles.categoryButton,
-            selectedCategory === category && styles.categoryButtonSelected,
-          ]}
-          onPress={() => setSelectedCategory(category)}
-        >
-          <Text
+    <View style={styles.categoryFilterWrapper}>
+      <ScrollView 
+        horizontal 
+        style={styles.categoryFilterScrollView} 
+        contentContainerStyle={styles.filterContentContainer}
+        showsHorizontalScrollIndicator={false}
+      >
+        {ALL_CATEGORIES.map((category) => (
+          <TouchableOpacity
+            key={category}
             style={[
-              styles.categoryButtonText,
-              selectedCategory === category && styles.categoryButtonTextSelected,
+              styles.categoryButton,
+              selectedCategory === category && styles.categoryButtonSelected,
             ]}
+            onPress={() => setSelectedCategory(category)}
           >
-            {category}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+            <Text
+              style={[
+                styles.categoryButtonText,
+                selectedCategory === category && styles.categoryButtonTextSelected,
+              ]}
+            >
+              {category}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   );
 
   return (
@@ -282,6 +288,7 @@ export default function EventsScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {
           const isFavorited = favoritedEventIds.has(item.id);
+
           return (
             <TouchableOpacity
               style={styles.card}
@@ -317,7 +324,24 @@ export default function EventsScreen() {
                 <Text style={styles.desc} numberOfLines={3}>{item.description}</Text>
                 {item.creator_name && item.creator_name !== 'Unknown Creator' && (
                   <View style={styles.creatorContainer}>
-                    <Text style={styles.creatorInfo}>Created by: {item.creator_name}</Text>
+                    <Text style={styles.creatorInfo}>by {item.creator_name}</Text>
+                  </View>
+                )}
+                <View style={styles.detailRow}>
+                  <Ionicons name="cash-outline" size={16} color="#4CAF50" style={styles.iconStyle} />
+                  <Text style={styles.detailText}>
+                    {item.admission_fee && item.admission_fee > 0 
+                      ? `$${item.admission_fee.toFixed(2)}` 
+                      : 'Free'}
+                  </Text>
+                </View>
+                {typeof item.participants_going_count === 'number' && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="people-outline" size={16} color="#FF9800" style={styles.iconStyle} />
+                    <Text style={styles.detailText}>
+                      {item.participants_going_count} attending
+                      {item.max_participants ? ` / ${item.max_participants}` : ''}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -340,100 +364,124 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f2f5' },
   searchContainer: {
     paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: 5, // Reduced padding bottom
+    paddingVertical: 10,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   search: {
-    margin: 0,
-    padding: 12, // Increased padding
-    borderWidth: 1,
-    borderColor: '#e0e0e0', // Lighter border
-    borderRadius: 8,
-    backgroundColor: '#fff', // White background for search input
-    fontSize: 16, // Increased font size
+    height: 40,
+    backgroundColor: '#f0f2f5',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    fontSize: 16,
   },
-  filterContainer: { 
-    paddingVertical: 12, // Keep existing padding
-    backgroundColor: '#fff', 
-    paddingLeft: 15, 
-    minHeight: 70, // Set minimum height for the section
+  categoryFilterWrapper: { 
+    height: 50,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    justifyContent: 'center', 
+  },
+  categoryFilterScrollView: { 
+    width: '100%',
+    maxHeight: '100%', 
   },
   filterContentContainer: { 
     flexDirection: 'row',
+    alignItems: 'center', 
   },
   categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10, // Increased vertical padding for buttons
-    borderRadius: 20,
-    backgroundColor: '#e9e9eb',
-    marginRight: 10,
+    height: 32, 
+    paddingHorizontal: 12, 
+    borderRadius: 16, 
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#007bff',    
+    marginRight: 8,         
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoryButtonSelected: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#007bff', 
+    borderColor: '#007bff',    
   },
   categoryButtonText: {
-    color: '#333',
+    color: '#007bff',          
     fontWeight: '500',
+    fontSize: 14,             
+    lineHeight: 18, 
   },
   categoryButtonTextSelected: {
-    color: '#fff',
+    color: '#fff',              
+    fontWeight: '500',
+    fontSize: 14,             
+    lineHeight: 18, 
   },
-  list: { paddingHorizontal: 16, paddingBottom: 16, flex: 1 }, // Added flex: 1
+  list: { paddingHorizontal: 16, paddingBottom: 16, flex: 1 }, 
   card: {
-    backgroundColor: '#ffffff', // White card background
-    borderRadius: 12, // More rounded corners
-    marginBottom: 16, // Increased margin bottom
+    backgroundColor: '#ffffff', 
+    borderRadius: 12, 
+    marginBottom: 16, 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3, // Added elevation for Android shadow
-    position: 'relative', // Needed for absolute positioning of favorite button
+    elevation: 3, 
+    position: 'relative', 
   },
   image: {
     width: '100%',
-    height: 150, // Adjust height as needed
+    height: 150, 
     marginBottom: 12,
-    backgroundColor: '#eee', // Placeholder bg while loading
+    backgroundColor: '#eee', 
   },
   imagePlaceholder: {
     width: '100%',
     height: 150,
     marginBottom: 12,
-    backgroundColor: '#e0e0e0', // Distinct placeholder color
+    backgroundColor: '#e0e0e0', 
     alignItems: 'center',
     justifyContent: 'center',
-    // Optional: Add an icon or text for placeholder
-    // For example: <Icon name="image-off-outline" size={40} color="#a0a0a0" />
   },
   cardContent: { 
-    padding: 15, // Increased padding
+    padding: 15, 
   },
-  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 6, color: '#333' }, // Adjusted title
-  group: { fontSize: 14, color: '#555', marginBottom: 4 }, // Adjusted group text
-  date: { fontSize: 13, color: '#777', marginBottom: 8 }, // Adjusted date text
-  location: { fontSize: 13, color: '#777', marginBottom: 4 }, // Added location style
+  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 6, color: '#333' }, 
+  group: { fontSize: 14, color: '#555', marginBottom: 4 }, 
+  date: { fontSize: 13, color: '#777', marginBottom: 8 }, 
+  location: { fontSize: 13, color: '#777', marginBottom: 4 }, 
   creatorContainer: { 
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10, // Add some space above creator info
+    marginTop: 10, 
   },
   creatorInfo: { 
     fontSize: 13,
     color: '#555',
+    marginLeft: 4, 
   },
-  desc: { fontSize: 14, color: '#444', lineHeight: 20 }, // Adjusted description
-  empty: { textAlign: 'center', marginTop: 32, color: '#666', fontSize: 16 }, // Adjusted empty text
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  iconStyle: {
+    marginRight: 6,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#444',
+  },
+  desc: { fontSize: 14, color: '#444', lineHeight: 20 }, 
+  empty: { textAlign: 'center', marginTop: 32, color: '#666', fontSize: 16 }, 
   favoriteButton: {
     position: 'absolute',
     top: 10,
     right: 10,
-    zIndex: 1, // Ensure it's above the image
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent background
+    zIndex: 1, 
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', 
     padding: 6,
-    borderRadius: 20, // Circular background
+    borderRadius: 20, 
   },
 });

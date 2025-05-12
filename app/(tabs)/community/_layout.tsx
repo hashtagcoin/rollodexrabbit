@@ -11,7 +11,7 @@ export default function CommunityLayout() {
       <Stack.Screen 
         name="events" 
         options={{
-          headerShown: true,
+          headerShown: false, // Set to false to hide this header
           title: 'Events',
           headerLeft: () => (
             <TouchableOpacity 
