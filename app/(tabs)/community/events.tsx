@@ -418,7 +418,11 @@ const styles = StyleSheet.create({
     fontSize: 14,             
     lineHeight: 18, 
   },
-  list: { paddingHorizontal: 16, paddingBottom: 16, flex: 1 }, 
+  list: { 
+    paddingHorizontal: 16, 
+    paddingBottom: 16, 
+    flexGrow: 1 
+  },
   card: {
     backgroundColor: '#ffffff', 
     borderRadius: 12, 
