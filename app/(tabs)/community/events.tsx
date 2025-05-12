@@ -34,17 +34,8 @@ type Event = {
   created_by?: string | null; // Assuming this is a UUID referring to user_profiles.id
   image_url?: string | null; // Added new image_url field
   group_name?: string; // This is an enrichment, keep it
-  creator_name?: string | null; // New field for creator's name
+  creator_name?: string | null; // Restored field for creator's name
   category?: EventCategory | null; // Added category field
-};
-
-// TODO: Replace with your actual way of getting the user ID (e.g., from auth context)
-const getCurrentUserId = (): string | undefined => {
-  // Placeholder implementation - replace this!
-  // Example: const { session } = useAuth(); return session?.user?.id;
-  console.warn('Placeholder getCurrentUserId used. Replace with actual implementation.');
-  // For testing, returning a hardcoded ID - REMOVE THIS IN PRODUCTION
-  return 'd5414a0d-5c3c-4d2e-80e0-81e1b1159b1e';
 };
 
 export default function EventsScreen() {
@@ -55,9 +46,22 @@ export default function EventsScreen() {
   const [selectedCategory, setSelectedCategory] = useState<EventCategory | 'All'>('All'); // Added state for selected category
   const [favoritedEventIds, setFavoritedEventIds] = useState<Set<string>>(new Set());
   const [favoritesLoading, setFavoritesLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // State for user ID
 
-  // TODO: Replace this with your actual user ID from auth context/state
-  const currentUserId = getCurrentUserId();
+  // Get user ID on mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('Error fetching user session:', error);
+      } else if (session?.user) {
+        setCurrentUserId(session.user.id);
+      } else {
+        setCurrentUserId(null); // No user logged in
+      }
+    };
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     fetchEvents();
@@ -65,8 +69,9 @@ export default function EventsScreen() {
 
   useEffect(() => {
     const fetchFavorites = async () => {
-      if (!currentUserId) {
+      if (!currentUserId) { // Check state variable now
         setFavoritesLoading(false);
+        setFavoritedEventIds(new Set()); // Clear favorites if no user
         return; // No user logged in
       }
       setFavoritesLoading(true);
@@ -110,7 +115,6 @@ export default function EventsScreen() {
           created_by,
           image_url,
           group_name,
-          creator_name,
           category
         `)
         .order('start_time', { ascending: true });
@@ -127,14 +131,14 @@ export default function EventsScreen() {
 
       if (error) {
         console.error('Error fetching events:', error);
-        // Handle error (e.g., show a message to the user)
         setEvents([]);
         setLoading(false);
       } else {
         console.log('Fetched events:', data);
-        // Explicitly cast data to Event[] to satisfy TypeScript
-        setEvents(data as Event[] || []);
+        const fetchedEvents = (data as Event[]) || [];
+        setEvents(fetchedEvents); // Set initial events without creator names
         setLoading(false);
+        fetchAndMapCreatorNames(fetchedEvents);
       }
     } catch (e) {
       console.error('Exception fetching events:', e);
@@ -143,9 +147,49 @@ export default function EventsScreen() {
     }
   }, [searchTerm, selectedCategory]);
 
+  const fetchAndMapCreatorNames = async (eventsData: Event[]) => {
+    const creatorIds = [ // Get unique, non-null creator IDs
+      ...new Set(eventsData.map(event => event.created_by).filter(id => id !== null))
+    ] as string[];
+
+    if (creatorIds.length === 0) {
+      return; // No creator IDs to fetch
+    }
+
+    try {
+      const { data: profiles, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id, full_name')
+        .in('id', creatorIds);
+
+      if (profileError) {
+        console.error('Error fetching creator profiles:', profileError);
+        return; // Don't crash, just skip augmenting names
+      }
+
+      const creatorNameMap = new Map<string, string>();
+      profiles?.forEach(profile => {
+        if (profile.id && profile.full_name) {
+          creatorNameMap.set(profile.id, profile.full_name);
+        }
+      });
+
+      // Update the events state with the fetched names
+      setEvents(prevEvents => 
+        prevEvents.map(event => ({
+          ...event,
+          creator_name: event.created_by ? creatorNameMap.get(event.created_by) || 'Unknown Creator' : 'Unknown Creator'
+        }))
+      );
+
+    } catch (e) {
+      console.error('Exception fetching/mapping creator names:', e);
+    }
+  };
+
   // Toggle favorite status
   const toggleFavorite = async (eventId: string) => {
-    if (!currentUserId || favoritesLoading) return; // Need user ID and ensure initial load is done
+    if (!currentUserId || favoritesLoading) return; // Check state variable now
 
     const isCurrentlyFavorited = favoritedEventIds.has(eventId);
     const originalFavorites = new Set(favoritedEventIds);
@@ -190,7 +234,12 @@ export default function EventsScreen() {
 
   // Function to render category buttons
   const renderCategoryButtons = () => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false} 
+      style={styles.filterContainer} 
+      contentContainerStyle={styles.filterContentContainer}
+    >
       {ALL_CATEGORIES.map((category) => (
         <TouchableOpacity
           key={category}
@@ -292,7 +341,8 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 15,
     paddingTop: 10,
-    paddingBottom: 5, // Reduced bottom padding
+    paddingBottom: 5, // Reduced padding bottom
+    backgroundColor: '#fff',
   },
   search: {
     margin: 0,
@@ -303,18 +353,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', // White background for search input
     fontSize: 16, // Increased font size
   },
-  filterContainer: {
+  filterContainer: { 
+    paddingVertical: 12, // Keep existing padding
+    backgroundColor: '#fff', 
+    paddingLeft: 15, 
+    minHeight: 70, // Set minimum height for the section
+  },
+  filterContentContainer: { 
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 15,
-    paddingBottom: 15,
-    marginTop: 5, // Reduced top margin to bring filters closer to search
   },
   categoryButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10, // Increased vertical padding for buttons
     borderRadius: 20,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#e9e9eb',
     marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -357,19 +409,19 @@ const styles = StyleSheet.create({
     // Optional: Add an icon or text for placeholder
     // For example: <Icon name="image-off-outline" size={40} color="#a0a0a0" />
   },
-  cardContent: { // Style for the content part of the card
+  cardContent: { 
     padding: 15, // Increased padding
   },
   title: { fontSize: 18, fontWeight: 'bold', marginBottom: 6, color: '#333' }, // Adjusted title
   group: { fontSize: 14, color: '#555', marginBottom: 4 }, // Adjusted group text
   date: { fontSize: 13, color: '#777', marginBottom: 8 }, // Adjusted date text
   location: { fontSize: 13, color: '#777', marginBottom: 4 }, // Added location style
-  creatorContainer: { // Container for avatar and name
+  creatorContainer: { 
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 10, // Add some space above creator info
   },
-  creatorInfo: { // Styles for creator text
+  creatorInfo: { 
     fontSize: 13,
     color: '#555',
   },
