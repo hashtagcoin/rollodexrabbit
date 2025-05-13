@@ -12,35 +12,27 @@ import { supabase } from '../../../lib/supabase';
 import { ArrowLeft, MapPin, Star, Calendar, Clock, ChevronRight } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 
-// Assume or import more specific types based on your actual schema
-// This is a placeholder structure based on the query
-type FetchedServiceData = {
+// Updated type to reflect data from 'service_providers' table
+// Based on the MCP query result and typical provider fields
+type ProviderDetailsType = {
   id: string;
-  title: string;
-  description: string;
-  media_urls: string[];
-  address_line_1?: string; // Assuming address parts are in listings
-  suburb?: string;
-  state?: string;
-  postcode?: string;
-  provider: {
-    business_name: string; // Assuming this is in service_providers
-    verified: boolean; // Assuming this is in service_providers
-    id: string; // Assuming the FK relationship uses this ID
-  } | null;
-  service_details: {
-    hourly_rate?: number; // Optional fields based on service_listings
-    duration?: string; // e.g., '60 min'
-  } | null;
-  // Add other fields from 'listings' table as needed
-  // e.g., rating, reviews_count - These might need separate queries or be part of listings
+  business_name: string;
+  abn?: string;
+  credentials?: string[];
+  verified?: boolean;
+  service_categories?: string[];
+  service_area?: string;
+  business_description?: string;
+  logo_url?: string | null; 
+  // Add other fields from 'service_providers' as needed
+  // If specific services OF this provider are displayed, they'll need a separate fetch & type
 };
 
 export default function ServiceDetails() {
   const { id, returnIndex, returnViewMode } = useLocalSearchParams<{ id: string; returnIndex?: string; returnViewMode?: string }>();
   const navigation = useNavigation();
-  const [loading, setLoading] = useState(true); // Start loading initially
-  const [serviceData, setServiceData] = useState<FetchedServiceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [providerDetails, setProviderDetails] = useState<ProviderDetailsType | null>(null); // Renamed state
   const [error, setError] = useState<string | null>(null);
 
   // Custom back handler to return to discover screen
@@ -56,72 +48,59 @@ export default function ServiceDetails() {
   };
 
   useEffect(() => {
-    const fetchServiceDetails = async () => {
+    const fetchProviderDetails = async () => { // Renamed function
       if (!id) return;
 
       setLoading(true);
       setError(null);
 
       try {
-        // Step 1: Fetch the main service data from 'services' table
-        console.log(`Fetching service with ID: ${id}`);
-        const { data: serviceDataResult, error: serviceError } = await supabase
-          .from('services')
-          .select('*')
+        // Step 1: Fetch the main provider data from 'service_providers' table
+        console.log(`Fetching service provider with ID: ${id}`); // Updated log message
+        const { data: providerDataResult, error: providerError } = await supabase
+          .from('service_providers') // Changed table name
+          .select('*') // Consider selecting specific columns later for optimization
           .eq('id', id)
           .single();
 
-        if (serviceError) {
-          console.error('Error fetching service details:', serviceError);
-          setError(serviceError.message || 'Failed to fetch service details.');
-          setServiceData(null); // Clear data on error
+        if (providerError) {
+          console.error('Error fetching service provider details:', providerError); // Updated log
+          if (providerError.code === 'PGRST116') {
+            setError('The requested service provider could not be found or is no longer available.'); // Updated error message
+          } else {
+            setError(providerError.message || 'Failed to fetch service provider details.'); // Updated error message
+          }
+          setProviderDetails(null); // Clear data on error
           setLoading(false);
           return;
         }
 
-        // Combine data - Assuming 'services' table has all necessary initial fields including provider_id
-        // We might not need separate provider/service_listing fetches if 'services' is comprehensive
-        // For now, let's keep the structure but log potential missing data from this primary fetch
-
-        let combinedData = { ...serviceDataResult } as any; // Start with data from 'services'
-
-        // Step 2: Fetch provider data if provider_id exists in the serviceDataResult
-        if (serviceDataResult?.provider_id) {
-          // Querying 'service_providers' based on user information.
-          // This may fail if the table doesn't exist in the connected project.
-          const { data: providerData, error: providerError } = await supabase
-            .from('service_providers') // Changed table name
-            .select('business_name, verified, id') // Selecting columns assumed to be in service_providers
-            .eq('id', serviceDataResult.provider_id) // Assuming FK still relates via this ID
-            .maybeSingle();
-
-          if (providerError) {
-            console.warn(`Could not fetch provider ${serviceDataResult.provider_id}:`, providerError.message);
-          } else if (providerData) {
-            combinedData.provider = providerData;
-          }
+        if (!providerDataResult) {
+          setError('Service provider details are unexpectedly missing after a successful query.'); // Updated error message
+          setProviderDetails(null);
+          setLoading(false);
+          return;
         }
 
-        // Set the final combined state
-        setServiceData(combinedData);
+        setProviderDetails(providerDataResult as ProviderDetailsType); // Set the fetched provider data
 
       } catch (err: any) {
-        console.error('Error fetching service details:', err);
-        setError(err.message || 'Failed to fetch service details.');
-        setServiceData(null); // Clear data on error
+        console.error('Error fetching service provider details:', err); // Updated log
+        setError(err.message || 'Failed to fetch service provider details.'); // Updated error message
+        setProviderDetails(null); // Clear data on error
       } finally {
         setLoading(false);
       }
     };
 
-    fetchServiceDetails();
+    fetchProviderDetails(); // Call renamed function
   }, [id]);
 
   const handleBooking = () => {
-    if (!serviceData) return; 
+    if (!providerDetails) return; 
     router.push({
-      pathname: '/(tabs)/discover/booking', // Adjust path if needed
-      params: { serviceId: serviceData.id }, 
+      pathname: '/(tabs)/discover/booking', 
+      params: { serviceProviderId: providerDetails.id }, // Changed param name for clarity
     });
   };
 
@@ -130,80 +109,66 @@ export default function ServiceDetails() {
     return (
       <View style={styles.containerCentered}>
         <AppHeader title="Loading..." showBackButton={true} onBackPress={handleBackPress} />
-        {/* Consider adding an ActivityIndicator here */}
-        <Text style={styles.messageText}>Loading service details...</Text>
+        <Text style={styles.messageText}>Loading service provider details...</Text>{/* Updated text */}
       </View>
     );
   }
 
   // Error State
-  if (error || !serviceData) {
+  if (error || !providerDetails) { // Check providerDetails
     return (
       <View style={styles.containerCentered}>
         <AppHeader title="Error" showBackButton={true} onBackPress={handleBackPress} />
-        <Text style={styles.messageText}>{error || 'Service data could not be loaded.'}</Text>
+        <Text style={styles.messageText}>{error || 'Service provider data could not be loaded.'}</Text>{/* Updated text */}
       </View>
     );
   }
 
   // --- Data Rendering --- 
-  // Use serviceData instead of hardcoded 'service'
-  const imageUrl = serviceData.media_urls && serviceData.media_urls.length > 0 
-                   ? serviceData.media_urls[0] 
-                   : 'https://placehold.co/600x400?text=No+Image'; // Fallback image
+  // THIS SECTION WILL NEED SIGNIFICANT UPDATES IN A FOLLOW-UP STEP
+  // to map fields from 'providerDetails' (e.g., business_name, logo_url)
+  // instead of the old 'serviceData' (e.g., title, media_urls).
 
+  // Example: This will likely break or show wrong image until UI is mapped
+  const imageUrl = providerDetails.logo_url || 'https://placehold.co/600x400?text=No+Image';
+
+  // Example: This needs re-evaluation based on where address data for a provider is stored
   const fullAddress = [
-    serviceData.address_line_1,
-    serviceData.suburb,
-    serviceData.state,
-    serviceData.postcode
-  ].filter(Boolean).join(', '); // Construct address safely
+    // providerDetails.address_line_1, // These fields are not on service_providers directly
+    // providerDetails.suburb,
+    // providerDetails.state,
+    // providerDetails.postcode
+    providerDetails.service_area // service_providers has service_area
+  ].filter(Boolean).join(', ');
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Service Details" showBackButton={true} onBackPress={handleBackPress} />
+      <AppHeader title={providerDetails.business_name || "Provider Details"} showBackButton={true} onBackPress={handleBackPress} />
       <ScrollView>
         <View style={styles.imageContainer}>
-          {/* Use fetched image URL with fallback */}
           <Image source={{ uri: imageUrl }} style={styles.image} />
         </View>
 
         <View style={styles.content}>
           <View style={styles.header}>
-            {/* Use fetched data */}
-            <Text style={styles.title}>{serviceData.title || 'Service Name Unavailable'}</Text>
-            {/* TODO: Fetch/Display Rating and Reviews if available in schema */}
-            {/* <View style={styles.ratingContainer}>
-              <Star size={20} color="#FFB800" fill="#FFB800" />
-              <Text style={styles.rating}>{serviceData.rating}</Text> 
-              <Text style={styles.reviews}>({serviceData.reviews} reviews)</Text> 
-            </View> */}
+            <Text style={styles.title}>{providerDetails.business_name || 'Provider Name Unavailable'}</Text>
+            {/* Rating/Reviews would need to be sourced if applicable to providers */}
           </View>
 
           <View style={styles.metaInfo}>
             <View style={styles.metaItem}>
               <MapPin size={20} color="#666" />
-              {/* Use constructed address */}
-              <Text style={styles.metaText}>{fullAddress || 'Address not available'}</Text>
+              <Text style={styles.metaText}>{fullAddress || 'Service area not available'}</Text>
             </View>
-            {serviceData.service_details?.duration && (
-              <View style={styles.metaItem}>
-                <Clock size={20} color="#666" />
-                {/* Use fetched duration */}
-                <Text style={styles.metaText}>{serviceData.service_details.duration}</Text>
-              </View>
-            )}
-            {/* TODO: Implement availability logic */}
-            {/* <View style={styles.metaItem}>
-              <Calendar size={20} color="#666" />
-              <Text style={styles.metaText}>Available Today</Text> 
-            </View> */}
+            {/* Duration/Availability were for specific services, not directly for provider */}
+            {/* If providerDetails has 'service_details.duration', it would be from a joined source or different structure */}
+            {/* Example: (providerDetails as any).service_details?.duration might be how it was before */}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About {serviceData.provider?.business_name || ''}</Text>
+            <Text style={styles.sectionTitle}>About {providerDetails.business_name || ''}</Text>
             {/* Use fetched description */}
-            <Text style={styles.description}>{serviceData.description || 'No description provided.'}</Text>
+            <Text style={styles.description}>{providerDetails.business_description || 'No description provided.'}</Text>
           </View>
 
           {/* TODO: Implement Available Times fetching/display */}
@@ -223,17 +188,15 @@ export default function ServiceDetails() {
           </View> */}
 
           <View style={styles.priceSection}>
-            {serviceData.service_details?.hourly_rate && (
-              <View>
-                <Text style={styles.priceLabel}>Price per session</Text>
-                {/* Use fetched price */}
-                <Text style={styles.price}>${serviceData.service_details.hourly_rate}</Text>
-              </View>
-            )}
+            {/* TODO: Implement pricing logic */}
+            {/* <View>
+              <Text style={styles.priceLabel}>Price per session</Text>
+              <Text style={styles.price}>${serviceData.service_details.hourly_rate}</Text>
+            </View> */}
             <TouchableOpacity 
               style={[styles.bookButton, loading && styles.bookButtonDisabled]} // Loading state check might be redundant here
               onPress={handleBooking}
-              disabled={loading || !serviceData} // Disable if loading or no data
+              disabled={loading || !providerDetails} // Disable if loading or no data
             >
               <Text style={styles.bookButtonText}>Book Now</Text>
               <ChevronRight size={20} color="#fff" />

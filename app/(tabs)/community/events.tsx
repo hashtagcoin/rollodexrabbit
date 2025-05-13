@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, A
 import { supabase } from '../../../lib/supabase';
 import AppHeader from '../../../components/AppHeader';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons'; // Import Ionicons
+import { Ionicons } from '@expo/vector-icons'; 
+import SharePostModal from '../../../components/SharePostModal';
+import { User } from '@supabase/supabase-js';
 
 // Expo Router screen options
 export const options = {
@@ -50,14 +52,19 @@ export default function EventsScreen() {
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); // State for user ID
 
+  // State for Share Modal
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+  const [eventToShare, setEventToShare] = useState<Event | null>(null);
+
   // Get user ID on mount
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
         console.error('Error fetching user session:', error);
+        setCurrentUserId(null); 
       } else if (session?.user) {
-        setCurrentUserId(session.user.id);
+        setCurrentUserId(session.user.id); // Set the user ID string
       } else {
         setCurrentUserId(null); // No user logged in
       }
@@ -199,7 +206,7 @@ export default function EventsScreen() {
     const originalFavorites = new Set(favoritedEventIds);
 
     // Optimistic UI update
-    const updatedFavorites = new Set(originalFavorites);
+    const updatedFavorites = new Set(favoritedEventIds);
     if (isCurrentlyFavorited) {
       updatedFavorites.delete(eventId);
     } else {
@@ -209,31 +216,34 @@ export default function EventsScreen() {
 
     try {
       if (isCurrentlyFavorited) {
-        // Remove from favorites
+        // Delete from favorites
         const { error } = await supabase
           .from('favorites')
           .delete()
-          .eq('user_id', currentUserId)
-          .eq('item_id', eventId)
-          .eq('item_type', 'group_event');
+          .match({ user_id: currentUserId, item_id: eventId, item_type: 'group_event' });
         if (error) throw error;
       } else {
         // Add to favorites
         const { error } = await supabase
           .from('favorites')
-          .insert({
-            user_id: currentUserId,
-            item_id: eventId,
-            item_type: 'group_event',
-          });
+          .insert({ user_id: currentUserId, item_id: eventId, item_type: 'group_event' });
         if (error) throw error;
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      // Revert optimistic update on error
-      setFavoritedEventIds(originalFavorites);
-      // Optionally show an error message to the user
+      setFavoritedEventIds(originalFavorites); // Revert on error
     }
+  };
+
+  const handleOpenShareModal = (event: Event) => {
+    setEventToShare(event);
+    setIsShareModalVisible(true);
+  };
+
+  const handleConfirmShareEvent = (sharedEventId: string, selectedFriendIds: string[]) => {
+    // Placeholder for actual share logic
+    console.log(`Event ${sharedEventId} shared with friends: ${selectedFriendIds.join(', ')}`);
+    setIsShareModalVisible(false); // Close modal after 'sharing'
   };
 
   // Function to render category buttons
@@ -345,6 +355,13 @@ export default function EventsScreen() {
                   </View>
                 )}
               </View>
+              {/* Share Button */}
+              <TouchableOpacity 
+                style={styles.shareIconContainer}
+                onPress={() => handleOpenShareModal(item)}
+              >
+                <Ionicons name="share-social-outline" size={24} color="#007AFF" />
+              </TouchableOpacity>
             </TouchableOpacity>
           );
         }}
@@ -356,6 +373,19 @@ export default function EventsScreen() {
           )
         }
       />
+      
+      {/* Use SharePostModal */}
+      {eventToShare && currentUserId && (
+        <SharePostModal 
+          isVisible={isShareModalVisible} 
+          onClose={() => setIsShareModalVisible(false)} 
+          modalTitle="Share Event" // Custom title for the modal
+          postId={eventToShare.id} // Pass event ID as postId (or rename prop in modal if needed)
+          onShare={handleConfirmShareEvent} // Pass the new handler
+          currentUser={{ id: currentUserId } as User} // Pass currentUser, ensuring it matches User type or cast appropriately
+        />
+      )}
+
     </View>
   );
 }
@@ -449,9 +479,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardContent: { 
-    padding: 15, 
+    padding: 12, 
   },
-  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 6, color: '#333' }, 
+  shareIconContainer: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)', // Optional: light background for icon
+    padding: 6,
+    borderRadius: 20, // Make it circular
+    elevation: 2, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 6,
+    color: '#333' }, 
   group: { fontSize: 14, color: '#555', marginBottom: 4 }, 
   date: { fontSize: 13, color: '#777', marginBottom: 8 }, 
   location: { fontSize: 13, color: '#777', marginBottom: 4 }, 
@@ -478,7 +525,12 @@ const styles = StyleSheet.create({
     color: '#444',
   },
   desc: { fontSize: 14, color: '#444', lineHeight: 20 }, 
-  empty: { textAlign: 'center', marginTop: 32, color: '#666', fontSize: 16 }, 
+  empty: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: '#666',
+  },
   favoriteButton: {
     position: 'absolute',
     top: 10,

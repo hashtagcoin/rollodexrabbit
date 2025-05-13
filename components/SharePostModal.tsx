@@ -28,6 +28,7 @@ interface SharePostModalProps {
   postId: string | null;
   onShare: (postId: string, selectedFriendIds: string[]) => void;
   currentUser: User | null;
+  modalTitle?: string;
 }
 
 const SharePostModal: React.FC<SharePostModalProps> = ({
@@ -36,6 +37,7 @@ const SharePostModal: React.FC<SharePostModalProps> = ({
   postId,
   onShare,
   currentUser,
+  modalTitle,
 }) => {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
@@ -146,7 +148,7 @@ const SharePostModal: React.FC<SharePostModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <View style={styles.headerContainer}>
-            <Text style={styles.headerTitle}>Share Post</Text>
+            <Text style={styles.headerTitle}>{modalTitle || 'Share Post'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
