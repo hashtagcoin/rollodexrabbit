@@ -30,29 +30,37 @@ import { HousingGroup, GroupMember } from '../types/housing';
 import { type Database } from '../../../../types/database.types'; // Updated path after moving types
 
 // Define Tables type from Supabase generated types
-type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
-type Enums<T extends keyof Database['public']['Enums']> = Database['public']['Enums'][T]; // Kept unused type
-type UserProfileType = Tables<'user_profiles'>; // Define UserProfileType
+// --- MANUAL TYPE DEFINITIONS ---
+type HousingGroupMember = {
+  id: string;
+  user_id: string;
+  group_id: string;
+  join_date: string;
+  status: 'pending' | 'approved' | 'rejected';
+  support_level: string | null;
+  is_admin: boolean;
+  bio?: string | null;
+};
 
-// Extend the GroupMember and related user profile types to include additional fields
-interface ExtendedUserProfile {
+type ExtendedUserProfile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   sex: string | null;
   bio?: string | null;
-}
+};
 
-interface ExtendedGroupMember extends Omit<Tables<'housing_group_members'>, 'user_profile' | 'bio' | 'support_level'> {
+type ExtendedGroupMember = HousingGroupMember & {
   user_profile: ExtendedUserProfile;
-  support_level: string | null;
-  bio?: string | null;
-}
+};
 
-interface ExtendedHousingGroup extends Omit<HousingGroup, 'members'> {
+type ExtendedHousingGroup = Omit<HousingGroup, 'members'> & {
   members: ExtendedGroupMember[];
   description: string;
-}
+};
+
+// --- END MANUAL TYPE DEFINITIONS ---
+
 
 // Define type for the housing listing summary
 type HousingListingSummary = {
@@ -79,6 +87,98 @@ export default function HousingGroupDetail() {
   const [userMembership, setUserMembership] = useState<ExtendedGroupMember | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avatarErrorStates, setAvatarErrorStates] = useState<{ [key: number]: boolean }>({}); // Use object for sparse state
+
+  // --- FAVORITE STATE ---
+  const [isFavorite, setIsFavorite] = useState<boolean>(false);
+  const [favoriteId, setFavoriteId] = useState<string | null>(null);
+  const [favoriteLoading, setFavoriteLoading] = useState<boolean>(false);
+
+  // --- FAVORITE LOGIC ---
+  const checkFavoriteStatus = useCallback(async () => {
+    if (!userId || !id) return;
+    setFavoriteLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('favorite_id')
+        .eq('user_id', userId)
+        .eq('item_id', id)
+        .eq('item_type', 'housing_group')
+        .maybeSingle();
+      if (error) throw error;
+      if (data && data.favorite_id) {
+        setIsFavorite(true);
+        setFavoriteId(data.favorite_id);
+      } else {
+        setIsFavorite(false);
+        setFavoriteId(null);
+      }
+    } catch (err) {
+      console.error('Error checking favorite status:', err);
+      setIsFavorite(false);
+      setFavoriteId(null);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }, [userId, id]);
+
+  const handleFavorite = useCallback(async () => {
+    if (!userId || !id) return;
+    setFavoriteLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .insert([
+          {
+            user_id: userId,
+            item_id: id,
+            item_type: 'housing_group',
+            created_at: new Date().toISOString(),
+          },
+        ])
+        .select('favorite_id')
+        .single();
+      if (error) throw error;
+      setIsFavorite(true);
+      setFavoriteId(data.favorite_id);
+    } catch (err) {
+      console.error('Error favoriting group:', err);
+      Alert.alert('Error', 'Could not favorite this group.');
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }, [userId, id]);
+
+  const handleUnfavorite = useCallback(async () => {
+    if (!userId || !id || !favoriteId) return;
+    setFavoriteLoading(true);
+    try {
+      const { error } = await supabase
+        .from('favorites')
+        .delete()
+        .eq('favorite_id', favoriteId);
+      if (error) throw error;
+      setIsFavorite(false);
+      setFavoriteId(null);
+    } catch (err) {
+      console.error('Error unfavoriting group:', err);
+      Alert.alert('Error', 'Could not unfavorite this group.');
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }, [userId, id, favoriteId]);
+
+  // --- AUTO-FAVORITE ON JOIN ---
+  const favoriteOnJoin = useCallback(async () => {
+    if (!isFavorite) {
+      await handleFavorite();
+    }
+  }, [isFavorite, handleFavorite]);
+
+  // --- EFFECT: CHECK FAVORITE ON LOAD ---
+  useEffect(() => {
+    checkFavoriteStatus();
+  }, [checkFavoriteStatus]);
 
   // Format date as Month Day
   const formatMoveInDate = (dateString: string | null | undefined) => {
@@ -312,6 +412,9 @@ export default function HousingGroupDetail() {
       ]);
       if (insertError) throw insertError;
 
+      // --- AUTO-FAVORITE ON JOIN ---
+      await favoriteOnJoin();
+
       console.log('Successfully requested to join group.');
       // Refresh details to show pending status
       await loadGroupDetails();
@@ -327,11 +430,13 @@ export default function HousingGroupDetail() {
     }
   };
 
+
   // *** FIX 3: Define handleAvatarError ***
   const handleAvatarError = (index: number) => {
     console.log(`Avatar failed to load for member at index: ${index}`);
-    setAvatarErrorStates(prev => ({ ...prev, [index]: true }));
+    setAvatarErrorStates((prev: Record<number, boolean>) => ({ ...prev, [index]: true }));
   };
+
 
 
   // --- RENDER LOGIC ---
@@ -431,6 +536,27 @@ export default function HousingGroupDetail() {
 
         {/* Group Details Card */}
         <View style={styles.groupDetailsCard}>
+          {/* --- FAVORITE BUTTON --- */}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <TouchableOpacity
+              onPress={isFavorite ? handleUnfavorite : handleFavorite}
+              disabled={favoriteLoading}
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 6 }}
+              accessibilityLabel={isFavorite ? 'Unfavorite this group' : 'Favorite this group'}
+            >
+              <Heart
+                size={24}
+                color={isFavorite ? '#FF3B30' : '#B0B0B0'}
+                fill={isFavorite ? '#FF3B30' : 'none'}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={{ color: isFavorite ? '#FF3B30' : '#555', fontWeight: '600' }}>
+                {favoriteLoading
+                  ? '...'
+                  : (isFavorite ? 'Favorited' : 'Favorite')}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.groupName}>{group.name}</Text>
            <View style={styles.separatorThin} />
           <View style={styles.detailRow}>
@@ -454,7 +580,7 @@ export default function HousingGroupDetail() {
            </Text>
           {group.members.length > 0 ? (
             group.members.map((member, index) => (
-              <View key={member.id || index} style={styles.memberItem}>
+               <View key={member.user_id} style={styles.memberItem}>
                  {/* Member Avatar with Placeholder Logic */}
                  {avatarErrorStates[index] || !member.user_profile.avatar_url ? (
                     <View style={styles.memberAvatarPlaceholder}>

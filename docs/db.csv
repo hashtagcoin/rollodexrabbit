@@ -1,0 +1,620 @@
+table_schema,table_name,column_name,data_type,is_nullable,column_default,object_type,constraint_name,referenced_table,referenced_column
+public,achievement_types,type,text,NO,null,Table,null,null,null
+public,achievement_types,name,text,NO,null,Table,null,null,null
+public,achievement_types,description,text,YES,null,Table,null,null,null
+public,achievement_types,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,badge_definitions,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,badge_definitions,name,text,NO,null,Table,null,null,null
+public,badge_definitions,description,text,NO,null,Table,null,null,null
+public,badge_definitions,icon_url,text,YES,null,Table,null,null,null
+public,badge_definitions,category,text,NO,null,Table,null,null,null
+public,badge_definitions,points,integer,NO,0,Table,null,null,null
+public,badge_definitions,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,badge_definitions,requirements,jsonb,NO,'{}'::jsonb,Table,null,null,null
+public,badge_definitions,is_active,boolean,NO,true,Table,null,null,null
+public,badges,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,badges,name,text,NO,null,Table,null,null,null
+public,badges,description,text,NO,null,Table,null,null,null
+public,badges,icon_url,text,YES,null,Table,null,null,null
+public,badges,category,text,NO,null,Table,null,null,null
+public,badges,points,integer,YES,0,Table,null,null,null
+public,badges,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,chat_conversations,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,chat_conversations,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,chat_conversations,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,chat_conversations,is_group_chat,boolean,NO,false,Table,null,null,null
+public,chat_messages,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,chat_messages,conversation_id,uuid,NO,null,Table,chat_messages_conversation_id_fkey,chat_conversations,id
+public,chat_messages,sender_id,uuid,NO,null,Table,chat_messages_sender_id_fkey,users,id
+public,chat_messages,content,text,NO,null,Table,null,null,null
+public,chat_messages,media_url,text,YES,null,Table,null,null,null
+public,chat_messages,read,boolean,YES,false,Table,null,null,null
+public,chat_messages,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,chat_messages,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,chat_participants,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,chat_participants,conversation_id,uuid,NO,null,Table,chat_participants_conversation_id_fkey,chat_conversations,id
+public,chat_participants,user_id,uuid,NO,null,Table,chat_participants_user_id_fkey,users,id
+public,chat_participants,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,claims,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,claims,booking_id,uuid,YES,null,Table,claims_booking_id_fkey,service_bookings,id
+public,claims,user_id,uuid,YES,null,Table,claims_user_id_fkey,users,id
+public,claims,status,text,NO,null,Table,null,null,null
+public,claims,amount,numeric,NO,null,Table,null,null,null
+public,claims,expiry_date,date,NO,null,Table,null,null,null
+public,claims,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,comments,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,comments,post_id,uuid,YES,null,Table,comments_post_id_fkey,posts,post_id
+public,comments,user_id,uuid,YES,null,Table,comments_user_id_fkey,users,id
+public,comments,content,text,NO,null,Table,null,null,null
+public,comments,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,detailed_accessibility_features,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,detailed_accessibility_features,listing_id,uuid,NO,null,Table,detailed_accessibility_features_listing_id_fkey,housing_listings,id
+public,detailed_accessibility_features,feature_type,text,NO,null,Table,null,null,null
+public,detailed_accessibility_features,feature_name,text,NO,null,Table,null,null,null
+public,detailed_accessibility_features,description,text,YES,null,Table,null,null,null
+public,detailed_accessibility_features,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,favorites,favorite_id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,favorites,user_id,uuid,NO,null,Table,favorites_user_id_fkey,users,id
+public,favorites,item_id,uuid,NO,null,Table,null,null,null
+public,favorites,item_type,text,NO,null,Table,null,null,null
+public,favorites,created_at,timestamp with time zone,NO,now(),Table,null,null,null
+public,friendships,friendships_id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,friendships,user_id,uuid,NO,null,Table,friendships_user_id_fkey,users,id
+public,friendships,friend_id,uuid,NO,null,Table,friendships_friend_id_fkey,users,id
+public,friendships,status,text,NO,null,Table,null,null,null
+public,friendships,category,text,NO,'friend'::text,Table,null,null,null
+public,friendships,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,friendships,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_event_participants,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_event_participants,event_id,uuid,YES,null,Table,group_event_participants_event_id_fkey,group_events,id
+public,group_event_participants,user_id,uuid,YES,null,Table,group_event_participants_user_id_fkey,user_profiles,id
+public,group_event_participants,status,text,YES,'going'::text,Table,null,null,null
+public,group_event_participants,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_events,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_events,group_id,uuid,YES,null,Table,group_events_group_id_fkey,groups,id
+public,group_events,subgroup_id,uuid,YES,null,Table,group_events_subgroup_id_fkey,subgroups,id
+public,group_events,title,text,NO,null,Table,null,null,null
+public,group_events,description,text,YES,null,Table,null,null,null
+public,group_events,start_time,timestamp with time zone,NO,null,Table,null,null,null
+public,group_events,end_time,timestamp with time zone,YES,null,Table,null,null,null
+public,group_events,location,jsonb,YES,null,Table,null,null,null
+public,group_events,max_participants,integer,YES,null,Table,null,null,null
+public,group_events,created_by,uuid,YES,null,Table,group_events_created_by_fkey,user_profiles,id
+public,group_events,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_events,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_events,image_url,text,YES,null,Table,null,null,null
+public,group_events,admission_fee,text,YES,null,Table,null,null,null
+public,group_events,category,USER-DEFINED,YES,null,Table,null,null,null
+public,group_invites,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_invites,group_id,uuid,YES,null,Table,group_invites_group_id_fkey,groups,id
+public,group_invites,inviter_id,uuid,YES,null,Table,group_invites_inviter_id_fkey,user_profiles,id
+public,group_invites,invitee_id,uuid,YES,null,Table,group_invites_invitee_id_fkey,user_profiles,id
+public,group_invites,status,text,YES,'pending'::text,Table,null,null,null
+public,group_invites,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_invites,expires_at,timestamp with time zone,YES,(now() + '7 days'::interval),Table,null,null,null
+public,group_members,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_members,group_id,uuid,YES,null,Table,group_members_group_id_fkey,groups,id
+public,group_members,user_id,uuid,YES,null,Table,group_members_user_id_fkey,user_profiles,id
+public,group_members,role,text,NO,null,Table,null,null,null
+public,group_members,joined_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_post_comments,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_post_comments,post_id,uuid,YES,null,Table,group_post_comments_post_id_fkey,group_posts,id
+public,group_post_comments,author_id,uuid,YES,null,Table,group_post_comments_author_id_fkey,user_profiles,id
+public,group_post_comments,content,text,NO,null,Table,null,null,null
+public,group_post_comments,parent_id,uuid,YES,null,Table,group_post_comments_parent_id_fkey,group_post_comments,id
+public,group_post_comments,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_post_comments,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_post_reactions,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_post_reactions,post_id,uuid,YES,null,Table,group_post_reactions_post_id_fkey,group_posts,id
+public,group_post_reactions,user_id,uuid,YES,null,Table,group_post_reactions_user_id_fkey,user_profiles,id
+public,group_post_reactions,reaction_type,text,NO,null,Table,null,null,null
+public,group_post_reactions,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,group_posts,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_posts,created_at,timestamp with time zone,NO,now(),Table,null,null,null
+public,group_posts,group_id,uuid,NO,gen_random_uuid(),Table,group_posts_group_id_fkey,groups,id
+public,group_posts,user_id,uuid,NO,gen_random_uuid(),Table,group_posts_user_id_fkey,user_profiles,id
+public,group_posts,content,text,YES,null,Table,null,null,null
+public,group_posts,media_url,text,YES,null,Table,null,null,null
+public,group_posts,media_type,text,YES,null,Table,null,null,null
+public,group_settings,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,group_settings,group_id,uuid,NO,null,Table,group_settings_group_id_fkey,groups,id
+public,group_settings,is_private,boolean,NO,false,Table,null,null,null
+public,group_settings,allow_posting,boolean,NO,true,Table,null,null,null
+public,group_settings,created_at,timestamp with time zone,NO,now(),Table,null,null,null
+public,group_settings,updated_at,timestamp with time zone,NO,now(),Table,null,null,null
+public,groups,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,groups,name,text,NO,null,Table,null,null,null
+public,groups,owner_id,uuid,YES,null,Table,groups_owner_id_fkey,user_profiles,id
+public,groups,type,text,NO,null,Table,null,null,null
+public,groups,description,text,YES,null,Table,null,null,null
+public,groups,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,groups,avatar_url,text,YES,null,Table,null,null,null
+public,groups,is_public,boolean,NO,true,Table,null,null,null
+public,groups,rules,text,YES,null,Table,null,null,null
+public,groups,cover_image_url,text,YES,null,Table,null,null,null
+public,groups,max_members,integer,YES,null,Table,null,null,null
+public,groups,category,text,YES,null,Table,null,null,null
+public,groups,tags,ARRAY,YES,null,Table,null,null,null
+public,groups,settings,jsonb,YES,'{}'::jsonb,Table,null,null,null
+public,groups,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,groups,event_date,timestamp with time zone,YES,null,Table,null,null,null
+public,groups,event_location,text,YES,null,Table,null,null,null
+public,groups,visibility,text,YES,null,Table,null,null,null
+public,housing_applications,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,housing_applications,listing_id,uuid,YES,null,Table,housing_applications_listing_id_fkey,housing_listings,id
+public,housing_applications,user_id,uuid,YES,null,Table,housing_applications_user_id_fkey,users,id
+public,housing_applications,status,text,NO,'pending'::text,Table,null,null,null
+public,housing_applications,move_in_date,date,NO,null,Table,null,null,null
+public,housing_applications,household_size,integer,NO,null,Table,null,null,null
+public,housing_applications,has_pets,boolean,YES,false,Table,null,null,null
+public,housing_applications,pet_details,text,YES,null,Table,null,null,null
+public,housing_applications,support_requirements,text,YES,null,Table,null,null,null
+public,housing_applications,additional_notes,text,YES,null,Table,null,null,null
+public,housing_applications,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_applications,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_group_members,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,housing_group_members,group_id,uuid,YES,null,Table,housing_group_members_group_id_fkey,housing_groups,id
+public,housing_group_members,user_id,uuid,YES,null,Table,housing_group_members_user_id_fkey,users,id
+public,housing_group_members,join_date,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_group_members,status,text,YES,'approved'::text,Table,null,null,null
+public,housing_group_members,bio,text,YES,null,Table,null,null,null
+public,housing_group_members,support_level,text,YES,null,Table,null,null,null
+public,housing_group_members,is_admin,boolean,YES,false,Table,null,null,null
+public,housing_groups,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,housing_groups,name,text,NO,null,Table,null,null,null
+public,housing_groups,listing_id,uuid,YES,null,Table,housing_groups_listing_id_fkey,housing_listings,id
+public,housing_groups,creator_id,uuid,YES,null,Table,housing_groups_creator_id_fkey,users,id
+public,housing_groups,max_members,integer,NO,4,Table,null,null,null
+public,housing_groups,current_members,integer,NO,1,Table,null,null,null
+public,housing_groups,move_in_date,date,YES,null,Table,null,null,null
+public,housing_groups,description,text,YES,null,Table,null,null,null
+public,housing_groups,is_active,boolean,YES,true,Table,null,null,null
+public,housing_groups,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_groups,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_images,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,housing_images,listing_id,uuid,NO,null,Table,housing_images_listing_id_fkey,housing_listings,id
+public,housing_images,image_url,text,NO,null,Table,null,null,null
+public,housing_images,image_type,text,NO,null,Table,null,null,null
+public,housing_images,room_type,text,YES,null,Table,null,null,null
+public,housing_images,is_primary,boolean,YES,false,Table,null,null,null
+public,housing_images,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_inquiries,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,housing_inquiries,user_id,uuid,NO,null,Table,housing_inquiries_user_id_fkey,users,id
+public,housing_inquiries,listing_id,uuid,NO,null,Table,housing_inquiries_listing_id_fkey,housing_listings,id
+public,housing_inquiries,inquiry_text,text,NO,null,Table,null,null,null
+public,housing_inquiries,response_text,text,YES,null,Table,null,null,null
+public,housing_inquiries,is_responded,boolean,YES,false,Table,null,null,null
+public,housing_inquiries,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_inquiries,responded_at,timestamp with time zone,YES,null,Table,null,null,null
+public,housing_listing_views,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,housing_listing_views,user_id,uuid,NO,null,Table,housing_listing_views_user_id_fkey,users,id
+public,housing_listing_views,listing_id,uuid,NO,null,Table,housing_listing_views_listing_id_fkey,housing_listings,id
+public,housing_listing_views,viewed_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_listings,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,housing_listings,provider_id,uuid,YES,null,Table,housing_listings_provider_id_fkey,service_providers,id
+public,housing_listings,title,text,NO,null,Table,null,null,null
+public,housing_listings,description,text,NO,null,Table,null,null,null
+public,housing_listings,weekly_rent,numeric,NO,null,Table,null,null,null
+public,housing_listings,bond_amount,numeric,YES,null,Table,null,null,null
+public,housing_listings,available_from,date,NO,null,Table,null,null,null
+public,housing_listings,bedrooms,integer,NO,null,Table,null,null,null
+public,housing_listings,bathrooms,integer,NO,null,Table,null,null,null
+public,housing_listings,parking_spaces,integer,YES,0,Table,null,null,null
+public,housing_listings,property_type,text,NO,null,Table,null,null,null
+public,housing_listings,sda_category,text,NO,null,Table,null,null,null
+public,housing_listings,coordinates,USER-DEFINED,NO,null,Table,null,null,null
+public,housing_listings,address,text,NO,null,Table,null,null,null
+public,housing_listings,suburb,text,NO,null,Table,null,null,null
+public,housing_listings,state,text,NO,null,Table,null,null,null
+public,housing_listings,postcode,text,NO,null,Table,null,null,null
+public,housing_listings,features,ARRAY,YES,'{}'::text[],Table,null,null,null
+public,housing_listings,accessibility_features,ARRAY,YES,'{}'::text[],Table,null,null,null
+public,housing_listings,media_urls,ARRAY,YES,'{}'::text[],Table,null,null,null
+public,housing_listings,virtual_tour_url,text,YES,null,Table,null,null,null
+public,housing_listings,pets_allowed,boolean,YES,false,Table,null,null,null
+public,housing_listings,ndis_supported,boolean,YES,true,Table,null,null,null
+public,housing_listings,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_listings,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_listings,accessibility_rating,integer,YES,null,Table,null,null,null
+public,housing_listings,is_sda_certified,boolean,YES,false,Table,null,null,null
+public,housing_listings,sda_certification_date,timestamp with time zone,YES,null,Table,null,null,null
+public,housing_listings,has_virtual_tour,boolean,YES,false,Table,null,null,null
+public,housing_listings,virtual_tour_enabled,boolean,YES,false,Table,null,null,null
+public,housing_listings,last_updated,timestamp with time zone,YES,now(),Table,null,null,null
+public,housing_listings,has_group_match,boolean,YES,false,Table,null,null,null
+public,ndis_plans,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,ndis_plans,user_id,uuid,YES,null,Table,ndis_plans_user_id_fkey,user_profiles,id
+public,ndis_plans,storage_path,text,NO,null,Table,null,null,null
+public,ndis_plans,original_filename,text,YES,null,Table,null,null,null
+public,ndis_plans,uploaded_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,notifications,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,notifications,user_id,uuid,YES,null,Table,notifications_user_id_fkey,users,id
+public,notifications,type,text,NO,null,Table,null,null,null
+public,notifications,content,text,NO,null,Table,null,null,null
+public,notifications,seen,boolean,YES,false,Table,null,null,null
+public,notifications,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,notifications,title,text,YES,null,Table,null,null,null
+public,notifications,body,text,YES,null,Table,null,null,null
+public,point_transactions,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,point_transactions,user_id,uuid,NO,null,Table,point_transactions_user_id_fkey,users,id
+public,point_transactions,amount,integer,NO,null,Table,null,null,null
+public,point_transactions,transaction_type,text,NO,null,Table,null,null,null
+public,point_transactions,description,text,YES,null,Table,null,null,null
+public,point_transactions,reference_id,uuid,YES,null,Table,null,null,null
+public,point_transactions,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,post_likes,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,post_likes,post_id,uuid,YES,null,Table,post_likes_post_id_fkey,posts,post_id
+public,post_likes,user_id,uuid,YES,null,Table,post_likes_user_id_fkey,users,id
+public,post_likes,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,post_reactions,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,post_reactions,post_id,uuid,YES,null,Table,post_reactions_post_id_fkey,posts,post_id
+public,post_reactions,user_id,uuid,YES,null,Table,post_reactions_user_id_fkey,users,id
+public,post_reactions,reaction_type,text,NO,null,Table,null,null,null
+public,post_reactions,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,posts,post_id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,posts,user_id,uuid,YES,null,Table,posts_user_id_fkey,users,id
+public,posts,caption,text,NO,null,Table,null,null,null
+public,posts,media_urls,ARRAY,YES,null,Table,null,null,null
+public,posts,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_business_metrics,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,provider_business_metrics,provider_id,uuid,NO,null,Table,provider_business_metrics_provider_id_fkey,service_providers,id
+public,provider_business_metrics,metric_date,date,NO,null,Table,null,null,null
+public,provider_business_metrics,revenue,numeric,YES,0,Table,null,null,null
+public,provider_business_metrics,bookings_total,integer,YES,0,Table,null,null,null
+public,provider_business_metrics,bookings_completed,integer,YES,0,Table,null,null,null
+public,provider_business_metrics,bookings_cancelled,integer,YES,0,Table,null,null,null
+public,provider_business_metrics,new_clients,integer,YES,0,Table,null,null,null
+public,provider_business_metrics,service_hours,numeric,YES,0,Table,null,null,null
+public,provider_business_metrics,average_rating,numeric,YES,0,Table,null,null,null
+public,provider_business_metrics,review_count,integer,YES,0,Table,null,null,null
+public,provider_business_metrics,costs,numeric,YES,0,Table,null,null,null
+public,provider_business_metrics,profit,numeric,YES,0,Table,null,null,null
+public,provider_business_metrics,popular_services,jsonb,YES,'[]'::jsonb,Table,null,null,null
+public,provider_business_metrics,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_clients,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,provider_clients,provider_id,uuid,NO,null,Table,provider_clients_provider_id_fkey,service_providers,id
+public,provider_clients,client_id,uuid,NO,null,Table,provider_clients_client_id_fkey,users,id
+public,provider_clients,relationship_start_date,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_clients,last_interaction,timestamp with time zone,YES,null,Table,null,null,null
+public,provider_clients,lifetime_value,numeric,YES,0,Table,null,null,null
+public,provider_clients,booking_count,integer,YES,0,Table,null,null,null
+public,provider_clients,notes,text,YES,null,Table,null,null,null
+public,provider_clients,tags,ARRAY,YES,null,Table,null,null,null
+public,provider_clients,status,text,NO,'active'::text,Table,null,null,null
+public,provider_clients,custom_fields,jsonb,YES,'{}'::jsonb,Table,null,null,null
+public,provider_clients,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_document_templates,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,provider_document_templates,provider_id,uuid,NO,null,Table,provider_document_templates_provider_id_fkey,service_providers,id
+public,provider_document_templates,template_name,text,NO,null,Table,null,null,null
+public,provider_document_templates,template_type,text,NO,null,Table,null,null,null
+public,provider_document_templates,template_content,text,NO,null,Table,null,null,null
+public,provider_document_templates,is_active,boolean,YES,true,Table,null,null,null
+public,provider_document_templates,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_document_templates,last_updated,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_documents,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,provider_documents,provider_id,uuid,NO,null,Table,provider_documents_provider_id_fkey,service_providers,id
+public,provider_documents,document_name,text,NO,null,Table,null,null,null
+public,provider_documents,document_type,text,NO,null,Table,null,null,null
+public,provider_documents,document_url,text,NO,null,Table,null,null,null
+public,provider_documents,document_size,integer,YES,null,Table,null,null,null
+public,provider_documents,mime_type,text,YES,null,Table,null,null,null
+public,provider_documents,is_template,boolean,YES,false,Table,null,null,null
+public,provider_documents,is_public,boolean,YES,false,Table,null,null,null
+public,provider_documents,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_documents,last_updated,timestamp with time zone,YES,now(),Table,null,null,null
+public,provider_documents,metadata,jsonb,YES,'{}'::jsonb,Table,null,null,null
+public,provider_scheduling,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,provider_scheduling,provider_id,uuid,NO,null,Table,provider_scheduling_provider_id_fkey,service_providers,id
+public,provider_scheduling,day_of_week,integer,NO,null,Table,null,null,null
+public,provider_scheduling,start_time,time without time zone,NO,null,Table,null,null,null
+public,provider_scheduling,end_time,time without time zone,NO,null,Table,null,null,null
+public,provider_scheduling,is_available,boolean,YES,true,Table,null,null,null
+public,provider_scheduling,max_bookings,integer,YES,null,Table,null,null,null
+public,provider_scheduling,break_start,time without time zone,YES,null,Table,null,null,null
+public,provider_scheduling,break_end,time without time zone,YES,null,Table,null,null,null
+public,provider_scheduling,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,rewards,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,rewards,user_id,uuid,YES,null,Table,rewards_user_id_fkey,users,id
+public,rewards,type,text,NO,null,Table,null,null,null
+public,rewards,label,text,NO,null,Table,null,null,null
+public,rewards,status,text,NO,null,Table,null,null,null
+public,rewards,metadata,jsonb,YES,'{}'::jsonb,Table,null,null,null
+public,rewards,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,saved_housing_listings,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,saved_housing_listings,user_id,uuid,NO,null,Table,saved_housing_listings_user_id_fkey,users,id
+public,saved_housing_listings,listing_id,uuid,NO,null,Table,saved_housing_listings_listing_id_fkey,housing_listings,id
+public,saved_housing_listings,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,saved_housing_listings,notes,text,YES,null,Table,null,null,null
+public,service_bookings,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,service_bookings,user_id,uuid,YES,null,Table,service_bookings_user_id_fkey,users,id
+public,service_bookings,service_id,uuid,YES,null,Table,service_bookings_service_id_fkey,services,id
+public,service_bookings,scheduled_at,timestamp with time zone,NO,null,Table,null,null,null
+public,service_bookings,total_price,numeric,NO,null,Table,null,null,null
+public,service_bookings,ndis_covered_amount,numeric,NO,null,Table,null,null,null
+public,service_bookings,gap_payment,numeric,NO,null,Table,null,null,null
+public,service_bookings,notes,text,YES,null,Table,null,null,null
+public,service_bookings,status,text,NO,null,Table,null,null,null
+public,service_bookings,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,service_bookings,provider_notes,text,YES,null,Table,null,null,null
+public,service_bookings,provider_checklist,jsonb,YES,'[]'::jsonb,Table,null,null,null
+public,service_bookings,provider_documents,jsonb,YES,'[]'::jsonb,Table,null,null,null
+public,service_providers,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,service_providers,business_name,text,NO,null,Table,null,null,null
+public,service_providers,abn,text,YES,null,Table,null,null,null
+public,service_providers,credentials,ARRAY,YES,null,Table,null,null,null
+public,service_providers,verified,boolean,YES,false,Table,null,null,null
+public,service_providers,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,service_providers,service_categories,ARRAY,YES,null,Table,null,null,null
+public,service_providers,service_formats,ARRAY,YES,null,Table,null,null,null
+public,service_providers,service_area,text,YES,null,Table,null,null,null
+public,service_providers,business_description,text,YES,null,Table,null,null,null
+public,service_providers,logo_url,text,YES,null,Table,null,null,null
+public,service_providers,bank_account_details,jsonb,YES,'{}'::jsonb,Table,null,null,null
+public,service_providers,analytics_preferences,jsonb,YES,'{}'::jsonb,Table,null,null,null
+public,service_providers,last_analytics_view,timestamp with time zone,YES,null,Table,null,null,null
+public,service_providers,dashboard_layout,jsonb,YES,"'{""widgets"": [""bookings"", ""revenue"", ""clients"", ""services""]}'::jsonb",Table,null,null,null
+public,services,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,services,provider_id,uuid,YES,null,Table,services_provider_id_fkey,service_providers,id
+public,services,title,text,NO,null,Table,null,null,null
+public,services,description,text,YES,null,Table,null,null,null
+public,services,category,text,NO,null,Table,null,null,null
+public,services,format,text,NO,null,Table,null,null,null
+public,services,price,numeric,NO,null,Table,null,null,null
+public,services,available,boolean,YES,true,Table,null,null,null
+public,services,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,services,media_urls,ARRAY,YES,null,Table,null,null,null
+public,spatial_ref_sys,srid,integer,NO,null,Table,null,null,null
+public,spatial_ref_sys,auth_name,character varying,YES,null,Table,null,null,null
+public,spatial_ref_sys,auth_srid,integer,YES,null,Table,null,null,null
+public,spatial_ref_sys,srtext,character varying,YES,null,Table,null,null,null
+public,spatial_ref_sys,proj4text,character varying,YES,null,Table,null,null,null
+public,subgroups,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,subgroups,group_id,uuid,YES,null,Table,subgroups_group_id_fkey,groups,id
+public,subgroups,created_by,uuid,YES,null,Table,subgroups_created_by_fkey,user_profiles,id
+public,subgroups,name,text,NO,null,Table,null,null,null
+public,subgroups,description,text,YES,null,Table,null,null,null
+public,subgroups,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_achievements,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,user_achievements,user_id,uuid,NO,null,Table,user_achievements_user_id_fkey,users,id
+public,user_achievements,achievement_type,text,NO,null,Table,null,null,null
+public,user_achievements,progress,integer,NO,0,Table,null,null,null
+public,user_achievements,target,integer,NO,null,Table,null,null,null
+public,user_achievements,completed,boolean,NO,false,Table,null,null,null
+public,user_achievements,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_achievements,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_badges,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,user_badges,user_id,uuid,NO,null,Table,user_badges_user_id_fkey,users,id
+public,user_badges,badge_id,uuid,NO,null,Table,user_badges_badge_id_fkey,badge_definitions,id
+public,user_badges,awarded_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_badges,is_claimed,boolean,NO,false,Table,null,null,null
+public,user_badges,claimed_at,timestamp with time zone,YES,null,Table,null,null,null
+public,user_badges,is_notified,boolean,NO,false,Table,null,null,null
+public,user_points,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,user_points,user_id,uuid,NO,null,Table,user_points_user_id_fkey,users,id
+public,user_points,total_points,integer,NO,0,Table,null,null,null
+public,user_points,available_points,integer,NO,0,Table,null,null,null
+public,user_points,lifetime_points,integer,NO,0,Table,null,null,null
+public,user_points,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_points,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_profiles,username,text,YES,null,Table,null,null,null
+public,user_profiles,full_name,text,YES,null,Table,null,null,null
+public,user_profiles,avatar_url,text,YES,null,Table,null,null,null
+public,user_profiles,bio,text,YES,null,Table,null,null,null
+public,user_profiles,role,text,NO,'participant'::text,Table,null,null,null
+public,user_profiles,ndis_number,text,YES,null,Table,null,null,null
+public,user_profiles,ndis_verified,boolean,YES,false,Table,null,null,null
+public,user_profiles,comfort_traits,ARRAY,YES,null,Table,null,null,null
+public,user_profiles,preferred_categories,ARRAY,YES,null,Table,null,null,null
+public,user_profiles,preferred_service_formats,ARRAY,YES,null,Table,null,null,null
+public,user_profiles,accessibility_needs,ARRAY,YES,null,Table,null,null,null
+public,user_profiles,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_profiles,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_profiles,id,uuid,NO,null,Table,user_profiles_id_fkey,users,id
+public,user_profiles,id,uuid,NO,null,Table,fk_user_profiles_auth_users,users,id
+public,user_profiles,is_active,boolean,NO,true,Table,null,null,null
+public,user_profiles,email,text,NO,'user@rollodex.com.au'::text,Table,null,null,null
+public,user_profiles,points,integer,NO,1800,Table,null,null,null
+public,user_profiles,sex,text,YES,null,Table,null,null,null
+public,user_relationships,user_relationships_id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,user_relationships,requester_id,uuid,NO,null,Table,user_relationships_requester_id_fkey,user_profiles,id
+public,user_relationships,addressee_id,uuid,NO,null,Table,user_relationships_addressee_id_fkey,user_profiles,id
+public,user_relationships,status,USER-DEFINED,NO,'pending'::relationship_status,Table,null,null,null
+public,user_relationships,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_relationships,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_relationships,category,text,YES,'friend'::text,Table,null,null,null
+public,user_streaks,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,user_streaks,user_id,uuid,NO,null,Table,user_streaks_user_id_fkey,users,id
+public,user_streaks,streak_type,text,NO,null,Table,null,null,null
+public,user_streaks,current_count,integer,NO,0,Table,null,null,null
+public,user_streaks,longest_count,integer,NO,0,Table,null,null,null
+public,user_streaks,last_activity_date,date,NO,CURRENT_DATE,Table,null,null,null
+public,user_streaks,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,user_streaks,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,virtual_tours,id,uuid,NO,uuid_generate_v4(),Table,null,null,null
+public,virtual_tours,listing_id,uuid,NO,null,Table,virtual_tours_listing_id_fkey,housing_listings,id
+public,virtual_tours,tour_title,text,NO,null,Table,null,null,null
+public,virtual_tours,tour_description,text,YES,null,Table,null,null,null
+public,virtual_tours,panorama_url,text,NO,null,Table,null,null,null
+public,virtual_tours,hotspot_data,jsonb,YES,null,Table,null,null,null
+public,virtual_tours,room_type,text,YES,null,Table,null,null,null
+public,virtual_tours,sequence_order,integer,YES,null,Table,null,null,null
+public,virtual_tours,created_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,wallets,id,uuid,NO,gen_random_uuid(),Table,null,null,null
+public,wallets,user_id,uuid,YES,null,Table,wallets_user_id_fkey,users,id
+public,wallets,total_balance,numeric,NO,0,Table,null,null,null
+public,wallets,category_breakdown,jsonb,NO,"'{""core_support"": 0, ""capital_support"": 0, ""capacity_building"": 0}'::jsonb",Table,null,null,null
+public,wallets,updated_at,timestamp with time zone,YES,now(),Table,null,null,null
+public,bookings_with_details,booking_id,uuid,YES,null,View,null,null,null
+public,bookings_with_details,user_profile_id,uuid,YES,null,View,null,null,null
+public,bookings_with_details,service_id,uuid,YES,null,View,null,null,null
+public,bookings_with_details,scheduled_at,timestamp with time zone,YES,null,View,null,null,null
+public,bookings_with_details,total_price,numeric,YES,null,View,null,null,null
+public,bookings_with_details,ndis_covered_amount,numeric,YES,null,View,null,null,null
+public,bookings_with_details,gap_payment,numeric,YES,null,View,null,null,null
+public,bookings_with_details,booking_notes,text,YES,null,View,null,null,null
+public,bookings_with_details,booking_status,text,YES,null,View,null,null,null
+public,bookings_with_details,booking_created_at,timestamp with time zone,YES,null,View,null,null,null
+public,bookings_with_details,provider_notes,text,YES,null,View,null,null,null
+public,bookings_with_details,provider_checklist,jsonb,YES,null,View,null,null,null
+public,bookings_with_details,provider_documents,jsonb,YES,null,View,null,null,null
+public,bookings_with_details,provider_id,uuid,YES,null,View,null,null,null
+public,bookings_with_details,service_title,text,YES,null,View,null,null,null
+public,bookings_with_details,service_description,text,YES,null,View,null,null,null
+public,bookings_with_details,service_category,text,YES,null,View,null,null,null
+public,bookings_with_details,service_format,text,YES,null,View,null,null,null
+public,bookings_with_details,service_price,numeric,YES,null,View,null,null,null
+public,bookings_with_details,service_available,boolean,YES,null,View,null,null,null
+public,bookings_with_details,service_created_at,timestamp with time zone,YES,null,View,null,null,null
+public,bookings_with_details,service_media_urls,ARRAY,YES,null,View,null,null,null
+public,bookings_with_details,user_username,text,YES,null,View,null,null,null
+public,bookings_with_details,user_full_name,text,YES,null,View,null,null,null
+public,bookings_with_details,user_avatar_url,text,YES,null,View,null,null,null
+public,bookings_with_details,ndis_number,text,YES,null,View,null,null,null
+public,bookings_with_details,ndis_verified,boolean,YES,null,View,null,null,null
+public,friendships_with_profiles,id,uuid,YES,null,View,null,null,null
+public,friendships_with_profiles,requester_id,uuid,YES,null,View,null,null,null
+public,friendships_with_profiles,requester_name,text,YES,null,View,null,null,null
+public,friendships_with_profiles,requester_avatar,text,YES,null,View,null,null,null
+public,friendships_with_profiles,addressee_id,uuid,YES,null,View,null,null,null
+public,friendships_with_profiles,addressee_name,text,YES,null,View,null,null,null
+public,friendships_with_profiles,addressee_avatar,text,YES,null,View,null,null,null
+public,friendships_with_profiles,status,USER-DEFINED,YES,null,View,null,null,null
+public,friendships_with_profiles,created_at,timestamp with time zone,YES,null,View,null,null,null
+public,geography_columns,f_table_catalog,name,YES,null,View,null,null,null
+public,geography_columns,f_table_schema,name,YES,null,View,null,null,null
+public,geography_columns,f_table_name,name,YES,null,View,null,null,null
+public,geography_columns,f_geography_column,name,YES,null,View,null,null,null
+public,geography_columns,coord_dimension,integer,YES,null,View,null,null,null
+public,geography_columns,srid,integer,YES,null,View,null,null,null
+public,geography_columns,type,text,YES,null,View,null,null,null
+public,geometry_columns,f_table_catalog,character varying,YES,null,View,null,null,null
+public,geometry_columns,f_table_schema,name,YES,null,View,null,null,null
+public,geometry_columns,f_table_name,name,YES,null,View,null,null,null
+public,geometry_columns,f_geometry_column,name,YES,null,View,null,null,null
+public,geometry_columns,coord_dimension,integer,YES,null,View,null,null,null
+public,geometry_columns,srid,integer,YES,null,View,null,null,null
+public,geometry_columns,type,character varying,YES,null,View,null,null,null
+public,group_events_with_details,id,uuid,YES,null,View,null,null,null
+public,group_events_with_details,group_id,uuid,YES,null,View,null,null,null
+public,group_events_with_details,title,text,YES,null,View,null,null,null
+public,group_events_with_details,description,text,YES,null,View,null,null,null
+public,group_events_with_details,start_time,timestamp with time zone,YES,null,View,null,null,null
+public,group_events_with_details,end_time,timestamp with time zone,YES,null,View,null,null,null
+public,group_events_with_details,location,jsonb,YES,null,View,null,null,null
+public,group_events_with_details,max_participants,integer,YES,null,View,null,null,null
+public,group_events_with_details,created_by,uuid,YES,null,View,null,null,null
+public,group_events_with_details,category,USER-DEFINED,YES,null,View,null,null,null
+public,group_events_with_details,image_url,text,YES,null,View,null,null,null
+public,group_events_with_details,admission_fee,text,YES,null,View,null,null,null
+public,group_events_with_details,group_name,text,YES,null,View,null,null,null
+public,group_events_with_details,creator_name,text,YES,null,View,null,null,null
+public,group_events_with_details,participants_going_count,bigint,YES,null,View,null,null,null
+public,group_events_with_details,event_status,text,YES,null,View,null,null,null
+public,group_events_with_details,participants,json,YES,null,View,null,null,null
+public,group_posts_with_users,group_post_id,uuid,YES,null,View,null,null,null
+public,group_posts_with_users,group_id,uuid,YES,null,View,null,null,null
+public,group_posts_with_users,author_profile_id,uuid,YES,null,View,null,null,null
+public,group_posts_with_users,content,text,YES,null,View,null,null,null
+public,group_posts_with_users,media_urls,ARRAY,YES,null,View,null,null,null
+public,group_posts_with_users,media_url,text,YES,null,View,null,null,null
+public,group_posts_with_users,media_type,text,YES,null,View,null,null,null
+public,group_posts_with_users,post_created_at,timestamp with time zone,YES,null,View,null,null,null
+public,group_posts_with_users,author_username,text,YES,null,View,null,null,null
+public,group_posts_with_users,author_full_name,text,YES,null,View,null,null,null
+public,group_posts_with_users,author_avatar_url,text,YES,null,View,null,null,null
+public,group_posts_with_users,author_bio,text,YES,null,View,null,null,null
+public,group_posts_with_users,likes_count,bigint,YES,null,View,null,null,null
+public,group_posts_with_users,comments_count,bigint,YES,null,View,null,null,null
+public,housing_groups_with_members,id,uuid,YES,null,View,null,null,null
+public,housing_groups_with_members,name,text,YES,null,View,null,null,null
+public,housing_groups_with_members,listing_id,uuid,YES,null,View,null,null,null
+public,housing_groups_with_members,creator_id,uuid,YES,null,View,null,null,null
+public,housing_groups_with_members,max_members,integer,YES,null,View,null,null,null
+public,housing_groups_with_members,current_members,integer,YES,null,View,null,null,null
+public,housing_groups_with_members,move_in_date,date,YES,null,View,null,null,null
+public,housing_groups_with_members,description,text,YES,null,View,null,null,null
+public,housing_groups_with_members,is_active,boolean,YES,null,View,null,null,null
+public,housing_groups_with_members,created_at,timestamp with time zone,YES,null,View,null,null,null
+public,housing_groups_with_members,updated_at,timestamp with time zone,YES,null,View,null,null,null
+public,housing_groups_with_members,members,json,YES,null,View,null,null,null
+public,housing_listings_with_groups,id,uuid,YES,null,View,null,null,null
+public,housing_listings_with_groups,provider_id,uuid,YES,null,View,null,null,null
+public,housing_listings_with_groups,title,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,description,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,weekly_rent,numeric,YES,null,View,null,null,null
+public,housing_listings_with_groups,bond_amount,numeric,YES,null,View,null,null,null
+public,housing_listings_with_groups,available_from,date,YES,null,View,null,null,null
+public,housing_listings_with_groups,bedrooms,integer,YES,null,View,null,null,null
+public,housing_listings_with_groups,bathrooms,integer,YES,null,View,null,null,null
+public,housing_listings_with_groups,parking_spaces,integer,YES,null,View,null,null,null
+public,housing_listings_with_groups,property_type,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,sda_category,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,coordinates,USER-DEFINED,YES,null,View,null,null,null
+public,housing_listings_with_groups,address,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,suburb,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,state,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,postcode,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,features,ARRAY,YES,null,View,null,null,null
+public,housing_listings_with_groups,accessibility_features,ARRAY,YES,null,View,null,null,null
+public,housing_listings_with_groups,media_urls,ARRAY,YES,null,View,null,null,null
+public,housing_listings_with_groups,virtual_tour_url,text,YES,null,View,null,null,null
+public,housing_listings_with_groups,pets_allowed,boolean,YES,null,View,null,null,null
+public,housing_listings_with_groups,ndis_supported,boolean,YES,null,View,null,null,null
+public,housing_listings_with_groups,created_at,timestamp with time zone,YES,null,View,null,null,null
+public,housing_listings_with_groups,updated_at,timestamp with time zone,YES,null,View,null,null,null
+public,housing_listings_with_groups,accessibility_rating,integer,YES,null,View,null,null,null
+public,housing_listings_with_groups,is_sda_certified,boolean,YES,null,View,null,null,null
+public,housing_listings_with_groups,sda_certification_date,timestamp with time zone,YES,null,View,null,null,null
+public,housing_listings_with_groups,has_virtual_tour,boolean,YES,null,View,null,null,null
+public,housing_listings_with_groups,virtual_tour_enabled,boolean,YES,null,View,null,null,null
+public,housing_listings_with_groups,last_updated,timestamp with time zone,YES,null,View,null,null,null
+public,housing_listings_with_groups,has_group,boolean,YES,null,View,null,null,null
+public,posts_with_users,post_id,uuid,YES,null,View,null,null,null
+public,posts_with_users,post_created_at,timestamp with time zone,YES,null,View,null,null,null
+public,posts_with_users,author_profile_id,uuid,YES,null,View,null,null,null
+public,posts_with_users,content,text,YES,null,View,null,null,null
+public,posts_with_users,media_urls,ARRAY,YES,null,View,null,null,null
+public,posts_with_users,media_url,text,YES,null,View,null,null,null
+public,posts_with_users,media_type,text,YES,null,View,null,null,null
+public,posts_with_users,author_username,text,YES,null,View,null,null,null
+public,posts_with_users,author_full_name,text,YES,null,View,null,null,null
+public,posts_with_users,author_avatar_url,text,YES,null,View,null,null,null
+public,posts_with_users,author_bio,text,YES,null,View,null,null,null
+public,posts_with_users,likes_count,bigint,YES,null,View,null,null,null
+public,posts_with_users,comments_count,bigint,YES,null,View,null,null,null
+public,provider_financial_summary,provider_id,uuid,YES,null,View,null,null,null
+public,provider_financial_summary,total_bookings,bigint,YES,null,View,null,null,null
+public,provider_financial_summary,completed_bookings,bigint,YES,null,View,null,null,null
+public,provider_financial_summary,pending_bookings,bigint,YES,null,View,null,null,null
+public,provider_financial_summary,confirmed_bookings,bigint,YES,null,View,null,null,null
+public,provider_financial_summary,total_revenue,numeric,YES,null,View,null,null,null
+public,provider_financial_summary,ndis_revenue,numeric,YES,null,View,null,null,null
+public,provider_financial_summary,non_ndis_revenue,numeric,YES,null,View,null,null,null
+public,provider_financial_summary,pending_revenue,numeric,YES,null,View,null,null,null
+public,provider_financial_summary,upcoming_revenue,numeric,YES,null,View,null,null,null
+public,user_favorites_detailed,favorite_id,uuid,YES,null,View,null,null,null
+public,user_favorites_detailed,user_id,uuid,YES,null,View,null,null,null
+public,user_favorites_detailed,item_id,uuid,YES,null,View,null,null,null
+public,user_favorites_detailed,item_type,text,YES,null,View,null,null,null
+public,user_favorites_detailed,favorited_at,timestamp with time zone,YES,null,View,null,null,null
+public,user_favorites_detailed,user_username,text,YES,null,View,null,null,null
+public,user_favorites_detailed,user_avatar_url,text,YES,null,View,null,null,null
+public,user_favorites_detailed,item_title,text,YES,null,View,null,null,null
+public,user_favorites_detailed,item_description,text,YES,null,View,null,null,null
+public,user_favorites_detailed,item_image_url,text,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_address,text,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_suburb,text,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_state,text,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_postcode,text,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_weekly_rent,numeric,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_bedrooms,integer,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_bathrooms,integer,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_property_type,text,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_availability_date,date,YES,null,View,null,null,null
+public,user_favorites_detailed,housing_provider_id,uuid,YES,null,View,null,null,null
+public,user_favorites_detailed,service_provider_abn,text,YES,null,View,null,null,null
+public,user_favorites_detailed,service_provider_verified,boolean,YES,null,View,null,null,null
+public,user_favorites_detailed,event_start_time,timestamp with time zone,YES,null,View,null,null,null
+public,user_favorites_detailed,event_end_time,timestamp with time zone,YES,null,View,null,null,null
+public,user_favorites_detailed,event_location,jsonb,YES,null,View,null,null,null
+public,user_favorites_detailed,event_group_id,uuid,YES,null,View,null,null,null

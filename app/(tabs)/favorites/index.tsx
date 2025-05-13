@@ -81,6 +81,34 @@ export default function FavoritesScreen() {
                 };
               }
               break;
+            case 'housing_group':
+              // Fetch group details (including listing_id)
+              const { data: hgData, error: hgError } = await supabase
+                .from('housing_groups')
+                .select('id, name, description, listing_id')
+                .eq('id', fav.item_id)
+                .maybeSingle();
+              if (hgError) console.error(`Error fetching Housing Group ${fav.item_id}:`, hgError);
+              let mainImageUrl: string | null = null;
+              if (hgData && hgData.listing_id) {
+                const { data: listingData, error: listingError } = await supabase
+                  .from('housing_listings')
+                  .select('media_urls')
+                  .eq('id', hgData.listing_id)
+                  .maybeSingle();
+                if (listingError) console.error(`Error fetching housing listing for group ${fav.item_id}:`, listingError);
+                if (listingData && Array.isArray(listingData.media_urls) && listingData.media_urls.length > 0) {
+                  mainImageUrl = listingData.media_urls[0];
+                }
+              }
+              if (hgData) {
+                details = {
+                  item_title: hgData.name,
+                  item_description: hgData.description,
+                  item_image_url: mainImageUrl,
+                };
+              }
+              break;
             case 'housing_listing':
               const { data: hlData, error: hlError } = await supabase
                 .from('housing_listings')
@@ -268,22 +296,70 @@ export default function FavoritesScreen() {
       case 'housing_listing':
         return `/(tabs)/housing/${item.item_id}`;
       case 'group_event':
-        return `/(tabs)/community/event-detail/${item.item_id}`; 
+        return `/(tabs)/community/event-detail/${item.item_id}`;
       case 'housing_group':
-        return `/(tabs)/community/group-detail/${item.item_id}`; 
+        return `/(tabs)/housing/group/${item.item_id}`;
       default:
         console.warn(`Unhandled favorite item type for linking: ${item.item_type}`);
-        return '/(tabs)/favorites'; 
+        return '/(tabs)/favorites';
+    }
+  };
+
+  const [pendingDialogVisible, setPendingDialogVisible] = useState(false);
+  const [pendingToCancel, setPendingToCancel] = useState<FavoriteItem | null>(null);
+
+  const handlePendingCancel = (item: FavoriteItem) => {
+    setPendingToCancel(item);
+    setPendingDialogVisible(true);
+  };
+
+  const confirmPendingCancel = async () => {
+    if (!pendingToCancel || !user) return;
+    try {
+      // Remove from housing_group_members where group_id = item_id, user_id = user.id, status = 'pending' or 'REQUESTED'
+      const { error } = await supabase
+        .from('housing_group_members')
+        .delete()
+        .match({ group_id: pendingToCancel.item_id, user_id: user.id })
+        .in('status', ['pending', 'REQUESTED']);
+      if (error) throw error;
+      setFavorites(prev => prev.filter(fav => fav.item_id !== pendingToCancel.item_id));
+    } catch (err) {
+      console.error('Error cancelling join request:', err);
+      setError('Failed to cancel join request. Please try again.');
+    } finally {
+      setPendingDialogVisible(false);
+      setPendingToCancel(null);
     }
   };
 
   const renderFavoriteItem = ({ item }: { item: FavoriteItem }) => {
+    const isHousingGroup = item.item_type === 'housing_group';
+    const isPending = isHousingGroup && (item.member_status === 'REQUESTED' || item.member_status === 'pending');
+    // Only show 'Favourited' if not pending
+    const showFavourited = isHousingGroup && !isPending && !item.member_status;
     return (
-      <View style={styles.cardOuterContainer}> 
+      <View style={styles.cardOuterContainer}>
+        {/* Compact, rounded, absolutely positioned status badge top-right */}
+        {isHousingGroup && (isPending || showFavourited) && (
+          <View style={styles.statusBadgeContainer}>
+            {isPending ? (
+              <TouchableOpacity onPress={() => handlePendingCancel(item)} activeOpacity={0.7}>
+                <View style={[styles.statusBadge, { backgroundColor: '#fbbf24' }]}> 
+                  <Text style={styles.statusBadgeText}>Pending</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.statusBadge, { backgroundColor: '#38bdf8' }]}> 
+                <Text style={styles.statusBadgeText}>Favourited</Text>
+              </View>
+            )}
+          </View>
+        )}
         <Link href={getLinkHref(item) as any} asChild>
           <Pressable style={styles.itemContainer}>
             <Image
-              source={{ uri: item.item_image_url || 'https://via.placeholder.com/100' }} 
+              source={{ uri: item.item_image_url || 'https://via.placeholder.com/100' }}
               style={styles.itemImage}
             />
             <View style={styles.itemTextContainer}>
@@ -291,11 +367,7 @@ export default function FavoritesScreen() {
               {item.item_type === 'group_event' && item.event_start_time && (
                 <Text style={styles.itemSubtitle}>Starts: {new Date(item.event_start_time).toLocaleString()}</Text>
               )}
-              {item.item_type === 'housing_group' && item.member_status && (
-                <Text style={[styles.itemSubtitle, { fontStyle: 'italic' }]}>
-                  Status: {item.member_status === 'MEMBER' ? 'Member' : 'Requested'}
-                </Text>
-              )}
+              {/* Remove old status subtitle for housing_group */}
               {item.item_type === 'service_provider' && item.provider_abn && (
                 <Text style={styles.itemSubtitle}>ABN: {item.provider_abn}</Text>
               )}
@@ -394,6 +466,31 @@ export default function FavoritesScreen() {
 }
 
 const styles = StyleSheet.create({
+  statusBadgeContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+  },
+  statusBadge: {
+    borderRadius: 16,
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    minWidth: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statusBadgeText: {
+    fontWeight: '600',
+    color: '#222',
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
