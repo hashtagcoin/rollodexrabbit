@@ -65,6 +65,52 @@ export type Database = {
           requirements?: Json
         }
         Relationships: []
+      },
+      shared_items: {
+        Row: {
+          shared_item_id: string
+          sender_id: string
+          recipient_id: string
+          item_type: 'group_event' | 'service_provider' | 'housing_listing' | 'housing_group'
+          item_id: string
+          created_at: string
+          is_favourited: boolean
+          dismissed: boolean
+        }
+        Insert: {
+          shared_item_id?: string
+          sender_id: string
+          recipient_id: string
+          item_type: 'group_event' | 'service_provider' | 'housing_listing' | 'housing_group'
+          item_id: string
+          created_at?: string
+          is_favourited?: boolean
+          dismissed?: boolean
+        }
+        Update: {
+          shared_item_id?: string
+          sender_id?: string
+          recipient_id?: string
+          item_type?: 'group_event' | 'service_provider' | 'housing_listing' | 'housing_group'
+          item_id?: string
+          created_at?: string
+          is_favourited?: boolean
+          dismissed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'shared_items_sender_id_fkey'
+            columns: ['sender_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shared_items_recipient_id_fkey'
+            columns: ['recipient_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          }
+        ]
       }
       badges: {
         Row: {

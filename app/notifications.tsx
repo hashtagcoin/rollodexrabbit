@@ -20,12 +20,83 @@ type Notification = {
   created_at: string;
 };
 
+function parseNotificationContent(content: string) {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+function renderNotificationCard(notification: Notification) {
+  // DEBUG: Log notification type and parsed content
+  const parsed = parseNotificationContent(notification.content);
+  if (notification.type && notification.type.toLowerCase().includes('badge')) {
+    console.log('DEBUG Badge Notification:', { type: notification.type, content: notification.content, parsed });
+  }
+  switch (notification.type) {
+    case 'post_share':
+      if (parsed && parsed.item_type === 'service_provider') {
+        return `A service provider was shared with you! Tap to view.`;
+      } else if (parsed && parsed.item_type === 'post') {
+        return `A post was shared with you! Tap to view.`;
+      }
+      return `An item was shared with you! Tap to view.`;
+    // Add more cases for other types as needed
+    case 'badge_earned':
+      if (parsed && typeof parsed.points === 'number') {
+        return `You earned a badge! (+${parsed.points} points)`;
+      } else if (parsed && parsed.description) {
+        return `You earned a badge: ${parsed.description}`;
+      }
+      return 'You earned a badge!';
+    default:
+      return typeof notification.content === 'string' ? notification.content : 'You have a new notification.';
+  }
+}
+
+function onNotificationPress(notification: Notification) {
+  const parsed = parseNotificationContent(notification.content);
+  switch (notification.type) {
+    case 'post_share':
+      if (parsed && parsed.item_type === 'service_provider') {
+        // Navigate to service provider profile
+        router.push({ pathname: '/provider/profile', params: { id: parsed.item_id } });
+      } else if (parsed && parsed.item_type === 'post') {
+        // Navigate to post detail
+        router.push({ pathname: '/profile/post/[postId]', params: { postId: parsed.item_id } });
+      }
+      break;
+    // Add more cases for other types as needed
+    case 'badge_earned':
+      if (parsed && parsed.badge_id) {
+        router.push({ pathname: '/rewards/badge-details', params: { badgeId: parsed.badge_id } });
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+import { Image } from 'react-native';
+
 export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [senderProfiles, setSenderProfiles] = useState<{ [id: string]: { full_name: string; avatar_url: string | null } }>({});
+  const [entityImages, setEntityImages] = useState<{ [key: string]: string | null }>({});
 
   async function loadNotifications() {
+    // Helper to get sender_id from notification content
+    function extractSenderId(content: string): string | null {
+      try {
+        const parsed = JSON.parse(content);
+        return parsed.sender_id || null;
+      } catch {
+        return null;
+      }
+    }
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -47,6 +118,103 @@ export default function Notifications() {
         .eq('seen', false);
 
       setNotifications(data || []);
+
+      // --- IMAGE PREVIEW LOGIC ---
+      // Helper to build a fetch plan for missing images
+      const fetchPlan: { type: string; id: string; notificationId: string }[] = [];
+      const imagesMap: { [key: string]: string | null } = {};
+      (data || []).forEach(n => {
+        let parsed = null;
+        try { parsed = JSON.parse(n.content); } catch {}
+        let imgUrl = null;
+        let type = null, id = null;
+        // Service
+        if (parsed && parsed.item_type === 'service_provider' && parsed.media_url) {
+          imgUrl = parsed.media_url;
+        } else if (parsed && parsed.item_type === 'service_provider' && parsed.item_id) {
+          type = 'services'; id = parsed.item_id;
+        }
+        // Housing
+        else if (parsed && parsed.item_type === 'housing' && parsed.media_url) {
+          imgUrl = parsed.media_url;
+        } else if (parsed && parsed.item_type === 'housing' && parsed.item_id) {
+          type = 'housing_listings'; id = parsed.item_id;
+        }
+        // Group
+        else if (parsed && parsed.item_type === 'group' && parsed.media_url) {
+          imgUrl = parsed.media_url;
+        } else if (parsed && parsed.item_type === 'group' && parsed.item_id) {
+          type = 'groups'; id = parsed.item_id;
+        }
+        // Event
+        else if (parsed && parsed.item_type === 'event' && parsed.media_url) {
+          imgUrl = parsed.media_url;
+        } else if (parsed && parsed.item_type === 'event' && parsed.item_id) {
+          type = 'group_events'; id = parsed.item_id;
+        }
+        // Badge
+        else if ((n.type === 'badge_earned' || parsed?.badge_id) && parsed?.badge_icon) {
+          imgUrl = parsed.badge_icon;
+        } else if ((n.type === 'badge_earned' || parsed?.badge_id) && parsed?.badge_id) {
+          type = 'badge_definitions'; id = parsed.badge_id;
+        }
+        if (imgUrl) {
+          imagesMap[n.id] = imgUrl;
+        } else if (type && id) {
+          fetchPlan.push({ type, id, notificationId: n.id });
+        }
+      });
+      // Batch fetch missing images
+      async function batchFetchImages() {
+        const results: { [key: string]: string | null } = {};
+        const grouped = fetchPlan.reduce((acc, item) => {
+          acc[item.type] = acc[item.type] || [];
+          acc[item.type].push(item);
+          return acc;
+        }, {} as { [type: string]: { type: string; id: string; notificationId: string }[] });
+        for (const type of Object.keys(grouped)) {
+          const ids = grouped[type].map(i => i.id);
+          let col = 'id', imgCol = 'media_url';
+          if (type === 'services') imgCol = 'media_urls';
+          if (type === 'housing_listings') imgCol = 'media_urls';
+          if (type === 'groups') imgCol = 'image_url';
+          if (type === 'group_events') imgCol = 'image_url';
+          if (type === 'badge_definitions') imgCol = 'icon_url';
+          const { data: rows, error } = await supabase.from(type).select(`${col}, ${imgCol}`).in(col, ids);
+          if (!error && rows) {
+            for (const row of rows) {
+              let url = null;
+              if (Array.isArray(row[imgCol])) url = row[imgCol][0];
+              else url = row[imgCol];
+              const notif = grouped[type].find(f => f.id === row[col]);
+              if (notif) results[notif.notificationId] = url;
+            }
+          }
+        }
+        setEntityImages({ ...imagesMap, ...results }); // All keys are string IDs
+      }
+      if (fetchPlan.length > 0) batchFetchImages();
+      else setEntityImages(imagesMap);
+
+      // Fetch sender profiles for all notifications with sender_id
+      const senderIds = Array.from(new Set((data || [])
+        .map(n => extractSenderId(n.content))
+        .filter(id => id && id !== 'null')));
+
+      if (senderIds.length > 0) {
+        const { data: profiles, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', senderIds);
+        if (!profileError && profiles) {
+          const profileMap: { [id: string]: { full_name: string; avatar_url: string | null } } = {};
+          profiles.forEach((p: any) => {
+            profileMap[p.id] = { full_name: p.full_name || 'Unknown', avatar_url: p.avatar_url || null };
+          });
+          setSenderProfiles(profileMap);
+        }
+      }
+
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -97,27 +265,64 @@ export default function Notifications() {
             </Text>
           </View>
         ) : (
-          notifications.map((notification) => (
-            <TouchableOpacity
-              key={notification.id}
-              style={[
-                styles.notificationCard,
-                !notification.seen && styles.notificationUnseen,
-              ]}
-            >
-              <View style={styles.notificationIcon}>
-                {getNotificationIcon(notification.type)}
-              </View>
-              <View style={styles.notificationContent}>
-                <Text style={styles.notificationText}>
-                  {notification.content}
-                </Text>
-                <Text style={styles.notificationTime}>
-                  {new Date(notification.created_at).toLocaleDateString()}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
+          notifications.map((notification) => {
+            // Determine sender_id
+            let senderId = null;
+            try {
+              senderId = JSON.parse(notification.content).sender_id || null;
+            } catch { senderId = null; }
+            // App/system notification if no senderId
+            const isSystem = !senderId;
+            const sender = isSystem
+              ? { full_name: 'Rollodex', avatar_url: require('../assets/avatar-placeholder.png') }
+              : senderProfiles[senderId as string] || { full_name: 'Unknown', avatar_url: require('../assets/avatar-placeholder.png') };
+            return (
+              <TouchableOpacity
+                key={notification.id}
+                style={[
+                  styles.notificationCard,
+                  !notification.seen && styles.notificationUnseen,
+                ]}
+                onPress={() => onNotificationPress(notification)}
+              >
+                <View style={styles.avatarContainer}>
+                  <Image
+                    source={
+                      sender.avatar_url && typeof sender.avatar_url === 'string'
+                        ? { uri: sender.avatar_url }
+                        : sender.avatar_url
+                    }
+                    style={styles.avatar}
+                  />
+                </View>
+                <View style={styles.notificationContent}>
+                  <Text style={styles.senderName}>{sender.full_name}</Text>
+                  <View style={styles.messageRow}>
+                    {/* Small entity image if available */}
+                    {(() => {
+                      const url = entityImages[notification.id as string];
+                      if (typeof url === 'string' && url) {
+                        return (
+                          <Image
+                            source={{ uri: url }}
+                            style={styles.entityImage}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    <Text style={styles.notificationText}>
+                      {renderNotificationCard(notification)}
+                    </Text>
+                  </View>
+                  <Text style={styles.notificationTime}>
+                    {new Date(notification.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -125,6 +330,34 @@ export default function Notifications() {
 }
 
 const styles = StyleSheet.create({
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  entityImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#eaeaea',
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#eee',
+  },
+  senderName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#444',
+    marginBottom: 2,
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',

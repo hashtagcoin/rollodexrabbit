@@ -24,6 +24,7 @@ interface SwipeListViewProps<T extends ListingItem> {
   hasHousingGroup: (item: T) => boolean;
   onCardTap: (item: T) => void;
   favorites: Set<string>;
+  onShare?: (item: T) => void;
 }
 
 const SwipeListView = <T extends ListingItem>({
@@ -40,7 +41,8 @@ const SwipeListView = <T extends ListingItem>({
   renderServiceProvider,
   hasHousingGroup,
   onCardTap,
-  favorites
+  favorites,
+  onShare
 }: SwipeListViewProps<T>) => {
   const [nextCardScale] = useState(new Animated.Value(0.92)); // Make scale difference more pronounced
   const currentIndexRef = useRef(currentIndex);
@@ -384,19 +386,18 @@ const SwipeListView = <T extends ListingItem>({
                 <SwipeCard
                   // Spread the collected props
                   {...cardProps}
-                  // Explicitly pass props if preferred over spreading
-                  /* 
-                  item={item}
-                  isTopCard={isTopCard}
-                  onTap={() => handleCardTapInternal(item)}
-                  isServiceListing={isServiceListing}
-                  isFavorite={currentIsFavorite}
-                  getItemImage={getItemImage}
-                  getItemPrice={getItemPrice}
-                  isHousingListing={isHousingListing}
-                  renderServiceProvider={renderServiceProvider}
-                  */
                 />
+                {/* Share button for the top card, if onShare is provided */}
+                {isTopCard && onShare && (
+                  <TouchableOpacity
+                    style={{ position: 'absolute', top: 16, right: 16, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 24, padding: 8 }}
+                    accessible
+                    accessibilityLabel="Share this item"
+                    onPress={() => onShare(item)}
+                  >
+                    <Text style={{ fontSize: 18 }}>🔗</Text>
+                  </TouchableOpacity>
+                )}
               </Animated.View>
             );
           })
