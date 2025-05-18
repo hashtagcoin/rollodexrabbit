@@ -201,6 +201,62 @@ export async function uploadMedia(
   }
 }
 
+/**
+ * Uploads an image to Supabase Storage and returns its public URL.
+ * @param params - The upload parameters.
+ * @param params.uri - The local file URI (from image picker).
+ * @param params.mimeType - The MIME type of the image.
+ * @param params.userId - The user's ID (for folder structure).
+ * @param params.bucket - (Optional) The storage bucket name. Defaults to 'media'.
+ * @param params.folder - (Optional) The folder inside the bucket. Defaults to 'services'.
+ * @returns The public URL of the uploaded image, or throws an error if upload fails.
+ */
+export async function uploadImageToSupabase({
+  uri,
+  mimeType,
+  userId,
+  bucket = 'media',
+  folder = 'services',
+}: {
+  uri: string;
+  mimeType: string;
+  userId: string;
+  bucket?: string;
+  folder?: string;
+}): Promise<string> {
+  // Generate a unique file name
+  const fileExt = uri.split('.').pop() || 'jpg';
+  const fileName = `${userId}_${Date.now()}.${fileExt}`;
+  const filePath = `${folder}/${userId}/${fileName}`;
+
+  // Fetch the image as a Blob
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error('Failed to fetch image for upload');
+  }
+  const blob = await response.blob();
+
+  // Upload to Supabase Storage
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(filePath, blob, {
+      contentType: mimeType,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(`Supabase upload failed: ${uploadError.message}`);
+  }
+
+  // Get the public URL
+  const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+  if (!publicUrlData?.publicUrl) {
+    throw new Error('Failed to get public URL for uploaded image');
+  }
+
+  return publicUrlData.publicUrl;
+}
+
 // Alternative upload method using Expo FileSystem for more reliable handling
 export async function uploadFromUri(
   uri: string,

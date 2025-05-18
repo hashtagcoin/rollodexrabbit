@@ -28,21 +28,26 @@ function parseNotificationContent(content: string) {
   }
 }
 
-function renderNotificationCard(notification: Notification) {
-  // DEBUG: Log notification type and parsed content
+function renderNotificationCard(notification: Notification, entitySummary?: string) {
   const parsed = parseNotificationContent(notification.content);
-  if (notification.type && notification.type.toLowerCase().includes('badge')) {
-    console.log('DEBUG Badge Notification:', { type: notification.type, content: notification.content, parsed });
-  }
+  // More contextual summaries
   switch (notification.type) {
     case 'post_share':
-      if (parsed && parsed.item_type === 'service_provider') {
-        return `A service provider was shared with you! Tap to view.`;
-      } else if (parsed && parsed.item_type === 'post') {
-        return `A post was shared with you! Tap to view.`;
+      if (parsed?.item_type === 'service_provider' && entitySummary) {
+        return `A service provider was shared with you: ${entitySummary}`;
+      } else if (parsed?.item_type === 'post' && entitySummary) {
+        return `A post was shared with you: ${entitySummary}`;
       }
       return `An item was shared with you! Tap to view.`;
-    // Add more cases for other types as needed
+    case 'group_invite':
+      if (entitySummary) return `You were invited to group: ${entitySummary}`;
+      return 'You were invited to a group!';
+    case 'event_invite':
+      if (entitySummary) return `You were invited to event: ${entitySummary}`;
+      return 'You were invited to an event!';
+    case 'housing_share':
+      if (entitySummary) return `A housing listing was shared: ${entitySummary}`;
+      return 'A housing listing was shared!';
     case 'badge_earned':
       if (parsed && typeof parsed.points === 'number') {
         return `You earned a badge! (+${parsed.points} points)`;
@@ -51,29 +56,44 @@ function renderNotificationCard(notification: Notification) {
       }
       return 'You earned a badge!';
     default:
+      if (entitySummary) return entitySummary;
       return typeof notification.content === 'string' ? notification.content : 'You have a new notification.';
   }
 }
 
 function onNotificationPress(notification: Notification) {
   const parsed = parseNotificationContent(notification.content);
+  if (!parsed) return;
   switch (notification.type) {
     case 'post_share':
-      if (parsed && parsed.item_type === 'service_provider') {
-        // Navigate to service provider profile
+      if (parsed.item_type === 'service_provider') {
         router.push({ pathname: '/provider/profile', params: { id: parsed.item_id } });
-      } else if (parsed && parsed.item_type === 'post') {
-        // Navigate to post detail
+      } else if (parsed.item_type === 'post') {
         router.push({ pathname: '/profile/post/[postId]', params: { postId: parsed.item_id } });
       }
       break;
-    // Add more cases for other types as needed
+    case 'group_invite':
+      if (parsed.item_id) {
+        router.push({ pathname: '/community/groups/[id]', params: { id: parsed.item_id } });
+      }
+      break;
+    case 'event_invite':
+      if (parsed.item_id) {
+        router.push({ pathname: '/community/events', params: { id: parsed.item_id } });
+      }
+      break;
+    case 'housing_share':
+      if (parsed.item_id) {
+        router.push({ pathname: '/housing/[id]', params: { id: parsed.item_id } });
+      }
+      break;
     case 'badge_earned':
-      if (parsed && parsed.badge_id) {
+      if (parsed.badge_id) {
         router.push({ pathname: '/rewards/badge-details', params: { badgeId: parsed.badge_id } });
       }
       break;
     default:
+      // fallback: do nothing or show details modal
       break;
   }
 }
@@ -84,8 +104,8 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [senderProfiles, setSenderProfiles] = useState<{ [id: string]: { full_name: string; avatar_url: string | null } }>({});
-  const [entityImages, setEntityImages] = useState<{ [key: string]: string | null }>({});
+  const [senderProfiles, setSenderProfiles] = useState<Record<string, { full_name: string; avatar_url: string | null }>>({});
+  const [entityImages, setEntityImages] = useState<Record<string, string | null>>({});
 
   async function loadNotifications() {
     // Helper to get sender_id from notification content
@@ -206,9 +226,9 @@ export default function Notifications() {
           .from('user_profiles')
           .select('id, full_name, avatar_url')
           .in('id', senderIds);
-        if (!profileError && profiles) {
-          const profileMap: { [id: string]: { full_name: string; avatar_url: string | null } } = {};
-          profiles.forEach((p: any) => {
+        if (!profileError && Array.isArray(profiles)) {
+          const profileMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
+          profiles.forEach((p: { id: string; full_name?: string; avatar_url?: string | null }) => {
             profileMap[p.id] = { full_name: p.full_name || 'Unknown', avatar_url: p.avatar_url || null };
           });
           setSenderProfiles(profileMap);
@@ -265,69 +285,86 @@ export default function Notifications() {
             </Text>
           </View>
         ) : (
-          notifications.map((notification) => {
-            // Determine sender_id
-            let senderId = null;
-            try {
-              senderId = JSON.parse(notification.content).sender_id || null;
-            } catch { senderId = null; }
-            // App/system notification if no senderId
-            const isSystem = !senderId;
-            const sender = isSystem
-              ? { full_name: 'Rollodex', avatar_url: require('../assets/avatar-placeholder.png') }
-              : senderProfiles[senderId as string] || { full_name: 'Unknown', avatar_url: require('../assets/avatar-placeholder.png') };
-            return (
-              <TouchableOpacity
-                key={notification.id}
-                style={[
-                  styles.notificationCard,
-                  !notification.seen && styles.notificationUnseen,
-                ]}
-                onPress={() => onNotificationPress(notification)}
-              >
-                <View style={styles.avatarContainer}>
-                  <Image
-                    source={
-                      sender.avatar_url && typeof sender.avatar_url === 'string'
-                        ? { uri: sender.avatar_url }
-                        : sender.avatar_url
-                    }
-                    style={styles.avatar}
-                  />
-                </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.senderName}>{sender.full_name}</Text>
-                  <View style={styles.messageRow}>
-                    {/* Small entity image if available */}
-                    {(() => {
-                      const url = entityImages[notification.id as string];
-                      if (typeof url === 'string' && url) {
-                        return (
-                          <Image
-                            source={{ uri: url }}
-                            style={styles.entityImage}
-                          />
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    <Text style={styles.notificationText}>
-                      {renderNotificationCard(notification)}
-                    </Text>
-                  </View>
-                  <Text style={styles.notificationTime}>
-                    {new Date(notification.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
+           notifications.map((notification) => {
+                // Determine sender_id
+                let senderId = null;
+                let entitySummary = '';
+                try {
+                  const parsed = JSON.parse(notification.content);
+                  senderId = parsed.sender_id || null;
+                  // Compose summary from referenced entity fields if available
+                  if (parsed.item_type === 'service_provider' && parsed.provider_name) {
+                    entitySummary = parsed.provider_name;
+                  } else if (parsed.item_type === 'post' && parsed.caption) {
+                    entitySummary = parsed.caption;
+                  } else if (parsed.item_type === 'group' && parsed.group_name) {
+                    entitySummary = parsed.group_name;
+                  } else if (parsed.item_type === 'event' && parsed.event_title) {
+                    entitySummary = parsed.event_title;
+                  } else if (parsed.item_type === 'housing' && parsed.housing_title) {
+                    entitySummary = parsed.housing_title;
+                  }
+                } catch { senderId = null; }
+                const isSystem = !senderId;
+                const sender = isSystem
+  ? { full_name: 'Rollodex', avatar_url: require('../assets/avatar-placeholder.png') }
+  : (typeof senderId === 'string' && senderProfiles && Object.prototype.hasOwnProperty.call(senderProfiles, senderId)
+      ? senderProfiles[senderId]
+      : { full_name: 'Unknown', avatar_url: require('../assets/avatar-placeholder.png') });
+                return (
+                  <TouchableOpacity
+                    key={notification.id}
+                    style={[
+                      styles.notificationCard,
+                      !notification.seen && styles.notificationUnseen,
+                    ]}
+                    onPress={() => onNotificationPress(notification)}
+                  >
+                    <View style={styles.avatarContainer}>
+                      <Image
+                        source={
+                          sender.avatar_url && typeof sender.avatar_url === 'string'
+                            ? { uri: sender.avatar_url }
+                            : sender.avatar_url
+                        }
+                        style={styles.avatar}
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={styles.senderName}>{sender.full_name}</Text>
+                      <View style={styles.messageRow}>
+                        {/* Small entity image if available */}
+                        {(() => {
+                          const url = typeof notification.id === 'string' && entityImages && Object.prototype.hasOwnProperty.call(entityImages, notification.id)
+  ? entityImages[notification.id]
+  : null;
+                          if (typeof url === 'string' && url) {
+                            return (
+                              <Image
+                                source={{ uri: url }}
+                                style={styles.entityImage}
+                              />
+                            );
+                          }
+                          return null;
+                        })()}
+                        <Text style={styles.notificationText}>
+                          {renderNotificationCard(notification, entitySummary)}
+                        </Text>
+                      </View>
+                      <Text style={styles.notificationTime}>
+                        {new Date(notification.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
         )}
       </ScrollView>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   messageRow: {

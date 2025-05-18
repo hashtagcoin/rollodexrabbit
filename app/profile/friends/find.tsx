@@ -149,7 +149,7 @@ const FindFriendsScreen = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton} onPress={() => console.log('Chat with', item.id)}> 
-             <MessageCircle size={26} color="#007AFF" /> 
+             <MessageCircle size={26} color="#007AFF" />
           </TouchableOpacity>
         </View>
       </View>

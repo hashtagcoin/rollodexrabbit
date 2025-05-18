@@ -9,32 +9,44 @@ import {
   FlatList,
   RefreshControl,
   Image,
-  ScrollView,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { 
-  Search, 
-  Grid2x2 as Grid, 
-  List, 
-  Heart, 
-  House,
-  Car,
-  Laptop,
-  FileSliders as Sliders,
-  MapPin,
-  Star,
-  X,
-  FilePlus as Helping,
-  Filter,
-  Users,
-  ArrowDownUp,
-  MessageCircleHeart,
-  PersonStanding,
+import {
+  AlertCircle,
+  Award,
   BadgeCheck,
-  Clock
- } from 'lucide-react-native';
+  Briefcase,
+  Building,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  FileText,
+  Filter,
+  Hash,
+  Heart,
+  Home,
+  LayoutGrid,
+  List,
+  Mail,
+  Map,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Search,
+  Settings2,
+  Share2,
+  SlidersHorizontal,
+  Star,
+  TrendingUp,
+  Upload,
+  Users,
+  X
+} from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import SwipeListView from './components/SwipeListView';
 import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
@@ -55,12 +67,12 @@ const categoryImageCounts: { [key: string]: number } = {
 
 const CATEGORIES = [
   { id: 'Therapy', name: 'Therapy', icon: (props: any) => <Heart {...props} /> },
-  { id: 'Housing', name: 'Housing', icon: (props: any) => <House {...props} /> },
-  { id: 'Support', name: 'Support', icon: (props: any) => <Helping {...props} /> },
-  { id: 'Transport', name: 'Transport', icon: (props: any) => <Car {...props} /> },
-  { id: 'Tech', name: 'Tech', icon: (props: any) => <Laptop {...props} /> },
-  { id: 'Personal', name: 'Personal', icon: (props: any) => <MessageCircleHeart {...props} /> },
-  { id: 'Social', name: 'Social', icon: (props: any) => <PersonStanding {...props} /> },
+  { id: 'Housing', name: 'Housing', icon: (props: any) => <Home {...props} /> },
+  { id: 'Support', name: 'Support', icon: (props: any) => <Briefcase {...props} /> },
+  { id: 'Transport', name: 'Transport', icon: (props: any) => <CreditCard {...props} /> },
+  { id: 'Tech', name: 'Tech', icon: (props: any) => <Upload {...props} /> },
+  { id: 'Personal', name: 'Personal', icon: (props: any) => <MessageCircle {...props} /> },
+  { id: 'Social', name: 'Social', icon: (props: any) => <Users {...props} /> },
 ];
 
 const { width } = Dimensions.get('window');
@@ -349,17 +361,34 @@ export default function DiscoverScreen() {
   };
 
   const navigateToDetails = (item: ListingItem) => {
-    const params = {
-        id: item.id,
+    let idForNavigation: string | null = null;
+    let targetPathname: '/(tabs)/discover/[id]' | '/(tabs)/housing/[id]' = '/(tabs)/discover/[id]';
+
+    if (isHousingListing(item)) {
+      // For housing listings, use the item's ID
+      idForNavigation = item.id;
+      targetPathname = '/(tabs)/housing/[id]';
+    } else if (isServiceListing(item)) {
+      // For service listings, use the service's ID (item.id), not the provider's ID
+      idForNavigation = item.id; // Changed from item.provider?.id to item.id
+      // Default path is already set
+    }
+
+    if (!idForNavigation) {
+      console.error("navigateToDetails: Could not determine ID for navigation or item type is unknown.", item);
+      return; 
+    }
+
+    // Use type assertion to ensure the params match the expected type
+    router.push({
+      pathname: targetPathname as any, // Type assertion needed for dynamic routes
+      params: {
+        id: idForNavigation,
         returnIndex: currentIndex.toString(),
         returnViewMode: viewMode,
         source: 'discover'
-    };
-    if (isHousingListing(item)) {
-      router.push({ pathname: "/(tabs)/housing/[id]", params });
-    } else {
-      router.push({ pathname: "/(tabs)/discover/[id]", params });
-    }
+      } as Record<string, string>
+    });
   };
 
   const renderGroupMatchBadge = (item: ListingItem) => {
@@ -418,7 +447,7 @@ export default function DiscoverScreen() {
                   <Image source={{ uri: getItemImage(item) }} style={styles.serviceImage} />
                   {renderGroupMatchBadge(item)}
                   {isServiceListing(item) && item.provider?.verified && (
-                    <View style={styles.ndisBadgeGrid}>
+                    <View style={styles.ndisBadge}> {/* Changed from ndisBadgeGrid to ndisBadge */}
                       <BadgeCheck size={14} color="#fff" />
                       <Text style={styles.ndisBadgeText}>NDIS</Text>
                     </View>
@@ -450,7 +479,7 @@ export default function DiscoverScreen() {
                 <View style={styles.serviceDetails}>
                   <Text style={styles.serviceTitle} numberOfLines={3}>{item.title}</Text>
                   {renderServiceProvider(item)}
-                  <View style={styles.serviceFooter}>
+                  <View style={styles.serviceFooter}> {/* Restored usage, will add style definition */}
                     <View style={styles.priceContainer}>
                       {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIcon}/>}
                       <Text style={styles.servicePrice}>
@@ -487,59 +516,65 @@ export default function DiscoverScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.serviceListItemTouchable}
+            style={styles.serviceListItemTouchable} // This will only provide margins now
             onPress={() => navigateToDetails(item)}
           >
-            <ShadowCard style={styles.serviceListItem} width={90} height={90}>
-              <View style={styles.listItemInner}>
-                <View style={styles.listImageContainer}>
-                  <Image source={{ uri: getItemImage(item) }} style={styles.listImage} />
-                  {/* NDIS Badge for List View */}
-                  {isServiceListing(item) && item.provider?.verified && (
-                    <View style={styles.ndisBadgeList}>
-                      <BadgeCheck size={12} color="#fff" />
-                      <Text style={styles.ndisBadgeText}>NDIS</Text>
-                    </View>
-                  )}
-                  {renderGroupMatchBadge(item)}
-                </View>
-                <View style={{ flex: 1, justifyContent: 'center' }}>
-                  <Text style={styles.serviceTitle} numberOfLines={2}>{item.title}</Text>
-                  {renderServiceProvider(item)}
-                   {/* Description for list view, if desired */}
-                  <Text style={styles.serviceDescription} numberOfLines={2}> 
-                    {item.description}
-                  </Text>
-                  <View style={styles.priceContainerList}>
-                    {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIcon}/>}
-                    <Text style={styles.servicePrice}>
-                        ${getItemPrice(item)}
-                        {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
-                    </Text>
+            <ShadowCard 
+              style={styles.serviceListItemCard} 
+              width={width - 32} 
+              height={124} 
+            > 
+              {/* Image Container */}
+              <View style={styles.listImageContainer}>
+                <Image source={{ uri: getItemImage(item) }} style={styles.listImage} />
+                {isServiceListing(item) && item.provider?.verified && (
+                  <View style={styles.ndisBadgeList}>
+                    <BadgeCheck size={12} color="#fff" />
+                    <Text style={styles.ndisBadgeTextList}>NDIS</Text>
                   </View>
+                )}
+                {renderGroupMatchBadge(item)} {/* Ensure this badge is styled for list view */}
+              </View>
+
+              {/* Text Content Container */}
+              <View style={styles.listTextContentContainer}>
+                <Text style={styles.listServiceTitle} numberOfLines={2}>{item.title}</Text>
+                {/* Provider info - ensure renderServiceProvider styles this appropriately or pass a style prop */}
+                <View style={styles.listProviderInfoContainer}>
+                  {renderServiceProvider(item)} 
                 </View>
-                <View style={{ justifyContent: 'space-between', alignItems: 'flex-end', paddingLeft: 8 }}>
-                    <Pressable onPress={() => toggleFavorite(item)} style={{padding: 4}}>
-                        <Heart size={24} color={isItemFavorited(item) ? "#ff4081" : "#ccc"} fill={isItemFavorited(item) ? "#ff4081" : "none"} />
-                    </Pressable>
-                    {/* Share button for list items */}
-                    {(isServiceListing(item) && item.provider?.id) && (
-                        <Pressable
-                          style={[styles.shareButton, {position: 'relative', bottom: 0, right: 0, marginTop: 'auto', alignSelf: 'flex-end'}]}
-                          onPress={() => {
-                            setShareModalVisible(true);
-                            setShareItem({
-                              itemId: item.provider!.id,
-                              itemType: 'service_provider',
-                              itemTitle: item.provider!.business_name,
-                              itemImageUrl: getItemImage(item),
-                            });
-                          }}
-                        >
-                          <Text style={{color: '#007aff', fontWeight: 'bold'}}>Share</Text>
-                        </Pressable>
-                    )}
+                <Text style={styles.listServiceDescription} numberOfLines={2}> 
+                  {item.description}
+                </Text>
+                <View style={styles.listPriceContainer}>
+                  {isServiceListing(item) && <Clock size={14} color="#4B5563" style={styles.listPriceIcon}/>}
+                  <Text style={styles.listServicePrice}>
+                    ${getItemPrice(item)}
+                    {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/hr' : '')}
+                  </Text>
                 </View>
+              </View>
+
+              {/* Actions Container */}
+              <View style={styles.listActionsContainer}>
+                <Pressable onPress={() => toggleFavorite(item)} style={styles.listActionButton}>
+                  <Heart size={22} color={isItemFavorited(item) ? "#FF4081" : "#A0A0A0"} fill={isItemFavorited(item) ? "#FF4081" : "none"} />
+                </Pressable>
+                {(isServiceListing(item) && item.provider?.id) && (
+                  <Pressable 
+                    style={styles.listActionButton} 
+                    onPress={() => {
+                      setShareModalVisible(true);
+                      setShareItem({
+                        itemId: item.provider!.id,
+                        itemType: 'service_provider',
+                        itemTitle: item.provider!.business_name,
+                        itemImageUrl: getItemImage(item),
+                      });
+                    }}>
+                    <Share2 size={20} color="#A0A0A0" />{/* Ensured Share2 is used */}
+                  </Pressable>
+                )}
               </View>
             </ShadowCard>
           </TouchableOpacity>
@@ -558,7 +593,7 @@ export default function DiscoverScreen() {
         <View style={styles.swipeViewToggleContainer}>
           <View style={styles.viewToggleGroup}>
             <TouchableOpacity style={[styles.viewToggleButton, isMode(viewMode, 'grid') && styles.selectedViewToggle]} onPress={() => setViewMode('grid')}>
-              <Grid size={20} color={isMode(viewMode, 'grid') ? '#007AFF' : '#333'} />
+              <LayoutGrid size={20} color={isMode(viewMode, 'grid') ? '#007AFF' : '#333'} />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.viewToggleButton, isMode(viewMode, 'list') && styles.selectedViewToggle]} onPress={() => setViewMode('list')}>
               <List size={20} color={isMode(viewMode, 'list') ? '#007AFF' : '#333'} />
@@ -568,7 +603,7 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.sortButton} onPress={handlePresentModalPress}>
-            <ArrowDownUp size={20} color="#333" />
+            <ChevronDown size={20} color="#333" />
           </TouchableOpacity>
         </View>
       )}
@@ -621,7 +656,7 @@ export default function DiscoverScreen() {
         <View style={styles.viewToggleContainer}>
           <View style={styles.viewToggleGroup}>
             <TouchableOpacity style={[styles.viewToggleButton, isMode(viewMode, 'grid') && styles.selectedViewToggle]} onPress={() => setViewMode('grid')}>
-              <Grid size={20} color={isMode(viewMode, 'grid') ? '#007AFF' : '#333'} />
+              <LayoutGrid size={20} color={isMode(viewMode, 'grid') ? '#007AFF' : '#333'} />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.viewToggleButton, isMode(viewMode, 'list') && styles.selectedViewToggle]} onPress={() => setViewMode('list')}>
               <List size={20} color={isMode(viewMode, 'list') ? '#007AFF' : '#333'} />
@@ -631,7 +666,7 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.sortButton} onPress={handlePresentModalPress}>
-            <ArrowDownUp size={20} color="#333" />
+            <ChevronDown size={20} color="#333" />
           </TouchableOpacity>
         </View>
       )}
@@ -786,35 +821,114 @@ const styles = StyleSheet.create({
     // flex: 0.5, margin: 4, // Alternative flex based sizing
   },
   serviceCard: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden' },
-  serviceListItemTouchable: { marginHorizontal: 8, marginBottom: 12 }, // ListItem specific touchable
-  serviceListItem: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden'}, // ListItem card
-  listItemInner: { flexDirection: 'row', padding: 12, gap: 12 },
-  imageContainer: { position: 'relative', width: '100%', backgroundColor: '#f0f0f0' }, // Added BG for image loading
-  serviceImage: {
-    width: '100%', height: 140, resizeMode: 'cover', // Changed to cover for better fill
-    // borderRadius: 20, // Top corners are handled by card's borderRadius
-    // alignSelf: 'center',
+  
+  // LIST VIEW ITEM STYLES - MODERNIZED
+  serviceListItemTouchable: { 
+    marginHorizontal: 16, // More horizontal margin for a floating card feel
+    marginBottom: 16, // Increased bottom margin
+  }, 
+  serviceListItemCard: { // Style for the ShadowCard component itself in list view
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 12, // Existing border radius
+    // overflow: 'hidden', // ShadowCard might handle overflow or need it for shadow
+    padding: 12,
+    alignItems: 'center', // Vertically align items in the row
   },
-  listImageContainer: { position: 'relative', width: 90, height: 90, backgroundColor: '#f0f0f0', borderRadius: 8, overflow: 'hidden'},
-  listImage: { width: '100%', height: '100%', resizeMode: 'cover' }, // Cover for list image
+  listImageContainer: { 
+    position: 'relative', 
+    width: 100, // Increased image size
+    height: 100, // Increased image size
+    backgroundColor: '#f0f0f0', 
+    borderRadius: 8, 
+    overflow: 'hidden',
+    marginRight: 12, // Added margin to separate from text content
+  },
+  listImage: { 
+    width: '100%', 
+    height: '100%', 
+    resizeMode: 'cover' 
+  },
+  ndisBadgeList: { 
+    position: 'absolute', top: 6, left: 6, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, zIndex: 1,
+  },
+  ndisBadgeTextList: { // Specific text style for NDIS badge in list if needed
+    fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 3 
+  },
+  listTextContentContainer: {
+    flex: 1, // Takes up available space between image and actions
+    justifyContent: 'space-between', // Distribute space for title, desc, price
+    // paddingHorizontal: 12, // Space from image and actions - removed as image container has margin right
+    height: '100%', // Ensure it takes full height of the card for price alignment
+  },
+  listServiceTitle: {
+    fontSize: 16, // Increased size
+    fontWeight: '600', // Slightly less than bold to differentiate from price or more prominent elements
+    color: '#1F2937', // Darker, more modern text color
+    marginBottom: 4,
+  },
+  listProviderInfoContainer: { // Container for provider name and verification badge
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  // Ensure providerName style inside renderServiceProvider is updated or a new style is used e.g. listProviderName
+  // providerName: { fontSize: 13, color: '#6B7280', flexShrink: 1 }, // Example for listProviderName
+  listServiceDescription: {
+    fontSize: 13,
+    color: '#4B5563', // Softer color
+    lineHeight: 18,
+    marginBottom: 8,
+    flexShrink: 1, // Allow description to shrink if needed
+  },
+  listPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    // marginTop: 'auto', // Pushes price to the bottom - adjusted with flex in parent
+  },
+  listPriceIcon: {
+    marginRight: 5,
+  },
+  listServicePrice: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  listActionsContainer: {
+    justifyContent: 'space-around', // Or 'flex-start' / 'flex-end' depending on desired alignment
+    alignItems: 'center', // Vertically center action items
+    paddingLeft: 8, // Space from text content
+    height: '100%', // Make actions container take full height for vertical alignment of icons
+  },
+  listActionButton: {
+    padding: 8, // Touch area for icons
+    // marginBottom: 8, // If stacking icons vertically and needing space between them
+  },
+  // END LIST VIEW ITEM STYLES
+
+  // listItemInner: { flexDirection: 'row', padding: 12, gap: 12 }, // Removed duplicate/unused
+  imageContainer: { position: 'relative', width: '100%', backgroundColor: '#f0f0f0' }, // Added BG for image loading
+  serviceImage: { // Restored for grid view
+    width: '100%', 
+    height: 140, 
+    resizeMode: 'cover',
+  },
   serviceDetails: { padding: 12 }, // Consistent padding
   serviceTitle: { fontSize: 15, fontWeight: '600', marginBottom: 4, color: '#111' },
   providerContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 4, flexShrink: 1 },
-  providerName: { fontSize: 12, color: '#555', marginRight: 4, flexShrink: 1 },
-  serviceDescription: { fontSize: 13, color: '#666', marginTop: 4, lineHeight: 18 },
-  serviceFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }, // Push to bottom
-  priceContainer: { flexDirection: 'row', alignItems: 'center' },
-  priceContainerList: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  priceIcon: { marginRight: 4 },
-  ndisBadgeGrid: {
+  providerName: { fontSize: 13, color: '#666', flexShrink: 1 },
+  serviceDescription: { fontSize: 12, color: '#777', marginBottom: 6, lineHeight: 16 },
+  priceContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 'auto', paddingTop: 4 },
+  priceContainerList: {flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 2},
+  priceIcon: { marginRight: 5, color: '#666' },
+  servicePrice: { fontSize: 14, fontWeight: 'bold', color: '#007AFF' },
+  ndisBadge: { // Changed from ndisBadgeGrid to ndisBadge
     position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, zIndex: 1,
-  },
-  ndisBadgeList: { // Potentially different positioning or size for list items
-    position: 'absolute', top: 4, left: 4, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, zIndex: 1,
+    backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, zIndex: 1,
   },
   ndisBadgeText: { fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 2 },
+  // ndisBadgeTextList: { fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 3 }, // Removed duplicate
   favButton: { 
     position: 'absolute', top: 8, right: 8, padding: 6, borderRadius: 20, 
     backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 1,
@@ -830,11 +944,22 @@ const styles = StyleSheet.create({
     borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 1,
   },
   groupMatchText: { fontSize: 12, color: '#fff', fontWeight: '500' },
-  servicePrice: { fontSize: 16, fontWeight: 'bold', color: '#007AFF' },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   emptyStateTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 8, color: '#333' },
   emptyStateText: { fontSize: 16, color: '#666', textAlign: 'center' },
   bottomSheetContent: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
   bottomSheetTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16, textAlign: 'center', color: '#333' },
   sortOptionButton: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  serviceFooter: { // Added style definition for serviceFooter
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginTop: 'auto', // Pushes to bottom of serviceDetails
+    paddingTop: 8,
+  },
+  shareButtonGrid: {
+    // Example: Add padding if it's just an icon for better touch area
+    padding: 4,
+    // alignSelf: 'flex-end', // If it needs to be pushed to one side within its container
+  },
 });

@@ -81,7 +81,8 @@ export default function CreateServiceScreen() {
     'in_person', 'online', 'hybrid', 'group'
   ];
 
-  const handleServiceImagePicked = async (uri: string | null) => {
+  const handleServiceImagePicked = async (data: { uri: string; mimeType: string }) => {
+  const { uri, mimeType } = data;
     if (!uri) {
       return;
     }
@@ -277,7 +278,7 @@ export default function CreateServiceScreen() {
       Alert.alert(
         'Success',
         'Service created successfully!',
-        [{ text: 'OK', onPress: () => router.push('/provider/services') }]
+        [{ text: 'OK', onPress: () => router.push('/provider/services/index') }]
       );
     } catch (e: unknown) {
       console.error('Error creating service:', e);
