@@ -17,13 +17,28 @@ import { Entypo, MaterialCommunityIcons } from '@expo/vector-icons'; // For icon
 
 // Define the type for a single event based on your Supabase table
 // This is an example, adjust according to your 'events' table structure
-type GroupEvent = Database['public']['Tables']['group_events']['Row'] & {
+interface GroupEvent {
+  id: string;
+  group_id: string;
+  subgroup_id: string;
+  title: string;
+  description: string;
+  start_time: string;
+  end_time: string;
+  location: {
+    city: string;
+    full_address: string;
+  } | null;
+  max_participants: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  image_url: string;
+  admission_fee: string;
+  category: string;
   // Add any related data types if you join tables, e.g., creator profile
   user_profiles?: Database['public']['Tables']['user_profiles']['Row'] | null;
-  group_event_categories?: {
-    name: string;
-  } | null;
-};
+}
 
 export default function EventDetailScreen() {
   const { id, goBackPath } = useLocalSearchParams<{ id: string; goBackPath?: string }>();
@@ -48,8 +63,7 @@ export default function EventDetailScreen() {
         .from('group_events')
         .select(`
           *,
-          user_profiles ( id, full_name, avatar_url ),
-          group_event_categories ( name )
+          user_profiles ( id, full_name, avatar_url )
         `)
         .eq('id', id)
         .single();
@@ -161,9 +175,9 @@ export default function EventDetailScreen() {
         <View style={styles.contentPadding}>
           <Text style={styles.title}>{event.title}</Text>
           
-          {event.group_event_categories?.name && (
+          {event.category && (
             <View style={styles.categoryContainer}>
-              <Text style={styles.categoryText}>{event.group_event_categories.name}</Text>
+              <Text style={styles.categoryText}>{event.category}</Text>
             </View>
           )}
 
@@ -185,17 +199,19 @@ export default function EventDetailScreen() {
           <Text style={styles.sectionTitle}>Date & Time</Text>
           <View style={styles.detailItemContainer}>
             <Entypo name="calendar" size={20} color="#4F4F4F" style={styles.iconStyle} />
-            <Text style={styles.detailText}>{formatDate(event.start_date)}</Text>
+            <Text style={styles.detailText}>{formatDate(event.start_time)}</Text>
           </View>
           <View style={styles.detailItemContainer}>
             <Entypo name="clock" size={20} color="#4F4F4F" style={styles.iconStyle} />
-            <Text style={styles.detailText}>{formatTime(event.start_date)} {event.end_date ? `- ${formatTime(event.end_date)}` : ''}</Text>
+            <Text style={styles.detailText}>{formatTime(event.start_time)} {event.end_time ? `- ${formatTime(event.end_time)}` : ''}</Text>
           </View>
 
           <Text style={styles.sectionTitle}>Location</Text>
           <View style={styles.detailItemContainer}>
             <Entypo name="location-pin" size={20} color="#4F4F4F" style={styles.iconStyle} />
-            <Text style={styles.detailText}>{event.location || 'Location not specified'}</Text>
+            <Text style={styles.detailText}>
+              {event.location ? `${event.location.city}, ${event.location.full_address}` : 'Location not specified'}
+            </Text>
           </View>
 
           <Text style={styles.sectionTitle}>About this Event</Text>

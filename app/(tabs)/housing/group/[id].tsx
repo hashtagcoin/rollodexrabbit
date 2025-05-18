@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RemoteImageWithPlaceholder } from './RemoteImageWithPlaceholder'; // Kept unused import
+import { RemoteImageWithPlaceholder } from './RemoteImageWithPlaceholder';
 import {
   View,
   Text,
@@ -74,26 +74,31 @@ type HousingListingSummary = {
   media_urls: string[];
 };
 
+// A simple function to get the first character of a name (not a component with hooks)
+function getInitial(name: string | null): string {
+  return name ? name.charAt(0).toUpperCase() : '?';
+}
+
 export default function HousingGroupDetail() {
+  // --- ALL HOOKS DECLARED FIRST (before any return or conditional) ---
   const { id, action, goBackPath } = useLocalSearchParams<{ id: string; action?: string; goBackPath?: string }>();
-  console.log('GroupDetail: received id param:', id);
   const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user.id;
 
+  // State hooks
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [group, setGroup] = useState<ExtendedHousingGroup | null>(null);
   const [listing, setListing] = useState<HousingListingSummary | null>(null);
   const [userMembership, setUserMembership] = useState<ExtendedGroupMember | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [avatarErrorStates, setAvatarErrorStates] = useState<{ [key: number]: boolean }>({}); // Use object for sparse state
-
-  // --- FAVORITE STATE ---
+  const [avatarErrorStates, setAvatarErrorStates] = useState<{ [key: number]: boolean }>({});
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [favoriteLoading, setFavoriteLoading] = useState<boolean>(false);
 
+  // All callbacks and effects defined after all state hooks
   // --- FAVORITE LOGIC ---
   const checkFavoriteStatus = useCallback(async () => {
     if (!userId || !id) return;
@@ -180,6 +185,17 @@ export default function HousingGroupDetail() {
   useEffect(() => {
     checkFavoriteStatus();
   }, [checkFavoriteStatus]);
+
+  // Moved handleBack here to ensure it's declared before any conditional returns
+  const handleBack = useCallback(() => {
+    if (goBackPath) {
+      router.push(goBackPath as Href);
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/housing' as Href); // Fallback to housing index
+    }
+  }, [goBackPath, router]);
 
   // Format date as Month Day
   const formatMoveInDate = (dateString: string | null | undefined) => {
@@ -494,16 +510,6 @@ export default function HousingGroupDetail() {
 
   // --- RENDER ACTUAL CONTENT ---
   // If loading is false, no major error preventing display, and group exists
-  const handleBack = useCallback(() => {
-    if (goBackPath) {
-      router.push(goBackPath as Href);
-    } else if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/housing' as Href); // Fallback to housing index
-    }
-  }, [goBackPath, router]);
-
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Custom Back Button */}
@@ -599,20 +605,21 @@ export default function HousingGroupDetail() {
           {group.members.length > 0 ? (
             group.members.map((member, index) => (
                <View key={member.user_id} style={styles.memberCard}>
-                 {/* Member Avatar with Placeholder Logic */}
-                 {avatarErrorStates[index] || !member.user_profile.avatar_url ? (
-                    <View style={styles.memberAvatarPlaceholder}>
-                        <Text style={styles.memberAvatarPlaceholderText}>
-                            {member.user_profile.full_name ? member.user_profile.full_name.charAt(0).toUpperCase() : '?'}
-                        </Text>
-                    </View>
-                 ) : (
+                 {/* Render both avatar and placeholder, control with opacity */}
+                 {member.user_profile.avatar_url && (
                    <Image
-                     source={{ uri: member.user_profile.avatar_url }} // Use avatar_url directly
-                     style={styles.memberAvatar}
-                     onError={() => handleAvatarError(index)} // Use defined handler
+                     source={{ uri: member.user_profile.avatar_url }}
+                     style={[styles.memberAvatar, avatarErrorStates[index] && { opacity: 0 }]}
+                     onError={() => handleAvatarError(index)}
                      resizeMode="cover"
                    />
+                 )}
+                 {(!member.user_profile.avatar_url || avatarErrorStates[index]) && (
+                   <View style={styles.memberAvatarPlaceholder}>
+                     <Text style={styles.memberAvatarPlaceholderText}>
+                       {getInitial(member.user_profile.full_name)}
+                     </Text>
+                   </View>
                  )}
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName}>{member.user_profile.full_name || 'Unknown User'}</Text>
