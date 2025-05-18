@@ -51,7 +51,7 @@ import {
 } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import SwipeListView from './components/SwipeListView';
-import { ListingItem, ViewMode, Service, HousingListing, isViewMode } from './types';
+import { ListingItem, Service, HousingListing, ViewMode, isServiceListing, isHousingListing, isViewMode } from './types';
 import { ShadowCard } from './components/ShadowCard';
 import GroupMatchIcon from '../housing/components/GroupMatchIcon';
 import HousingCard from './components/HousingCard';
@@ -108,7 +108,7 @@ export default function DiscoverScreen() {
       if (!itemId || !selectedFriendIds.length) return;
       const { error: shareError } = await supabase.from('shared_items').insert(
         selectedFriendIds.map(friendId => ({
-          sender_id: userId, recipient_id: friendId, item_id: itemId, item_type: itemType,
+          sender_id: userId, recipient_id: friendId, item_id: itemId, item_type: 'service_provider',
         }))
       );
       if (shareError) throw shareError;
@@ -116,7 +116,7 @@ export default function DiscoverScreen() {
         selectedFriendIds.map(friendId => ({
           user_id: friendId,
           type: 'post_share',
-          content: JSON.stringify({ sender_id: userId, item_id: itemId, item_type: itemType }),
+          content: JSON.stringify({ sender_id: userId, item_id: itemId, item_type: 'service_provider' }),
           seen: false,
         }))
       );
@@ -218,7 +218,12 @@ export default function DiscoverScreen() {
     console.log("Fetching user favorites...");
     // setLoading(true); // Avoid double loading indicator if loadListings also sets it
     try {
-      const { data, error } = await supabase.from('favorites').select('item_id').eq('user_id', userId); 
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('item_id') // item_id is sufficient for the Set
+        .eq('user_id', userId)
+        .in('item_type', ['service_provider', 'housing_listing']); // Fetch both service_provider and housing_listing types
+      
       if (error) { console.error("Error fetching favorites:", error); } 
       else if (data) { setFavorites(new Set(data.map(fav => fav.item_id))); } 
       else { setFavorites(new Set()); }
@@ -231,32 +236,60 @@ export default function DiscoverScreen() {
   const toggleFavorite = async (item: ListingItem) => {
     if (!userId) { console.error("Cannot toggle favorite: User not logged in."); return; }
     const currentFavorites = new Set(favorites);
-    const itemType = isHousingListing(item) ? 'housing_listing' : 'service_provider';
-    const itemIdToSave = itemType === 'service_provider' ? (item as Service).provider?.id : item.id;
-    if (!itemIdToSave) { console.error(`Cannot toggle favorite: Invalid item ID for type ${itemType}`, item); return; }
+    const itemType = isHousingListing(item) ? 'housing_listing' : 'service';
+    
+    let itemIdToSave: string | null = null;
 
-    if (currentFavorites.has(itemIdToSave)) { currentFavorites.delete(itemIdToSave); } 
-    else { currentFavorites.add(itemIdToSave); }
-    setFavorites(currentFavorites);
+    if (itemType === 'service') {
+      const serviceItem = item as Service;
+      // Ensure provider and provider.id are valid and a string
+      if (serviceItem.provider && typeof serviceItem.provider.id === 'string') {
+        itemIdToSave = serviceItem.provider.id;
+      } else {
+        console.error(`Cannot toggle favorite: Service item is missing provider information or provider.id is not a string.`, item);
+        return; // Prevent further action if ID is invalid
+      }
+    } else {
+      // Assuming item.id is always a string for other types like housing_listing
+      // Add checks here if item.id can also be null for other types
+      itemIdToSave = item.id;
+    }
+
+    if (!itemIdToSave) { // This check is now more robust due to the explicit assignment logic above
+      console.error(`Cannot toggle favorite: Final itemIdToSave is null or invalid for type ${itemType}`, item);
+      return;
+    }
+
+    // Optimistically update UI
+    const newFavorites = new Set(currentFavorites);
+    if (newFavorites.has(itemIdToSave)) { 
+      newFavorites.delete(itemIdToSave); 
+    } else { 
+      newFavorites.add(itemIdToSave); 
+    }
+    setFavorites(newFavorites);
 
     try {
-      if (favorites.has(itemIdToSave)) { 
-        const { error } = await supabase.from('favorites').delete().match({ user_id: userId, item_id: itemIdToSave });
-        if (error) { console.error("Error removing favorite:", error); setFavorites(prev => new Set(prev).add(itemIdToSave)); }
-      } else {
-        const { error } = await supabase.from('favorites').insert({ user_id: userId, item_id: itemIdToSave, item_type: itemType });
+      // Check against the newFavorites state which reflects the intended operation
+      if (!newFavorites.has(itemIdToSave)) { // This means we intended to delete it (it was present before)
+        const { error } = await supabase.from('favorites').delete().match({ user_id: userId, item_id: itemIdToSave, item_type: 'service_provider' });
+        if (error) { 
+          console.error("Error removing favorite:", error); 
+          // Revert optimistic UI update on error
+          setFavorites(currentFavorites);
+        }
+      } else { // This means we intended to add it (it was not present before)
+        const { error } = await supabase.from('favorites').insert({ user_id: userId, item_id: itemIdToSave, item_type: 'service_provider' });
         if (error) {
           console.error("Error adding favorite:", error);
-          setFavorites(prev => { const reverted = new Set(prev); reverted.delete(itemIdToSave); return reverted; });
+          // Revert optimistic UI update on error
+          setFavorites(currentFavorites);
         }
       }
     } catch (err) {
        console.error("Exception toggling favorite:", err);
-       setFavorites(prev => {
-         const reverted = new Set(prev);
-         if (reverted.has(itemIdToSave)) reverted.delete(itemIdToSave); else reverted.add(itemIdToSave); 
-         return reverted;
-       });
+       // Revert optimistic UI update on exception
+       setFavorites(currentFavorites);
     }
   };
 
@@ -314,12 +347,14 @@ export default function DiscoverScreen() {
   };
 
   const isMode = (current: ViewMode, target: ViewMode): boolean => current === target;
-  const isServiceListing = (item: ListingItem): item is Service => 'category' in item && 'format' in item;
-  const isHousingListing = (item: ListingItem): item is HousingListing => 'weekly_rent' in item;
 
   const isItemFavorited = (item: ListingItem): boolean => {
-    if (isServiceListing(item) && item.provider?.id) return favorites.has(item.provider.id);
-    if (isHousingListing(item)) return favorites.has(item.id);
+    if (isServiceListing(item) && item.provider && typeof item.provider.id === 'string') {
+      return favorites.has(item.provider.id);
+    }
+    if (isHousingListing(item) && typeof item.id === 'string') { // Assuming item.id for housing is always string
+      return favorites.has(item.id);
+    }
     return false;
   };
 
@@ -364,6 +399,13 @@ export default function DiscoverScreen() {
   };
 
   const navigateToDetails = (item: ListingItem) => {
+    // Log the item and the results of the type guard checks immediately
+    console.log("DEBUG NAV: Item received:", JSON.stringify(item, null, 2));
+    const isService = isServiceListing(item);
+    const isHousing = isHousingListing(item);
+    console.log(`DEBUG NAV: isServiceListing(item) returned: ${isService}`);
+    console.log(`DEBUG NAV: isHousingListing(item) returned: ${isHousing}`);
+
     let idForNavigation: string | null = null;
     let targetPathname: '/(tabs)/discover/[id]' | '/(tabs)/housing/[id]' = '/(tabs)/discover/[id]';
 
@@ -372,12 +414,40 @@ export default function DiscoverScreen() {
       idForNavigation = item.id;
       targetPathname = '/(tabs)/housing/[id]';
     } else if (isServiceListing(item)) {
-      // For service listings, use the service's ID (item.id), not the provider's ID
-      idForNavigation = item.id; // Changed from item.provider?.id to item.id
-      // Default path is already set
+      const providerExists = !!item.provider;
+      const providerIdIsString = providerExists && typeof item.provider.id === 'string';
+      // Ensure provider.id is not null before trimming, then check if non-empty
+      const providerIdIsNonEmpty = providerIdIsString && item.provider.id !== null && item.provider.id.trim() !== '';
+
+      // Log the conditions:
+      console.log(`DEBUG: Conditions for service item '${item.title}':`);
+      console.log(`DEBUG:   item.provider exists: ${providerExists}`);
+      if (providerExists) {
+        console.log(`DEBUG:   item.provider.id type: ${typeof item.provider.id}, value: '${item.provider.id}'`);
+        console.log(`DEBUG:   item.provider.id is string: ${providerIdIsString}`);
+        // Only log trim attempt if id is a string
+        if (typeof item.provider.id === 'string') {
+            console.log(`DEBUG:   item.provider.id trimmed !== '': ${item.provider.id.trim() !== ''}`);
+        }
+        console.log(`DEBUG:   Overall providerIdIsNonEmpty check: ${providerIdIsNonEmpty}`);
+      }
+
+      if (providerExists && providerIdIsString && providerIdIsNonEmpty) {
+        idForNavigation = item.provider.id;
+        // Log the assigned value and type immediately
+        console.log("DEBUG: Assigned item.provider.id to idForNavigation. Value:", idForNavigation, "Type:", typeof idForNavigation);
+      } else {
+        // Simplified error log to ensure it's not filtered
+        console.log("!!! NAVIGATION BLOCKED: Provider ID check failed. See conditions above. Item:", item);
+        // idForNavigation remains null, caught by the check below
+      }
+      // targetPathname is already '/(tabs)/discover/[id]' which is correct for provider details
     }
 
+    console.log("DEBUG: Checking idForNavigation before the final if. Value:", idForNavigation, "Type:", typeof idForNavigation);
+
     if (!idForNavigation) {
+      // This generic error catches cases where item type is not handled or id is still null after checks
       console.error("navigateToDetails: Could not determine ID for navigation or item type is unknown.", item);
       return; 
     }
@@ -797,9 +867,9 @@ export default function DiscoverScreen() {
               onCardTap={handleCardTap}
               favorites={favorites}
               onShare={(item: ListingItem) => { // Explicitly type item
-                 const itemTypeForShare = isHousingListing(item) ? 'housing_listing' : 'service_provider';
-                 const itemIdForShare = itemTypeForShare === 'service_provider' ? (item as Service).provider?.id : item.id;
-                 const itemTitleForShare = itemTypeForShare === 'service_provider' ? (item as Service).provider?.business_name : item.title;
+                 const itemTypeForShare = isHousingListing(item) ? 'housing_listing' : 'service';
+                 const itemIdForShare = itemTypeForShare === 'service' ? (item as Service).id : item.id;
+                 const itemTitleForShare = itemTypeForShare === 'service' ? (item as Service).title : item.title;
 
                  if (itemIdForShare) {
                     setShareModalVisible(true);

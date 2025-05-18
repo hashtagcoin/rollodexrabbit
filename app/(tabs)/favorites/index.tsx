@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image, Pressable, TouchableOpacity } from 'react-native';
-import { Link, LinkProps } from 'expo-router';
+import { Link, LinkProps, useFocusEffect } from 'expo-router';
 import { X as XIcon, Share2 as Share2Icon } from 'lucide-react-native'; 
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../providers/AuthProvider';
@@ -38,11 +38,15 @@ export default function FavoritesScreen() {
     { label: 'Housing Groups', value: 'housing_group' }, 
   ];
 
-  useEffect(() => {
-    if (user) { 
-      fetchFavorites();
-    }
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchFavorites();
+      }
+      // Optional: return a cleanup function if needed, e.g., to cancel subscriptions or async tasks
+      return () => {}; 
+    }, [user]) // Dependency array for useCallback, fetchFavorites itself is stable or defined outside/memoized
+  );
 
   const fetchFavorites = async () => {
     if (!user) return;
@@ -66,17 +70,38 @@ export default function FavoritesScreen() {
         try {
           switch (fav.item_type) {
             case 'service_provider':
+              // This case might become less relevant if primary favoriting is now 'service'
+              // For now, keeping the logic that fetches provider + representative service
               const { data: spData, error: spError } = await supabase
                 .from('service_providers')
                 .select('id, business_name, business_description, logo_url, abn')
                 .eq('id', fav.item_id)
-                .maybeSingle(); // Use maybeSingle in case item was deleted
+                .maybeSingle(); 
               if (spError) console.error(`Error fetching SP ${fav.item_id}:`, spError);
+              
               if (spData) {
+                let representativeServiceDesc: string | null = spData.business_description;
+                let representativeServiceImage: string | null = spData.logo_url;
+
+                const { data: repServiceData, error: repServiceError } = await supabase
+                  .from('services')
+                  .select('description, media_urls, title') // Added title for consistency
+                  .eq('provider_id', spData.id) // Changed 'service_provider_id' to 'provider_id'
+                  .limit(1)
+                  .maybeSingle();
+
+                if (repServiceError) {
+                  console.error(`Error fetching representative service for provider ${spData.id}:`, repServiceError);
+                } else if (repServiceData) {
+                  representativeServiceDesc = repServiceData.description || representativeServiceDesc;
+                  if (repServiceData.media_urls && repServiceData.media_urls.length > 0 && repServiceData.media_urls[0]) {
+                    representativeServiceImage = repServiceData.media_urls[0];
+                  }
+                }
                 details = {
                   item_title: spData.business_name,
-                  item_description: spData.business_description,
-                  item_image_url: spData.logo_url,
+                  item_description: representativeServiceDesc,
+                  item_image_url: representativeServiceImage,
                   provider_abn: spData.abn,
                 };
               }

@@ -512,13 +512,6 @@ export default function HousingGroupDetail() {
   // If loading is false, no major error preventing display, and group exists
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Custom Back Button */}
-      <View style={{ paddingTop: 40, paddingLeft: 12, backgroundColor: '#fff', zIndex: 10 }}>
-        <Pressable onPress={handleBack} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 24 }}>
-          <Text style={{ fontSize: 18, color: '#007AFF', fontWeight: 'bold', marginRight: 6 }}>{'←'}</Text>
-          <Text style={{ fontSize: 16, color: '#007AFF' }}>Back</Text>
-        </Pressable>
-      </View>
       {/* Scrollable content area */}
       <ScrollView contentContainerStyle={styles.container}>
         {/* Back Button */}

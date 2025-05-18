@@ -40,7 +40,7 @@ type ProviderType = {
 };
 
 type ServiceDetailsType = {
-  service: ServiceType;
+  service: ServiceType | null;
   provider: ProviderType | null;
 };
 
@@ -76,65 +76,96 @@ export default function ServiceDetails() {
   };
 
   useEffect(() => {
-    const fetchServiceDetails = async () => {
-      if (!id) return;
-
-      setLoading(true);
-      setError(null);
+    const fetchServiceDetails = async (passedId: string) => {
+      let finalServiceToSet: ServiceType | null = null;
+      let finalProviderToSet: ProviderType | null = null;
 
       try {
-        console.log(`Fetching service with ID: ${id}`);
-        
-        // Step 1: Fetch the service details
-        const { data: serviceData, error: serviceError } = await supabase
+        setLoading(true);
+        setError(null);
+        setServiceDetails(null); 
+
+        // Attempt 1: Assume passedId is a services.id
+        const { data: serviceResult, error: serviceErr } = await supabase
           .from('services')
           .select('*')
-          .eq('id', id)
-          .single();
+          .eq('id', passedId)
+          .maybeSingle();
 
-        if (serviceError || !serviceData) {
-          throw serviceError || new Error('Service not found');
-        }
+        if (serviceErr) throw serviceErr;
 
-        // Step 2: Fetch the associated provider details if service_provider_id exists
-        let providerData = null;
-        if (serviceData.service_provider_id) {
-          const { data, error: providerError } = await supabase
-            .from('service_providers')
-            .select('*')
-            .eq('id', serviceData.service_provider_id)
-            .single();
-
-          if (providerError) {
-            console.error('Error fetching provider details:', providerError);
-            // Don't throw, we'll handle missing provider gracefully
-          } else {
-            providerData = data;
+        if (serviceResult) {
+          // Successfully found a service with passedId
+          finalServiceToSet = serviceResult;
+          if (serviceResult.service_provider_id) {
+            const { data: pData, error: pError } = await supabase
+              .from('service_providers')
+              .select('*')
+              .eq('id', serviceResult.service_provider_id)
+              .maybeSingle();
+            if (pError) {
+              console.error("Error fetching provider for service:", pError);
+              // Do not throw, allow service to display without provider if provider fetch fails
+            } else {
+              finalProviderToSet = pData;
+            }
           }
         } else {
-          console.warn('Service has no associated provider:', serviceData.id);
+          // Attempt 2: Service not found with passedId. Assume passedId is a service_providers.id
+          const { data: providerResult, error: providerErr } = await supabase
+            .from('service_providers')
+            .select('*')
+            .eq('id', passedId)
+            .maybeSingle();
+
+          if (providerErr) throw providerErr;
+
+          if (providerResult) {
+            finalProviderToSet = providerResult;
+            // Now try to find at least one service associated with this provider
+            const { data: associatedService, error: assocServiceErr } = await supabase
+              .from('services')
+              .select('*')
+              .eq('service_provider_id', providerResult.id)
+              .limit(1) // Get the first one, or any one representative service
+              .maybeSingle(); 
+
+            if (assocServiceErr) {
+              console.error("Error fetching associated service for provider:", assocServiceErr);
+              // Do not throw, allow provider to display without a specific service if service fetch fails
+            } else {
+              finalServiceToSet = associatedService;
+            }
+          }
+          // If providerResult is also null here, both finalServiceToSet and finalProviderToSet will be null,
+          // and the UI will show "could not be loaded", which is correct.
         }
 
-        // Set the combined data
         setServiceDetails({
-          service: serviceData,
-          provider: providerData
+          service: finalServiceToSet,
+          provider: finalProviderToSet,
         });
 
-      } catch (err: any) {
-        console.error('Error fetching service details:', err);
-        setError(err.message || 'Failed to fetch service details.');
-        setServiceDetails(null);
+      } catch (err: any) { 
+        console.error('Fatal error in fetchServiceDetails:', err);
+        setError(err.message || 'An unexpected error occurred while fetching details.');
+        setServiceDetails(null); 
       } finally {
         setLoading(false);
       }
     };
 
-    fetchServiceDetails();
+    if (id) { // Ensure id is available before fetching
+      fetchServiceDetails(id);
+    } else {
+      setError('Service ID is missing.');
+      setLoading(false);
+      setServiceDetails(null);
+    }
   }, [id]);
 
   const handleBooking = () => {
-    if (!serviceDetails?.provider) return; 
+    if (!serviceDetails?.provider || !serviceDetails?.service) return; 
     router.push({
       pathname: '/(tabs)/discover/booking', 
       params: { 
@@ -154,7 +185,7 @@ export default function ServiceDetails() {
   }
 
   // Error State
-  if (error || !serviceDetails) {
+  if (error || !serviceDetails || (!serviceDetails.service && !serviceDetails.provider) ) { 
     return (
       <View style={styles.containerCentered}>
         <Text style={styles.messageText}>{error || 'Service details could not be loaded.'}</Text>
@@ -165,7 +196,7 @@ export default function ServiceDetails() {
   const { service, provider } = serviceDetails;
   
   // Use service image if available, otherwise use provider logo
-  const imageUrl = (service.media_urls && service.media_urls.length > 0) 
+  const imageUrl = (service?.media_urls && service.media_urls.length > 0) 
     ? service.media_urls[0] 
     : provider?.logo_url || 'https://placehold.co/600x400?text=Service+Image';
 
@@ -185,16 +216,16 @@ export default function ServiceDetails() {
         </View>
 
         <View style={styles.contentContainer}>
-          <Text style={styles.title}>{service.title || 'Service Name Unavailable'}</Text>
+          <Text style={styles.title}>{service?.title || 'Service Name Unavailable'}</Text>
           {provider && (
             <Text style={styles.providerNameText}>Provided by {provider.business_name}</Text>
           )}
 
           <View style={styles.metaInfoRow}>
-            {service.price !== undefined && (
+            {service?.price !== undefined && (
               <View style={styles.metaChip}>
                 <Clock size={16} color="#4B5563" />
-                <Text style={styles.metaChipText}>${service.price} / hour</Text>
+                <Text style={styles.metaChipText}>${service?.price} / hour</Text>
               </View>
             )}
             {provider && (
@@ -207,7 +238,7 @@ export default function ServiceDetails() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About this service</Text>
-            <Text style={styles.sectionText}>{service.description || 'No description provided.'}</Text>
+            <Text style={styles.sectionText}>{service?.description || 'No description provided.'}</Text>
           </View>
           
           {provider?.business_description && (
