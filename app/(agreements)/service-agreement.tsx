@@ -147,7 +147,7 @@ export default function ServiceAgreementScreen() {
           <View style={styles.signatureCanvasContainer}>
             <Signature
               ref={signatureRef}
-              onBegin={() => setHasDrawn(true)}
+              onEnd={() => setHasDrawn(true)}
               onClear={() => { setHasDrawn(false); setSignatureData(null); }}
               onOK={(sig: string) => setSignatureData(sig)}
               onEmpty={() => setError('Signature is required')}

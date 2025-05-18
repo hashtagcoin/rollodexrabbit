@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -9,9 +9,10 @@ import {
   Dimensions, 
   ActivityIndicator,
   Alert,
-  FlatList
+  FlatList,
+  Pressable
 } from 'react-native';
-import { useLocalSearchParams, router, useNavigation } from 'expo-router';
+import { useLocalSearchParams, router, useNavigation, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { handleApiError, showErrorAlert } from '../../../lib/errorUtils';
 import {
@@ -61,15 +62,19 @@ type HousingListing = {
   virtual_tour_url: string | null;
   pets_allowed: boolean;
   ndis_supported: boolean;
-  provider: {
-    business_name: string;
+  provider_id: string;
+  provider_details?: {
+    business_name?: string;
+    avatar_url?: string;
+    contact_email?: string;
+    contact_phone?: string;
   };
 };
 
 const lighterBlue = '#007AFF';
 const lightGray = '#d3d3d3';
 
-function HousingDetail() {
+function HousingDetail(props: any) {
   const { id, returnIndex, returnViewMode } = useLocalSearchParams();
   const { source } = useLocalSearchParams<{ source: string }>();
   const navigation = useNavigation();
@@ -88,12 +93,25 @@ function HousingDetail() {
   const flatListRef = React.useRef<FlatList<HousingGroup>>(null);
 
   // Calculate dynamic card width (ensure Dimensions is imported)
-  const CARD_WIDTH = Dimensions.get('window').width * 0.4; // Show ~2 cards
+  const CARD_WIDTH = Dimensions.get('window').width * 0.85; // Show 1 card prominently
 
   // Handler for hover effect to scroll list
   const handleGroupHover = () => {
     flatListRef.current?.scrollToEnd({ animated: true });
   };
+
+  // Image carousel scroll handler
+  const handleScroll = (event: any) => {
+    const contentOffsetX = event.nativeEvent.contentOffset.x;
+    const layoutMeasurementWidth = event.nativeEvent.layoutMeasurement.width;
+    if (layoutMeasurementWidth > 0) {
+      const slide = Math.round(contentOffsetX / layoutMeasurementWidth);
+      if (slide !== currentImageIndex) {
+        setCurrentImageIndex(slide);
+      }
+    }
+  };
+
 
   // Set current user ID from session
   useEffect(() => {
@@ -173,106 +191,150 @@ function HousingDetail() {
         .from('housing_listings')
         .select(`
           *,
-          provider:provider_id(business_name)
+          provider_profile:provider_id (*)
         `)
         .eq('id', id)
         .single();
 
       if (fetchError) throw handleApiError(fetchError);
-      setListing(data);
-    } catch (e: unknown) {
-      const error = handleApiError(e);
-      showErrorAlert(error);
-      setError(error.message);
+      if (!data) throw new Error('Housing listing not found.');
+
+      let displayProviderData: HousingListing['provider_details'] = {};
+      const providerProfile = data.provider_profile as {
+        user_id: string;
+        contact_email?: string;
+        contact_phone?: string;
+        avatar_url?: string;
+        business_name?: string;
+      } | null;
+
+      if (providerProfile && providerProfile.user_id) {
+        // Step 2: Fetch service_provider data using user_id from provider_profile
+        const { data: serviceProviderData, error: spError } = await supabase
+          .from('service_providers')
+          .select('id, business_name, logo_url')
+          .eq('id', providerProfile.user_id) // Assuming service_providers.id is the user_id
+          .single();
+
+        if (spError && spError.code !== 'PGRST116') { // PGRST116: 'single' row not found, not an error here
+          console.warn('Error fetching service provider data:', spError);
+        }
+        
+        const serviceProvider = serviceProviderData as {
+          id: string;
+          business_name: string;
+          logo_url?: string;
+        } | null;
+
+        // Step 3: Merge data for display
+        displayProviderData.business_name = serviceProvider?.business_name || providerProfile?.business_name || 'N/A';
+        displayProviderData.avatar_url = serviceProvider?.logo_url || providerProfile?.avatar_url;
+        displayProviderData.contact_email = providerProfile?.contact_email;
+        displayProviderData.contact_phone = providerProfile?.contact_phone;
+      } else {
+          // Fallback if no provider_profile or user_id
+          displayProviderData.business_name = 'Provider information not available';
+      }
+
+      setListing({
+        ...(data as any), // Cast to any to avoid intermediate type conflicts before full mapping
+        provider_details: displayProviderData,
+        // Clear out old provider structures if they were part of housingData implicitly
+        provider_profile: undefined, 
+      });
+
+    } catch (e: any) {
+      console.error('Failed to fetch housing details:', e);
+      setError(e.message || 'Failed to load details.');
     } finally {
       setLoading(false);
     }
   }
 
   async function loadHousingGroups() {
-  if (!id) return; // Don't run if listing ID is not available
-  try {
-    setLoadingGroups(true);
-    console.log('Loading REAL housing groups for listing:', id);
+    if (!id) return; // Don't run if listing ID is not available
+    try {
+      setLoadingGroups(true);
+      console.log('Loading REAL housing groups for listing:', id);
 
-    // Fetch housing groups for this listing
-    const { data: groups, error: groupsError } = await supabase
-      .from('housing_groups')
-      .select('*')
-      .eq('listing_id', id)
-      .eq('is_active', true);
-
-    if (groupsError) throw handleApiError(groupsError);
-
-    // For each group, fetch approved members and join with user_profiles
-    const groupIds = (groups || []).map((g: any) => g.id);
-    let membersByGroup: Record<string, any[]> = {};
-    if (groupIds.length > 0) {
-      // Step 1: Fetch members (no join)
-      const { data: members, error: membersError } = await supabase
-        .from('housing_group_members')
+      // Fetch housing groups for this listing
+      const { data: groups, error: groupsError } = await supabase
+        .from('housing_groups')
         .select('*')
-        .in('group_id', groupIds)
-        .eq('status', 'approved');
-      if (membersError) throw handleApiError(membersError);
+        .eq('listing_id', id)
+        .eq('is_active', true);
 
-      // Step 2: Collect unique user_ids
-      const userIds = [...new Set((members || []).map((m: any) => m.user_id).filter(Boolean))];
-      let profiles: any[] = [];
-      if (userIds.length > 0) {
-        // Step 3: Fetch user_profiles for these user IDs (id column)
-        console.log('Fetching user_profiles for IDs:', userIds);
-        const { data: fetchedProfiles, error: profilesError } = await supabase
-          .from('user_profiles')
+      if (groupsError) throw handleApiError(groupsError);
+
+      // For each group, fetch approved members and join with user_profiles
+      const groupIds = (groups || []).map((g: any) => g.id);
+      let membersByGroup: Record<string, any[]> = {};
+      if (groupIds.length > 0) {
+        // Step 1: Fetch members (no join)
+        const { data: members, error: membersError } = await supabase
+          .from('housing_group_members')
           .select('*')
-          .in('id', userIds);
-        if (profilesError) throw handleApiError(profilesError);
-        profiles = fetchedProfiles || [];
+          .in('group_id', groupIds)
+          .eq('status', 'approved');
+        if (membersError) throw handleApiError(membersError);
+
+        // Step 2: Collect unique user_ids
+        const userIds = [...new Set((members || []).map((m: any) => m.user_id).filter(Boolean))];
+        let profiles: any[] = [];
+        if (userIds.length > 0) {
+          // Step 3: Fetch user_profiles for these user IDs (id column)
+          console.log('Fetching user_profiles for IDs:', userIds);
+          const { data: fetchedProfiles, error: profilesError } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .in('id', userIds);
+          if (profilesError) throw handleApiError(profilesError);
+          profiles = fetchedProfiles || [];
+        }
+
+        // Step 4: Merge profile data into each member
+        const profilesById = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
+        const membersWithProfiles = (members || []).map((m: any) => ({
+          ...m,
+          user_profile: profilesById[m.user_id] || null,
+        }));
+
+        // Step 5: Group members by group_id
+        membersByGroup = (membersWithProfiles || []).reduce((acc: Record<string, any[]>, m: any) => {
+          if (!acc[m.group_id]) acc[m.group_id] = [];
+          acc[m.group_id].push(m);
+          return acc;
+        }, {});
       }
-
-      // Step 4: Merge profile data into each member
-      const profilesById = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
-      const membersWithProfiles = (members || []).map((m: any) => ({
-        ...m,
-        user_profile: profilesById[m.user_id] || null,
-      }));
-
-      // Step 5: Group members by group_id
-      membersByGroup = (membersWithProfiles || []).reduce((acc: Record<string, any[]>, m: any) => {
-        if (!acc[m.group_id]) acc[m.group_id] = [];
-        acc[m.group_id].push(m);
-        return acc;
-      }, {});
+      // Compose processedData
+      const processedData: HousingGroup[] = (groups || []).map((group: any) => {
+        const members = (membersByGroup[group.id] || []).map((m: any) => ({
+          ...m,
+          user_profile: m.user_profile
+        }));
+        return {
+          ...group,
+          current_members: members.length,
+          members
+        };
+      });
+      console.log(`Fetched ${processedData.length} active groups for listing ${id}`);
+      setHousingGroups(processedData);
+    } catch (e: unknown) {
+      const error = handleApiError(e);
+      console.error('Error loading housing groups:', error);
+      // Decide if you want to show an error to the user for groups failing to load
+      // showErrorAlert(error, 'Could not load housing groups');
+    } finally {
+      setLoadingGroups(false);
     }
-    // Compose processedData
-    const processedData: HousingGroup[] = (groups || []).map((group: any) => {
-      const members = (membersByGroup[group.id] || []).map((m: any) => ({
-        ...m,
-        user_profile: m.user_profile
-      }));
-      return {
-        ...group,
-        current_members: members.length,
-        members
-      };
-    });
-    console.log(`Fetched ${processedData.length} active groups for listing ${id}`);
-    setHousingGroups(processedData);
-  } catch (e: unknown) {
-    const error = handleApiError(e);
-    console.error('Error loading housing groups:', error);
-    // Decide if you want to show an error to the user for groups failing to load
-    // showErrorAlert(error, 'Could not load housing groups');
-  } finally {
-    setLoadingGroups(false);
   }
-}
 
   const renderGroupsSection = () => {
     // If no groups loaded yet, show loading or empty state
     if (loadingGroups) {
       return (
-        <View style={styles.groupSectionContainer}>
+        <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Co-living Groups</Text>
           <ActivityIndicator style={styles.groupListLoading} size="small" color={lighterBlue} />
         </View>
@@ -282,7 +344,7 @@ function HousingDetail() {
     // If groups loaded but empty, show option to create one
     if (!loadingGroups && housingGroups.length === 0) {
       return (
-        <View style={styles.groupSectionContainer}>
+        <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Co-living Groups</Text>
           <TouchableOpacity style={styles.createGroupPrompt} onPress={handleCreateGroup}>
             <Plus size={20} color={lighterBlue} style={styles.createGroupIcon} />
@@ -295,7 +357,7 @@ function HousingDetail() {
 
     // If groups exist, render them
     return (
-      <View style={styles.groupSectionContainer}>
+      <View style={styles.sectionContainer}>
         <View style={styles.groupSectionHeader}>
           <Text style={styles.sectionTitle}>Co-living Groups ({housingGroups.length})</Text>
           <TouchableOpacity onPress={handleCreateGroup}>
@@ -379,64 +441,75 @@ function HousingDetail() {
     }
   }, [session]);
 
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const goBackPath = params.goBackPath as string | undefined;
+
+  const handleBack = useCallback(() => {
+    if (goBackPath) {
+      // TypeScript/Expo Router workaround: use double cast for strict literal route types
+      router.navigate(goBackPath as unknown as import('expo-router').LinkProps['href']);
+    } else {
+      router.back();
+    }
+  }, [goBackPath, router]);
+
   // Main return statement for HousingDetail component
   return (
-    <View style={styles.container}>
-      <AppHeader title={listing?.title ?? 'Housing Detail'} showBackButton onBackPress={handleBackPress} />
-      {loading && (
-        <View style={[styles.loadingContainer, styles.centeredContent]}>
-          <ActivityIndicator size="large" color={lighterBlue} />
-          <Text style={styles.loadingText}>Loading housing details...</Text>
-        </View>
-      )}
-      {error && !loading && (
-        <View style={[styles.errorContainer, styles.centeredContent]}>
-          <AlertCircle size={24} color="#D9534F" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-      {!loading && !error && listing && (
-        <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
-          {/* Image Carousel */}
-          {listing.media_urls && listing.media_urls.length > 0 && (
-            <View style={styles.imageContainer}>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={(event) => {
-                  const contentOffsetX = event.nativeEvent.contentOffset.x;
-                  const layoutMeasurementWidth = event.nativeEvent.layoutMeasurement.width;
-                  // Ensure layoutMeasurementWidth is not zero to avoid division by zero
-                  if (layoutMeasurementWidth > 0) {
-                     const slide = Math.round(contentOffsetX / layoutMeasurementWidth);
-                     if (slide !== currentImageIndex) {
-                       setCurrentImageIndex(slide);
-                     }
-                  }
-                }}
-                scrollEventThrottle={16} 
-              >
-                {listing.media_urls.map((url, index) => (
-                  <Image key={index} source={{ uri: url }} style={styles.image} resizeMode="cover" />
-                ))}
-              </ScrollView>
-              {listing.media_urls.length > 1 && (
-                <View style={styles.pagination}>
-                  {listing.media_urls.map((_, index) => (
-                    <Text key={index} style={index === currentImageIndex ? styles.paginationDotActive : styles.paginationDot}>•</Text>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Title and Basic Info */}
-          <Text style={styles.title}>{listing.title}</Text>
-          <View style={styles.locationRow}>
-            <MapPin size={16} color="#666" />
-            <Text style={styles.locationText}>{`${listing.suburb}, ${listing.state} ${listing.postcode}`}</Text>
+    <View style={{ flex: 1 }}>
+      {/* Custom Back Button */}
+      <View style={{ paddingTop: 40, paddingLeft: 12, backgroundColor: '#fff', zIndex: 10 }}>
+        <Pressable onPress={handleBack} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 24 }}>
+          <Text style={{ fontSize: 18, color: '#007AFF', fontWeight: 'bold', marginRight: 6 }}>{'←'}</Text>
+          <Text style={{ fontSize: 16, color: '#007AFF' }}>Back</Text>
+        </Pressable>
+      </View>
+      <View style={styles.container}>
+        <AppHeader title={listing?.title ?? 'Housing Detail'} showBackButton onBackPress={handleBackPress} />
+        {loading && (
+          <View style={[styles.loadingContainer, styles.centeredContent]}>
+            <ActivityIndicator size="large" color={lighterBlue} />
+            <Text style={styles.loadingText}>Loading housing details...</Text>
           </View>
+        )}
+        {error && !loading && (
+          <View style={[styles.errorContainer, styles.centeredContent]}>
+            <AlertCircle size={24} color="#D9534F" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+        {!loading && !error && listing && (
+          <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
+            {/* Image Carousel */}
+            {listing.media_urls && listing.media_urls.length > 0 && (
+              <View style={styles.imageContainer}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={handleScroll}
+                  scrollEventThrottle={16}
+                >
+                  {listing.media_urls.map((url, index) => (
+                    <Image key={index} source={{ uri: url }} style={styles.image} resizeMode="cover" />
+                  ))}
+                </ScrollView>
+                {listing.media_urls.length > 1 && (
+                  <View style={styles.paginationContainer}>
+                    {listing.media_urls.map((_, index) => (
+                      <Text key={index} style={index === currentImageIndex ? styles.paginationDotActive : styles.paginationDot}>•</Text>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Title and Address */}
+            <Text style={styles.title}>{listing.title}</Text>
+            <View style={styles.locationRow}>
+              <MapPin size={16} color="#666" />
+              <Text style={styles.locationText}>{`${listing.suburb}, ${listing.state} ${listing.postcode}`}</Text>
+            </View>
 
            {/* Rent and Bond */}
            <View style={styles.rentBondRow}>
@@ -516,9 +589,9 @@ function HousingDetail() {
            </View>
 
           {/* Provider Info */}
-          <View style={styles.providerContainer}>
+          <View style={styles.providerInfoContainer}>
             <Text style={styles.providerLabel}>Listed by:</Text>
-            <Text style={styles.providerName}>{listing.provider?.business_name ?? 'Provider details unavailable'}</Text>
+            <Text style={styles.providerName}>{listing.provider_details?.business_name ?? 'Provider details unavailable'}</Text>
             {/* Add verified badge if applicable */}
           </View>
           
@@ -530,9 +603,45 @@ function HousingDetail() {
             </TouchableOpacity>
           )}
 
-          {/* Render the Co-living Groups Section */}
-          {renderGroupsSection()}
+          {/* Render the Co-Living Groups Section */}
+          <View style={styles.sectionContainer}>
+            {renderGroupsSection()}
+          </View>
 
+          {/* Location Section */}
+          {listing && listing.address && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Location</Text>
+              <View style={styles.mapPlaceholder}>
+                <Text style={styles.mapPlaceholderText}>
+                  Map will be displayed here. Requires 'react-native-maps' and coordinates.
+                </Text>
+              </View>
+              <Text style={styles.addressText}>{`${listing.address}, ${listing.suburb}, ${listing.state} ${listing.postcode}`}</Text>
+            </View>
+          )}
+
+          {/* Contact Provider Section */}
+          {listing && listing.provider_details && (
+            <View style={styles.sectionContainer}> 
+              <Text style={styles.sectionTitle}>Contact Provider</Text>
+              {listing.provider_details ? (
+                <View style={styles.providerInfoContainer}>
+                  <Image 
+                    source={listing.provider_details.avatar_url ? { uri: listing.provider_details.avatar_url } : require('../../../assets/avatar-placeholder.png')} 
+                    style={styles.providerAvatar} 
+                  />
+                  <View style={styles.providerTextContainer}>
+                    <Text style={styles.providerName}>{listing.provider_details.business_name}</Text>
+                    {listing.provider_details.contact_email && <Text style={styles.providerContactText}>Email: {listing.provider_details.contact_email}</Text>}
+                    {listing.provider_details.contact_phone && <Text style={styles.providerContactText}>Phone: {listing.provider_details.contact_phone}</Text>}
+                  </View>
+                </View>
+              ) : (
+                <Text>Provider information is not available.</Text>
+              )}
+            </View>
+          )}
         </ScrollView>
       )}
 
@@ -545,347 +654,136 @@ function HousingDetail() {
         </View>
       )}
     </View>
+    </View> // Closes styles.container
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa', // Light background
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FDFDFD' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#FDFDFD' },
+  errorText: { fontSize: 16, color: 'red', textAlign: 'center', marginBottom: 20 },
+  container: { flex: 1, backgroundColor: '#FDFDFD' },
+  scrollContainer: { flexGrow: 1 },
+
+  // Image Carousel Styles
+  imageContainer: { width: '100%', height: 300, marginBottom: 20, backgroundColor: '#E0E0E0' },
+  image: { width: Dimensions.get('window').width, height: 300 }, // Assumes Dimensions is imported
+  paginationContainer: { position: 'absolute', bottom: 10, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  paginationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.4)', marginHorizontal: 4 },
+  paginationDotActive: { backgroundColor: '#FFFFFF' },
+
+  // Content Styles
+  contentContainer: { paddingHorizontal: 20, paddingBottom: 20 },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#1A1A1A', marginBottom: 12 },
+  sectionContainer: { marginBottom: 20, padding: 15, backgroundColor: '#FFFFFF', borderRadius: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
+  sectionTitle: { fontSize: 20, fontWeight: '600', color: '#333333', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEE', paddingBottom: 5 },
+  regularText: { fontSize: 16, color: '#4F4F4F', lineHeight: 24, marginBottom: 5 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
+  detailLabel: { fontSize: 16, fontWeight: '500', color: '#4F4F4F' },
+  detailValue: { fontSize: 16, color: '#1A1A1A' },
+  availabilityTextGreen: { fontSize: 16, fontWeight: 'bold', color: '#2E7D32' },
+  availabilityTextRed: { fontSize: 16, fontWeight: 'bold', color: '#C62828' },
+  bulletPoint: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
+  bulletIcon: { marginRight: 10, marginTop: 4, color: '#007AFF' },
+  bulletText: { fontSize: 16, color: '#4F4F4F', lineHeight: 24, flex: 1 },
+  expandButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  expandButtonText: { fontSize: 16, color: '#007AFF', fontWeight: '500', marginRight: 5 },
+
+  // Map and Address
+  mapPlaceholder: { height: 200, backgroundColor: '#E9E9EF', justifyContent: 'center', alignItems: 'center', borderRadius: 8, marginBottom: 10 },
+  mapPlaceholderText: { color: '#8A8A8E', fontSize: 16 },
+  addressText: { fontSize: 16, color: '#4F4F4F', textAlign: 'center', marginBottom: 20 },
+
+  // Provider Info
+  providerInfoContainer: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#FFFFFF', borderRadius: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2, marginTop: 10 },
+  providerAvatar: { width: 60, height: 60, borderRadius: 30, marginRight: 15, backgroundColor: '#E0E0E0' },
+  providerTextContainer: { flex: 1 },
+  providerName: { fontSize: 18, fontWeight: '600', color: '#1A1A1A', marginBottom: 4 },
+  providerContactText: { fontSize: 15, color: '#007AFF', lineHeight: 22 }, // Was '#007AFF'
+
+  // Button Styles
+  primaryButton: { backgroundColor: '#007AFF', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center', marginTop: 10, marginBottom: 10 },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  viewAgreementButton: { borderColor: '#007AFF', borderWidth: 1, paddingVertical: 15, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center', marginTop: 10, marginBottom: 10 },
+  viewAgreementButtonText: { color: '#007AFF', fontSize: 17, fontWeight: '600' },
+  disabledButton: { backgroundColor: '#BDBDBD' },
+
+  // Group Creation Prompt
+  createGroupPrompt: { padding: 15, backgroundColor: '#E6F2FF', borderRadius: 8, marginTop: 20, alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, // Added flexDirection and justifyContent
+  createGroupText: { fontSize: 16, color: '#00529B', textAlign: 'left', flex:1, marginRight: 10, lineHeight: 22 }, // Changed textAlign, added flex, marginRight
+  createGroupButton: { backgroundColor: '#007AFF', paddingVertical: 10, paddingHorizontal: 25, borderRadius: 8 },
+  createGroupButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '500' },
+
+  // Existing Group Info / Group Card Styles (consolidated)
+  groupInfoContainer: { marginTop: 20, padding: 15, backgroundColor: '#F0F8FF', borderRadius: 8, borderWidth: 1, borderColor: '#D1E9FF' },
+  groupInfoTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e5637', marginBottom: 10 }, // Dark green title from testGroupDetailTitle
+  groupMemberItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E8F4FF' },
+  groupMemberName: { fontSize: 16, color: '#333', marginLeft: 10 },
+  leaveGroupButton: { backgroundColor: '#FF6B6B', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center', marginTop: 15 },
+  leaveGroupButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '500' },
+  
+  groupCard: { 
+    backgroundColor: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#eeeeee',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
   },
-  scrollContainer: {
-    // Removed paddingBottom, handled by applyButtonContainer margin
+  groupName: { 
+    fontSize: 18, fontWeight: 'bold', color: '#007AFF', marginBottom: 8,
   },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 100, // Ensure space for fixed button
+  groupMemberCount: { 
+    fontSize: 15, color: '#555', marginBottom: 12,
   },
-  centeredContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  joinButton: { 
+    backgroundColor: '#28a745', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 5, alignItems: 'center',
   },
-  loadingContainer: {
-    flex: 1, // Take up full screen
+  joinButtonText: { 
+    color: '#ffffff', fontSize: 15, fontWeight: '500',
   },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
+  groupDetailContainer: { // For displaying details of a selected/joined group
+    padding: 15, backgroundColor: '#ffffff', borderRadius: 8, marginTop: 10,
   },
-  errorContainer: { 
-    flex: 1,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+  groupDetailTitle: { // Re-using from testGroupDetailTitle for consistency
+    fontSize: 18, fontWeight: 'bold', color: '#1e5637', marginBottom: 8,
   },
-  errorText: { 
-    marginTop: 10,
-    fontSize: 16,
-    color: '#D9534F', // Error red
-    textAlign: 'center',
+  groupDetailText: { // Re-using from testGroupDetailText
+    fontSize: 15, color: '#333', lineHeight: 22,
   },
-  imageContainer: {
-    width: width - 32, // Full width minus padding
-    height: 250, // Fixed height for images
-    marginBottom: 16,
-    borderRadius: 8,
-    overflow: 'hidden', // Clip images to rounded corners
-    alignSelf: 'center',
-  },
-  image: {
-    width: width - 32,
-    height: 250,
-  },
-  pagination: { 
-    position: 'absolute',
-    bottom: 10,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  paginationDot: { 
-    fontSize: 30, // Make dots larger
-    color: '#ccc', 
-    marginHorizontal: 4,
-  },
-  paginationDotActive: { 
-    fontSize: 30,
-    color: lighterBlue, // Active color
-    marginHorizontal: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  locationRow: { 
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  locationText: {
-    fontSize: 16,
-    color: '#666',
-    marginLeft: 6,
-  },
-  rentBondRow: { 
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline', // Align text baselines
-    marginBottom: 16,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#eee',
-  },
-  rentText: { 
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: lighterBlue,
-  },
-  bondText: { 
-    fontSize: 14,
-    color: '#666',
-  },
-  detailsGrid: { 
-    flexDirection: 'row',
-    flexWrap: 'wrap', // Allow items to wrap
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  detailItem: { 
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '48%', // Roughly two items per row
-    marginBottom: 10,
-  },
-  detailText: { 
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#333',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-    color: '#444',
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#555',
-    marginBottom: 16,
-  },
-  featureList: { 
-    marginLeft: 10, // Indent feature list
-    marginBottom: 16,
-  },
-  featureItem: { 
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 22, // Space out list items
-  },
-  additionalDetailsContainer: { 
-    flexDirection: 'row',
-    flexWrap: 'wrap', // Allow wrapping
-    justifyContent: 'flex-start', // Align items to the start
-    marginTop: 8,
-    marginBottom: 16,
-    gap: 15, // Add gap between items
-  },
-  additionalDetailItem: { 
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 15,
-  },
-  additionalDetailText: { 
-    marginLeft: 6,
-    fontSize: 13,
-    color: '#333',
-  },
-  providerContainer: { 
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  providerLabel: { 
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  providerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  virtualTourButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: lighterBlue,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  virtualTourButtonText: { 
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  groupSectionContainer: {
-    marginTop: 20,
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  groupSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  groupSectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#444',
-  },
-  createGroupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: lightGray, 
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 15,
-  },
-  createGroupButtonText: {
-    marginLeft: 4,
-    fontSize: 13,
-    color: '#333',
-    fontWeight: '500',
-  },
-  groupListContainer: {
-    // Container for GroupCards, add styles if needed (e.g., spacing)
-  },
-  createGroupPrompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    backgroundColor: '#f0f8ff', // Light blue background
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  createGroupIcon: {
-    marginRight: 8,
-  },
-  createGroupText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  createGroupLink: {
-    marginLeft: 4,
-    fontSize: 14,
-    color: lighterBlue,
-    fontWeight: 'bold',
-  },
-  createGroupPromptSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#e6f3ff', // Lighter blue
-    borderRadius: 6,
-    marginTop: 8,
-  },
-  createGroupTextSmall: {
-    fontSize: 13,
-    color: '#005A9C', // Darker blue text
-    marginLeft: 5,
-  },
-  avatarsRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  avatarContainer: {
-    marginRight: 6,
-    position: 'relative',
-  },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-  },
-  adminBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#ffd700', // Gold color for admin
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  applyButtonContainer: { 
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: '#f8f9fa', // Match container background
-    borderTopWidth: 1,
-    borderColor: '#eee',
-  },
-  applyButton: { 
-    backgroundColor: lighterBlue,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  applyButtonText: { 
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  groupListLoading: { 
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noGroupsContainer: { 
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  noGroupsText: { 
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 14,
-  },
+  groupListLoading: { marginVertical: 20 },
+  createGroupIcon: { marginRight: 8 },
+  groupSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  createGroupLink: { color: '#007AFF', fontWeight: '500', fontSize: 16 },
+  noGroupsContainer: { alignItems: 'center', paddingVertical: 30, paddingHorizontal: 20 },
+  noGroupsText: { fontSize: 16, color: '#666', marginBottom: 15, textAlign: 'center' },
+  createGroupPromptSmall: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#E6F2FF', borderRadius: 6 },
+  createGroupTextSmall: { fontSize: 15, color: '#00529B', marginLeft: 6 },  
+  centeredContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 15, fontSize: 17, color: '#4F4F4F' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  locationText: { fontSize: 17, color: '#333333', marginLeft: 8 },
+  rentBondRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 15, borderBottomWidth: 1, borderColor: '#EEE', paddingBottom:15 },
+  rentText: { fontSize: 20, fontWeight: 'bold', color: '#1A1A1A' },
+  bondText: { fontSize: 17, color: '#4F4F4F' },
+  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
+  detailItem: { flexDirection: 'row', alignItems: 'center', width: '48%', marginBottom: 12, backgroundColor: '#F8F9FA', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 8, borderWidth:1, borderColor: '#E9ECEF' },
+  detailText: { fontSize: 16, color: '#333333', marginLeft: 10 },
+  description: { fontSize: 16, color: '#4F4F4F', lineHeight: 24, marginBottom: 20, marginTop: 5 },
+  featureList: { marginLeft: 10, marginBottom: 15 },
+  featureItem: { fontSize: 16, color: '#4F4F4F', lineHeight: 24, marginBottom: 6 },
+  additionalDetailsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', marginTop: 15, marginBottom: 20, paddingVertical: 15, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#EEE' },
+  additionalDetailItem: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 10, marginVertical: 8, padding: 8, backgroundColor: '#F8F9FA', borderRadius: 6 },
+  additionalDetailText: { fontSize: 15, color: '#333333', marginLeft: 8 },
+  providerLabel: { fontSize: 16, fontWeight: '600', color: '#4F4F4F', marginBottom: 5 },
+  virtualTourButton: { flexDirection: 'row', backgroundColor: '#007AFF', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 15, marginBottom: 10 },
+  virtualTourButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600', marginRight: 8 },
+  applyButtonContainer: { paddingHorizontal: 20, paddingVertical: 15, borderTopWidth: 1, borderColor: '#E0E0E0', backgroundColor: '#FFFFFF' },
+  applyButton: { backgroundColor: '#007AFF', paddingVertical: 16, borderRadius: 8, alignItems: 'center' },
+  applyButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' }
 });
 
-export default function HousingDetailWithErrorBoundary() {
-  return (
-    <ErrorBoundary>
-      <HousingDetail />
-    </ErrorBoundary>
-  );
-}
+// Standardize export as per previous diff indication
+const HousingDetailWithErrorBoundary = (props: any) => (
+  <ErrorBoundary>
+    <HousingDetail {...props} />
+  </ErrorBoundary>
+);
+
+export default HousingDetailWithErrorBoundary;

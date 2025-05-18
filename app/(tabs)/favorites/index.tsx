@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image, Pressable, TouchableOpacity } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, LinkProps } from 'expo-router';
 import { X as XIcon, Share2 as Share2Icon } from 'lucide-react-native'; 
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../providers/AuthProvider';
@@ -289,21 +289,27 @@ export default function FavoritesScreen() {
     return favorites.filter(item => item.item_type === activeFilter);
   }, [favorites, activeFilter]);
 
-  const getLinkHref = (item: FavoriteItem) => {
-    switch (item.item_type) {
-      case 'service_provider':
-        return `/(tabs)/discover/${item.item_id}`;
-      case 'housing_listing':
-        return `/(tabs)/housing/${item.item_id}`;
-      case 'group_event':
-        return `/(tabs)/community/event-detail/${item.item_id}`;
-      case 'housing_group':
-        return `/(tabs)/housing/group/${item.item_id}`;
-      default:
-        console.warn(`Unhandled favorite item type for linking: ${item.item_type}`);
-        return '/(tabs)/favorites';
-    }
-  };
+  // TypeScript/Expo Router workaround: use double cast to satisfy strict literal route types
+const getLinkHref = (item: FavoriteItem): LinkProps['href'] => {
+  switch (item.item_type) {
+    case 'service_provider':
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { pathname: '/(tabs)/discover/[id]', params: { id: item.item_id } } as unknown as LinkProps['href'];
+    case 'housing_listing':
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { pathname: '/(tabs)/housing/[id]', params: { id: item.item_id, goBackPath: '/(tabs)/favorites' } } as unknown as LinkProps['href'];
+    case 'group_event':
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { pathname: '/(tabs)/community/event-detail/[id]', params: { id: item.item_id } } as unknown as LinkProps['href'];
+    case 'housing_group':
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { pathname: '/(tabs)/housing/group/[id]', params: { id: item.item_id, goBackPath: '/(tabs)/favorites' } } as unknown as LinkProps['href'];
+    default:
+      console.warn(`Unhandled favorite item type for linking: ${item.item_type}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { pathname: '/(tabs)/favorites' } as unknown as LinkProps['href'];
+  }
+};
 
   const [pendingDialogVisible, setPendingDialogVisible] = useState(false);
   const [pendingToCancel, setPendingToCancel] = useState<FavoriteItem | null>(null);
@@ -335,9 +341,11 @@ export default function FavoritesScreen() {
 
   const renderFavoriteItem = ({ item }: { item: FavoriteItem }) => {
     const isHousingGroup = item.item_type === 'housing_group';
-    const isPending = isHousingGroup && (item.member_status === 'REQUESTED' || item.member_status === 'pending');
+    // member_status can be 'MEMBER' | 'REQUESTED' | null, but not 'pending'.
+    const isPending = isHousingGroup && item.member_status === 'REQUESTED';
     // Only show 'Favourited' if not pending
     const showFavourited = isHousingGroup && !isPending && !item.member_status;
+    const linkHref = getLinkHref(item);
     return (
       <View style={styles.cardOuterContainer}>
         {/* Compact, rounded, absolutely positioned status badge top-right */}
@@ -356,7 +364,7 @@ export default function FavoritesScreen() {
             )}
           </View>
         )}
-        <Link href={getLinkHref(item) as any} asChild>
+        <Link href={linkHref} asChild>
           <Pressable style={styles.itemContainer}>
             <Image
               source={{ uri: item.item_image_url || 'https://via.placeholder.com/100' }}

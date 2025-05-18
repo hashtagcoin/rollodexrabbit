@@ -22,7 +22,9 @@ export type HousingListing = {
   bathrooms: number;
   suburb: string;
   state: string;
+  address: string;
   sda_category: string;
+  sda_listing: boolean;
   media_urls: string[];
   provider: {
     id: string | null;

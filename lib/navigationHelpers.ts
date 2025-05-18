@@ -20,35 +20,28 @@ export function navigateToTab(tabName: TabName): void {
   // Handle navigation differently based on tab
   switch(tabName) {
     case 'index':
-      router.replace('/(tabs)'); // Navigate to the index route within the (tabs) group
+      router.navigate('/(tabs)'); 
       break;
     case 'discover':
-      router.replace('/(tabs)/discover');
+      router.navigate('/(tabs)/discover'); 
       break;
     case 'community':
-      router.replace('/(tabs)/community');
+      router.navigate('/(tabs)/community'); 
       break;
     case 'wallet':
-      router.replace('/(tabs)/wallet');
+      router.navigate('/(tabs)/wallet'); 
       break;
     case 'favorites':
-      // Use a known valid path and cast to avoid TypeScript errors
-      // This works because we know the path is valid at runtime
-      router.replace('/');
-      // Allow a small delay before redirecting to favorites
-      setTimeout(() => {
-        // Using any to bypass type checking for new routes
-        (router as any).replace('/(tabs)/favorites');
-      }, 10);
+      router.navigate('/(tabs)/favorites'); 
       break;
     case 'profile':
-      router.replace('/(tabs)/profile');
+      router.navigate('/(tabs)/profile'); 
       break;
     case 'housing':
-      router.replace('/(tabs)/housing');
+      router.navigate('/(tabs)/housing'); 
       break;
     default:
-      router.replace('/');
+      router.navigate('/'); 
   }
 }
 

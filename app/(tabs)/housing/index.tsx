@@ -779,6 +779,7 @@ const styles = StyleSheet.create({
   },
   listingCard: {
     flexDirection: 'row',
+    width: '100%', // Ensure it takes full available width
     marginBottom: 16,
     borderRadius: 12,
     backgroundColor: '#fff',

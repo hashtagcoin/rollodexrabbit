@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert, // Kept unused import
   SafeAreaView,
+  Pressable,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
@@ -74,7 +75,7 @@ type HousingListingSummary = {
 };
 
 export default function HousingGroupDetail() {
-  const { id, action } = useLocalSearchParams<{ id: string; action?: string }>();
+  const { id, action, goBackPath } = useLocalSearchParams<{ id: string; action?: string; goBackPath?: string }>();
   console.log('GroupDetail: received id param:', id);
   const router = useRouter();
   const { session } = useAuth();
@@ -493,8 +494,24 @@ export default function HousingGroupDetail() {
 
   // --- RENDER ACTUAL CONTENT ---
   // If loading is false, no major error preventing display, and group exists
+  const handleBack = () => {
+    if (goBackPath) {
+      // TypeScript/Expo Router workaround: use double cast for strict literal route types
+      router.navigate(goBackPath as unknown as import('expo-router').LinkProps['href']);
+    } else {
+      router.back();
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Custom Back Button */}
+      <View style={{ paddingTop: 40, paddingLeft: 12, backgroundColor: '#fff', zIndex: 10 }}>
+        <Pressable onPress={handleBack} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 24 }}>
+          <Text style={{ fontSize: 18, color: '#007AFF', fontWeight: 'bold', marginRight: 6 }}>{'←'}</Text>
+          <Text style={{ fontSize: 16, color: '#007AFF' }}>Back</Text>
+        </Pressable>
+      </View>
       {/* Scrollable content area */}
       <ScrollView contentContainerStyle={styles.container}>
         {/* Back Button */}
@@ -580,7 +597,7 @@ export default function HousingGroupDetail() {
            </Text>
           {group.members.length > 0 ? (
             group.members.map((member, index) => (
-               <View key={member.user_id} style={styles.memberItem}>
+               <View key={member.user_id} style={styles.memberCard}>
                  {/* Member Avatar with Placeholder Logic */}
                  {avatarErrorStates[index] || !member.user_profile.avatar_url ? (
                     <View style={styles.memberAvatarPlaceholder}>
@@ -824,27 +841,19 @@ const styles = StyleSheet.create({
     color: '#172B4D',
     marginBottom: 16,
   },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EBECF0',
-  },
-   // Added back memberCard style definition (if needed elsewhere)
   memberCard: {
-    flexDirection: 'row',
+    flexDirection: 'row', // This controls layout *inside* the card (avatar next to name)
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    alignItems: 'flex-start',
+    alignItems: 'flex-start', // Changed from center to flex-start for better bio layout
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 }, // Softer shadow
+    shadowOpacity: 0.05, // Reduced opacity
+    shadowRadius: 3, // Reduced radius
+    elevation: 2, // Reduced elevation
+    width: '100%', // Ensure card takes full width for single column
   },
   memberAvatar: {
     width: 50, // Adjusted from 60 to 50

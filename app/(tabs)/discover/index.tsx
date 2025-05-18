@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Award,
   BadgeCheck,
+  Bed,
+  Bath,
   Briefcase,
   Building,
   CalendarDays,
@@ -162,11 +164,12 @@ export default function DiscoverScreen() {
       if (isHousingCategory) {
         const { data, error } = await supabase
           .from('housing_listings')
-          .select(`id, title, description, weekly_rent, bedrooms, bathrooms, suburb, state, sda_category, media_urls`)
+          .select(`id, title, description, weekly_rent, bedrooms, bathrooms, suburb, state, sda_category, media_urls, address`) // Added address
           .order(sortOption.field, { ascending: sortOption.direction === 'asc' });
         if (error) throw error;
         const transformedData = data?.map(item => ({
-          ...item,
+          ...item, // address will be spread from item if selected
+          sda_listing: !!item.sda_category, // Derive sda_listing from sda_category
           provider: { id: null, business_name: 'Housing Provider', verified: false },
           has_housing_group: false 
         })) as HousingListing[];
@@ -418,19 +421,22 @@ export default function DiscoverScreen() {
         key="grid"
         data={listings}
         numColumns={2}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         columnWrapperStyle={styles.gridColumnWrapper}
         contentContainerStyle={styles.servicesGrid}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => (
           isHousingListing(item) ? (
             <HousingCard
-              item={item}
+              item={item as HousingListing} // Cast because we filter for Housing category
               onPress={() => navigateToDetails(item)}
-              onToggleFavorite={() => toggleFavorite(item)}
-              isFavorite={favorites.has(item.id)} // Assumes housing favorites are stored by item.id
-              onMorePress={() => { /* TODO: handle more options */ }}
-              showGroupMatch={housingGroupsMap[item.id]}
+              onToggleFavorite={() => toggleFavorite(item)} // Corrected call
+              isFavorite={isItemFavorited(item)}
+              // onMorePress={() => {
+              //   console.log('More options for:', item.title);
+              //   // Implement more options logic, e.g., open a modal or action sheet
+              // }}
+              showGroupMatch={hasHousingGroup(item)}
             />
           ) : (
             <TouchableOpacity
@@ -446,47 +452,52 @@ export default function DiscoverScreen() {
                 <View style={styles.imageContainer}>
                   <Image source={{ uri: getItemImage(item) }} style={styles.serviceImage} />
                   {renderGroupMatchBadge(item)}
-                  {isServiceListing(item) && item.provider?.verified && (
-                    <View style={styles.ndisBadge}> {/* Changed from ndisBadgeGrid to ndisBadge */}
-                      <BadgeCheck size={14} color="#fff" />
-                      <Text style={styles.ndisBadgeText}>NDIS</Text>
-                    </View>
-                  )}
-                  <Pressable style={styles.favButton} onPress={() => toggleFavorite(item)}>
+                  <Pressable 
+                    style={styles.favButton}
+                    onPress={() => toggleFavorite(item)}
+                  >
                     <Heart 
                       size={20} 
                       color={isItemFavorited(item) ? "#ff4081" : "#ccc"} 
                       fill={isItemFavorited(item) ? "#ff4081" : "none"} 
                     />
                   </Pressable>
-                  {isServiceListing(item) && item.provider?.id && (
-                    <Pressable
-                      style={styles.shareButton}
-                      onPress={() => {
-                        setShareModalVisible(true);
-                        setShareItem({
-                          itemId: item.provider!.id, // item.provider.id is checked above
-                          itemType: 'service_provider',
-                          itemTitle: item.provider!.business_name,
-                          itemImageUrl: getItemImage(item),
-                        });
-                      }}
-                    >
-                      <Text style={{color: '#007aff', fontWeight: 'bold'}}>Share</Text>
-                    </Pressable>
+                  {item.provider?.verified && (
+                    <View style={styles.ndisBadge}> 
+                      <BadgeCheck size={14} color="#fff" />
+                      <Text style={styles.ndisBadgeText}>NDIS</Text>
+                    </View>
                   )}
                 </View>
                 <View style={styles.serviceDetails}>
-                  <Text style={styles.serviceTitle} numberOfLines={3}>{item.title}</Text>
-                  {renderServiceProvider(item)}
-                  <View style={styles.serviceFooter}> {/* Restored usage, will add style definition */}
+                  <Text style={styles.serviceTitle} numberOfLines={2}>{item.title}</Text> 
+                  {renderServiceProvider(item)} 
+                  <Text style={styles.serviceDescription} numberOfLines={2}>
+                    {item.description} 
+                  </Text>
+                  <View style={styles.serviceFooter}> 
                     <View style={styles.priceContainer}>
                       {isServiceListing(item) && <Clock size={14} color="#666" style={styles.priceIcon}/>}
-                      <Text style={styles.servicePrice}>
-                        ${getItemPrice(item)}
-                        {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/ hour' : '')}
+                      <Text style={styles.servicePrice}> 
+                        {String(getItemPrice(item)) === 'Contact for price' ? 'Contact for price' : `$${getItemPrice(item)}`}
+                        {isHousingListing(item) ? '/week' : (isServiceListing(item) && !String(getItemPrice(item)).includes('/hr') && String(getItemPrice(item)) !== 'Contact for price' ? '/hr' : '')}
                       </Text>
                     </View>
+                    {(isServiceListing(item) && item.provider?.id) && (
+                      <Pressable 
+                        style={styles.shareButtonGrid} 
+                        onPress={() => {
+                          setShareModalVisible(true);
+                          setShareItem({
+                            itemId: item.provider!.id,
+                            itemType: 'service_provider',
+                            itemTitle: item.provider!.business_name,
+                            itemImageUrl: getItemImage(item),
+                          });
+                      }}>
+                        <Share2 size={18} color="#007AFF" />
+                      </Pressable>
+                    )}
                   </View>
                 </View>
               </ShadowCard>
@@ -511,73 +522,164 @@ export default function DiscoverScreen() {
       <FlatList
         key="list"
         data={listings}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.servicesList}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.serviceListItemTouchable} // This will only provide margins now
-            onPress={() => navigateToDetails(item)}
-          >
-            <ShadowCard 
-              style={styles.serviceListItemCard} 
-              width={width - 32} 
-              height={124} 
-            > 
-              {/* Image Container */}
-              <View style={styles.listImageContainer}>
-                <Image source={{ uri: getItemImage(item) }} style={styles.listImage} />
-                {isServiceListing(item) && item.provider?.verified && (
-                  <View style={styles.ndisBadgeList}>
-                    <BadgeCheck size={12} color="#fff" />
-                    <Text style={styles.ndisBadgeTextList}>NDIS</Text>
-                  </View>
-                )}
-                {renderGroupMatchBadge(item)} {/* Ensure this badge is styled for list view */}
-              </View>
-
-              {/* Text Content Container */}
-              <View style={styles.listTextContentContainer}>
-                <Text style={styles.listServiceTitle} numberOfLines={2}>{item.title}</Text>
-                {/* Provider info - ensure renderServiceProvider styles this appropriately or pass a style prop */}
-                <View style={styles.listProviderInfoContainer}>
-                  {renderServiceProvider(item)} 
+        renderItem={({ item, index }) => (
+          isHousingListing(item) ? (
+            <TouchableOpacity 
+              key={`housing-list-${item.id || index}`}
+              style={styles.serviceListItemTouchable} 
+              onPress={() => handleCardTap(item)} // Retain housing-specific tap handler
+            >
+              <ShadowCard 
+                style={styles.serviceListItemCard} 
+                width={width - (styles.serviceListItemTouchable.marginHorizontal || 16) * 2}
+                height={styles.serviceListItemCard.height || 124}
+              > 
+                {/* Child 1: Image and Badges */}
+                <View style={styles.listItemImageContainer}> 
+                  <Image 
+                    source={{ uri: item.media_urls && item.media_urls.length > 0 ? item.media_urls[0] : DEFAULT_IMAGE }}
+                    style={styles.listItemImage} 
+                    resizeMode="cover"
+                  />
+                  {/* Housing Specific Badges */}
+                  {(() => {
+                    const shouldShowSdaBadge = Boolean(item.sda_listing);
+                    if (shouldShowSdaBadge) {
+                      return (
+                        <View style={styles.sdaBadgeList}> 
+                            <Text style={styles.sdaBadgeTextList}>SDA</Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {hasHousingGroup && hasHousingGroup(item) && renderGroupMatchBadge && (() => {
+                    const badgeContent = renderGroupMatchBadge(item);
+                    if (typeof badgeContent === 'string') {
+                      return <Text>{badgeContent}</Text>;
+                    }
+                    // Otherwise, assume it's valid JSX (or null/undefined)
+                    return badgeContent;
+                  })()}
                 </View>
-                <Text style={styles.listServiceDescription} numberOfLines={2}> 
-                  {item.description}
-                </Text>
-                <View style={styles.listPriceContainer}>
-                  {isServiceListing(item) && <Clock size={14} color="#4B5563" style={styles.listPriceIcon}/>}
-                  <Text style={styles.listServicePrice}>
-                    ${getItemPrice(item)}
-                    {isHousingListing(item) ? '/week' : (isServiceListing(item) ? '/hr' : '')}
+
+                {/* Child 2: Text Content Container */}
+                <View style={styles.listTextContentContainer}> 
+                  <Text style={styles.listItemTitleHousing} numberOfLines={1}>{String(item.title || '')}</Text> 
+                  <Text style={styles.listItemAddressHousing} numberOfLines={1}>{String(item.address || `${item.suburb || ''}, ${item.state || ''}`.trim() || 'Address not specified')}</Text>
+                  <View style={styles.listItemFeaturesHousing}> 
+                    <View style={styles.listItemFeatureItemHousing}>
+                      <Bed size={14} color="#374151" />
+                      <Text style={styles.listItemFeatureTextHousing}>{item.bedrooms || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.listItemFeatureItemHousing}>
+                      <Bath size={14} color="#374151" />
+                      <Text style={styles.listItemFeatureTextHousing}>{item.bathrooms || 'N/A'}</Text>
+                    </View>
+                    {item.sda_category && (
+                      <View style={styles.listItemFeatureItemHousing}>
+                        <Home size={14} color="#374151" />
+                        <Text style={styles.listItemFeatureTextHousing} numberOfLines={1}>{String(item.sda_category || '')}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.listItemPriceHousing}> 
+                    {getItemPrice(item) && String(getItemPrice(item)) !== 'Contact for price' ? `$${getItemPrice(item)}/week` : 'Contact for price'}
                   </Text>
                 </View>
-              </View>
 
-              {/* Actions Container */}
-              <View style={styles.listActionsContainer}>
-                <Pressable onPress={() => toggleFavorite(item)} style={styles.listActionButton}>
-                  <Heart size={22} color={isItemFavorited(item) ? "#FF4081" : "#A0A0A0"} fill={isItemFavorited(item) ? "#FF4081" : "none"} />
-                </Pressable>
-                {(isServiceListing(item) && item.provider?.id) && (
+                {/* Child 3: Actions Container */}
+                <View style={styles.listActionsContainer}>
+                  <Pressable onPress={() => toggleFavorite(item)} style={styles.listActionButton}>
+                    <Heart size={22} color={isItemFavorited(item) ? "#FF4081" : "#9CA3AF"} fill={isItemFavorited(item) ? "#FF4081" : "none"} />
+                  </Pressable>
                   <Pressable 
-                    style={styles.listActionButton} 
                     onPress={() => {
-                      setShareModalVisible(true);
                       setShareItem({
-                        itemId: item.provider!.id,
-                        itemType: 'service_provider',
-                        itemTitle: item.provider!.business_name,
+                        itemId: item.id,
+                        itemType: 'housing_listing',
+                        itemTitle: item.title,
                         itemImageUrl: getItemImage(item),
                       });
-                    }}>
-                    <Share2 size={20} color="#A0A0A0" />{/* Ensured Share2 is used */}
+                      setShareModalVisible(true);
+                    }} 
+                    style={styles.listActionButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Share2 size={22} color="#4B5563" />
                   </Pressable>
-                )}
-              </View>
-            </ShadowCard>
-          </TouchableOpacity>
+                </View>
+              </ShadowCard>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              key={`service-list-${item.id || index}`}
+              style={styles.serviceListItemTouchable}
+            >
+              <ShadowCard 
+                style={styles.serviceListItemCard} 
+                width={width - (styles.serviceListItemTouchable.marginHorizontal || 16) * 2}
+                height={styles.serviceListItemCard.height || 124}
+              > 
+                {/* Child 1: Image and Badges */}
+                <View style={styles.listImageContainer}>
+                  <Image 
+                    source={{ uri: getItemImage(item) }} 
+                    style={styles.listImage}
+                    resizeMode="cover"
+                  />
+                  {item.provider?.verified && (
+                    <View style={styles.ndisBadgeList}>
+                      <BadgeCheck size={12} color="#fff" />
+                      <Text style={styles.ndisBadgeTextList}>NDIS</Text>
+                    </View>
+                  )}
+                  {/* {renderGroupMatchBadge && renderGroupMatchBadge(item)} */}
+                </View>
+
+                {/* Child 2: Text Content Container */}
+                <View style={styles.listTextContentContainer}>
+                  <Text style={styles.listServiceTitle} numberOfLines={2}>{item.title}</Text>
+                  {renderServiceProvider && renderServiceProvider(item)} 
+                  <Text style={styles.listServiceDescription} numberOfLines={2}> 
+                    {item.description}
+                  </Text>
+                  <View style={styles.listPriceContainer}>
+                    {isServiceListing(item) && <Clock size={14} color="#666" style={styles.listPriceIcon}/>}
+                    <Text style={styles.listServicePrice}>
+                      {String(getItemPrice(item)) === 'Contact for price' ? 'Contact for price' : `$${getItemPrice(item)}`}
+                      {isHousingListing(item) ? '/week' : (isServiceListing(item) && !String(getItemPrice(item)).includes('/hr') && String(getItemPrice(item)) !== 'Contact for price' ? '/hr' : '')}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Child 3: Actions Container */}
+                <View style={styles.listActionsContainer}>
+                  <Pressable onPress={() => toggleFavorite(item)} style={styles.listActionButton}>
+                    <Heart size={22} color={isItemFavorited(item) ? "#FF4081" : "#9CA3AF"} fill={isItemFavorited(item) ? "#FF4081" : "none"} />
+                  </Pressable>
+                  {(isServiceListing(item) && item.provider?.id) && (
+                    <Pressable 
+                      style={styles.listActionButton} 
+                      onPress={() => {
+                        setShareModalVisible(true);
+                        setShareItem({
+                          itemId: item.provider!.id,
+                          itemType: 'service_provider',
+                          itemTitle: item.provider!.business_name,
+                          itemImageUrl: getItemImage(item),
+                        });
+                      }}>
+                      <Share2 size={20} color="#4B5563" />
+                    </Pressable>
+                  )}
+                </View>
+              </ShadowCard>
+            </TouchableOpacity>
+          )
         )}
       />
     );
@@ -834,6 +936,7 @@ const styles = StyleSheet.create({
     // overflow: 'hidden', // ShadowCard might handle overflow or need it for shadow
     padding: 12,
     alignItems: 'center', // Vertically align items in the row
+    height: 124, // Added height property
   },
   listImageContainer: { 
     position: 'relative', 
@@ -856,8 +959,15 @@ const styles = StyleSheet.create({
   ndisBadgeTextList: { // Specific text style for NDIS badge in list if needed
     fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 3 
   },
+  sdaBadgeList: { 
+    position: 'absolute', top: 6, left: 6, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, zIndex: 1,
+  },
+  sdaBadgeTextList: { // Specific text style for SDA badge in list if needed
+    fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 3 
+  },
   listTextContentContainer: {
-    flex: 1, // Takes up available space between image and actions
+    flex: 1, // Takes remaining space
     justifyContent: 'space-between', // Distribute space for title, desc, price
     // paddingHorizontal: 12, // Space from image and actions - removed as image container has margin right
     height: '100%', // Ensure it takes full height of the card for price alignment
@@ -893,7 +1003,7 @@ const styles = StyleSheet.create({
   listServicePrice: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1F2937', // Changed to dark black
   },
   listActionsContainer: {
     justifyContent: 'space-around', // Or 'flex-start' / 'flex-end' depending on desired alignment
@@ -907,7 +1017,94 @@ const styles = StyleSheet.create({
   },
   // END LIST VIEW ITEM STYLES
 
-  // listItemInner: { flexDirection: 'row', padding: 12, gap: 12 }, // Removed duplicate/unused
+  // START HOUSING LIST ITEM STYLES
+  listItemInnerHousing: {
+    flexDirection: 'row',
+    padding: 12,
+    // backgroundColor: 'white', // Handled by ShadowCard
+    // borderRadius: 12, // Handled by ShadowCard
+  },
+  listItemImageContainer: {
+    width: 100,
+    height: '100%', // Make image container take full height of content or fixed height
+    minHeight: 120, // Ensure a minimum height for the image section
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: 12,
+    backgroundColor: '#F3F4F6', // Placeholder bg
+    position: 'relative', // For GroupMatchIcon
+  },
+  listItemImage: { 
+    width: '100%', 
+    height: '100%', 
+    resizeMode: 'cover',
+  },
+  listItemImageHousing: { 
+    width: 100, // Fixed width for the image part of the card
+    height: 80, // Match the ShadowCard height to fill vertically
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+    backgroundColor: '#E5E7EB', // Placeholder color
+  },
+  groupMatchBadgeList: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'transparent', // Removed white background
+    padding: 4,
+    borderRadius: 10,
+  },
+  listItemContentHousing: {
+    flex: 1,
+    justifyContent: 'space-between', // Distribute content vertically
+  },
+  listItemTitleHousing: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  listItemAddressHousing: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginBottom: 6,
+  },
+  listItemFeaturesHousing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap', // Allow features to wrap if too many
+    marginBottom: 6,
+  },
+  listItemFeatureItemHousing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+    marginBottom: 4, // For wrapping
+  },
+  listItemFeatureTextHousing: {
+    fontSize: 13,
+    color: '#374151',
+    marginLeft: 4,
+  },
+  listItemPriceHousing: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 'auto', // Pushes price to the bottom if container has flex
+  },
+  listItemActionsContainerHousing: {
+    justifyContent: 'space-around', 
+    alignItems: 'center',
+    paddingLeft: 8, 
+    // backgroundColor: 'pink', // for debugging
+  },
+  listItemShadowCard: {
+    marginHorizontal: 16, // Consistent with grid cards horizontal margin if using ShadowCard defaults
+    marginVertical: 8, // Add some vertical spacing between list items
+    // backgroundColor: '#FFFFFF', // ShadowCard likely handles this
+  },
+  // END HOUSING LIST ITEM STYLES
+
   imageContainer: { position: 'relative', width: '100%', backgroundColor: '#f0f0f0' }, // Added BG for image loading
   serviceImage: { // Restored for grid view
     width: '100%', 
@@ -919,47 +1116,59 @@ const styles = StyleSheet.create({
   providerContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 4, flexShrink: 1 },
   providerName: { fontSize: 13, color: '#666', flexShrink: 1 },
   serviceDescription: { fontSize: 12, color: '#777', marginBottom: 6, lineHeight: 16 },
-  priceContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 'auto', paddingTop: 4 },
-  priceContainerList: {flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 2},
+  serviceFooter: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginTop: 'auto', 
+    paddingTop: 4, // Reduced padding top to save space
+  },
+  priceContainer: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, marginRight: 4 }, // Added flexShrink and marginRight
   priceIcon: { marginRight: 5, color: '#666' },
-  servicePrice: { fontSize: 14, fontWeight: 'bold', color: '#007AFF' },
-  ndisBadge: { // Changed from ndisBadgeGrid to ndisBadge
+  servicePrice: { fontSize: 14, fontWeight: 'bold', color: '#1F2937' }, // Changed to dark black
+  ndisBadge: { 
     position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, zIndex: 1,
   },
   ndisBadgeText: { fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 2 },
-  // ndisBadgeTextList: { fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 3 }, // Removed duplicate
+  sdaBadge: { 
+    position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.9)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, zIndex: 1,
+  },
+  sdaBadgeText: { fontSize: 10, fontWeight: '500', color: '#fff', marginLeft: 2 },
   favButton: { 
     position: 'absolute', top: 8, right: 8, padding: 6, borderRadius: 20, 
     backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 1,
   },
-  shareButton: { // Single definition
-    position: 'absolute', bottom: 8, right: 8, backgroundColor: '#fff', borderRadius: 16,
-    paddingVertical: 5, paddingHorizontal: 10, shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 3, zIndex: 1,
+  shareButtonGrid: {
+    padding: 8, // Increased padding for better touch area
+    marginLeft: 4, // Added margin to separate from price if they get close
   },
-  groupMatchBadge: {
-    position: 'absolute', bottom: 8, left: 8, // Example position
-    backgroundColor: 'rgba(76, 217, 100, 0.9)', paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 1,
+  groupMatchBadge: { // Style for GroupMatchBadge in grid view
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: '#FFD700', // Gold as an example
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  groupMatchText: { fontSize: 12, color: '#fff', fontWeight: '500' },
+  groupMatchBadgeText: {
+    color: '#4B5563',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   emptyStateTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 8, color: '#333' },
   emptyStateText: { fontSize: 16, color: '#666', textAlign: 'center' },
   bottomSheetContent: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
   bottomSheetTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16, textAlign: 'center', color: '#333' },
   sortOptionButton: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  serviceFooter: { // Added style definition for serviceFooter
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginTop: 'auto', // Pushes to bottom of serviceDetails
-    paddingTop: 8,
-  },
-  shareButtonGrid: {
-    // Example: Add padding if it's just an icon for better touch area
-    padding: 4,
-    // alignSelf: 'flex-end', // If it needs to be pushed to one side within its container
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
 });

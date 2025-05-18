@@ -34,7 +34,7 @@ const ShadowCard: React.FC<ShadowCardProps> = ({
   };
 
   // Use different shadow implementations based on platform
-  if (Platform.OS === 'ios') {
+  if (Platform.OS === 'ios') { 
     return (
       <BoxShadow setting={shadowOpt}>
         <View style={[styles.card, style, { width, height, borderRadius: radius }]}>
@@ -60,7 +60,7 @@ const ShadowCard: React.FC<ShadowCardProps> = ({
         {children}
       </View>
     );
-  }
+  } 
 };
 
 const styles = StyleSheet.create({

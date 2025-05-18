@@ -32,6 +32,7 @@ type ProviderType = {
   credentials?: string[];
   verified?: boolean;
   service_categories?: string[];
+  service_formats?: string[];
   service_area?: string;
   business_description?: string;
   logo_url?: string | null;
@@ -135,8 +136,7 @@ export default function ServiceDetails() {
   if (loading) {
     return (
       <View style={styles.containerCentered}>
-        <AppHeader title="Loading..." showBackButton={true} onBackPress={handleBackPress} />
-        <Text style={styles.messageText}>Loading service provider details...</Text>{/* Updated text */}
+        <Text style={styles.messageText}>Loading service provider details...</Text>
       </View>
     );
   }
@@ -145,7 +145,6 @@ export default function ServiceDetails() {
   if (error || !serviceDetails) {
     return (
       <View style={styles.containerCentered}>
-        <AppHeader title="Error" showBackButton={true} onBackPress={handleBackPress} />
         <Text style={styles.messageText}>{error || 'Service details could not be loaded.'}</Text>
       </View>
     );
@@ -156,86 +155,88 @@ export default function ServiceDetails() {
   // Use service image if available, otherwise use provider logo
   const imageUrl = (service.media_urls && service.media_urls.length > 0) 
     ? service.media_urls[0] 
-    : provider?.logo_url || 'https://placehold.co/600x400?text=No+Image';
+    : provider?.logo_url || 'https://placehold.co/600x400?text=Service+Image';
 
   // Get service area from provider if available
   const fullAddress = provider?.service_area || 'Service area not specified';
 
   return (
     <View style={styles.container}>
-      <AppHeader title={service.title || "Service Details"} showBackButton={true} onBackPress={handleBackPress} />
-      <ScrollView>
+      <Stack.Screen options={{ headerShown: false }} /> 
+      
+      <ScrollView contentContainerStyle={styles.scrollContentContainer}>
         <View style={styles.imageContainer}>
           <Image source={{ uri: imageUrl }} style={styles.image} />
+          <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+            <ArrowLeft size={24} color="#fff" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{service.title || 'Service Name Unavailable'}</Text>
-            {provider && (
-              <Text style={styles.subtitle}>by {provider.business_name}</Text>
-            )}
-          </View>
+        <View style={styles.contentContainer}>
+          <Text style={styles.title}>{service.title || 'Service Name Unavailable'}</Text>
+          {provider && (
+            <Text style={styles.providerNameText}>Provided by {provider.business_name}</Text>
+          )}
 
-          <View style={styles.metaInfo}>
-            {provider && (
-              <View style={styles.metaItem}>
-                <MapPin size={20} color="#666" />
-                <Text style={styles.metaText}>{fullAddress}</Text>
+          <View style={styles.metaInfoRow}>
+            {service.price !== undefined && (
+              <View style={styles.metaChip}>
+                <Clock size={16} color="#4B5563" />
+                <Text style={styles.metaChipText}>${service.price} / hour</Text>
               </View>
             )}
-            {service.price !== undefined && (
-              <View style={styles.metaItem}>
-                <Text style={styles.price}>${service.price} / hour</Text>
+            {provider && (
+              <View style={styles.metaChip}>
+                <MapPin size={16} color="#4B5563" />
+                <Text style={styles.metaChipText} numberOfLines={1}>{fullAddress}</Text>
               </View>
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About This Service</Text>
-            <Text style={styles.description}>{service.description || 'No description provided.'}</Text>
+            <Text style={styles.sectionTitle}>About this service</Text>
+            <Text style={styles.sectionText}>{service.description || 'No description provided.'}</Text>
           </View>
           
           {provider?.business_description && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>About {provider.business_name}</Text>
-              <Text style={styles.description}>{provider.business_description}</Text>
+              <Text style={styles.sectionText}>{provider.business_description}</Text>
             </View>
           )}
 
-          {/* TODO: Implement Available Times fetching/display */}
-          {/* <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Times</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.timeSlots}
-            >
-              {service.availableTimes.map((time, index) => (
-                <TouchableOpacity key={index} style={styles.timeSlot}>
-                  <Text style={styles.timeText}>{time}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View> */}
+          {provider?.credentials && provider.credentials.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Credentials</Text>
+              <View style={styles.tagContainer}>
+                {provider.credentials.map((cred, index) => (
+                  <View key={`cred-${index}`} style={styles.tag}>
+                    <Text style={styles.tagText}>{cred}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
-          <View style={styles.priceSection}>
-            {/* TODO: Implement pricing logic */}
-            {/* <View>
-              <Text style={styles.priceLabel}>Price per session</Text>
-              <Text style={styles.price}>${serviceData.service_details.hourly_rate}</Text>
-            </View> */}
-            <TouchableOpacity 
-              style={[styles.bookButton, loading && styles.bookButtonDisabled]} // Loading state check might be redundant here
-              onPress={handleBooking}
-              disabled={loading || !serviceDetails?.provider} // Disable if loading or no provider data
-            >
-              <Text style={styles.bookButtonText}>Book Now</Text>
-              <ChevronRight size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          {provider?.service_formats && provider.service_formats.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Service Formats</Text>
+              <View style={styles.tagContainer}>
+                {provider.service_formats.map((format, index) => (
+                  <View key={`format-${index}`} style={styles.tag}>
+                    <Text style={styles.tagText}>{format}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.bookingButton} onPress={handleBooking}>
+          <Text style={styles.bookingButtonText}>Book Now</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -243,151 +244,144 @@ export default function ServiceDetails() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB', 
   },
-  containerCentered: { 
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  messageText: { 
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  scrollContentContainer: {
+    paddingBottom: 100, 
   },
   imageContainer: {
     width: '100%',
     height: 300, 
-    backgroundColor: '#f0f0f0', 
+    position: 'relative', 
   },
   image: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  content: {
-    padding: 24,
+  backButton: {
+    position: 'absolute',
+    top: 40, 
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 8,
+    borderRadius: 20,
+    zIndex: 10,
   },
-  header: {
-    marginBottom: 16, 
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    backgroundColor: '#fff', 
+    borderTopLeftRadius: 20, 
+    borderTopRightRadius: 20,
+    marginTop: -20, 
+    zIndex: 5,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28, 
     fontWeight: 'bold',
-    marginBottom: 4,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
+    color: '#1F2937', 
     marginBottom: 8,
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  rating: {
-    marginLeft: 4,
-    marginRight: 8,
+  providerNameText: {
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  reviews: {
-    fontSize: 14,
-    color: '#666',
-  },
-  metaInfo: {
-    flexDirection: 'row',
-    flexWrap: 'wrap', 
+    color: '#4B5563', 
     marginBottom: 16,
-    gap: 16, 
   },
-  metaItem: {
+  metaInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16, 
+    flexWrap: 'wrap', 
+    marginBottom: 20,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E5E7EB', 
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
     marginBottom: 8, 
   },
-  metaText: {
-    marginLeft: 8,
+  metaChipText: {
+    marginLeft: 6,
     fontSize: 14,
-    color: '#666',
+    color: '#374151', 
   },
   section: {
     marginBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB', 
+    paddingBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
+    fontSize: 20, 
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
   },
-  description: {
+  sectionText: {
     fontSize: 16,
-    lineHeight: 24,
-    color: '#666',
+    lineHeight: 24, 
+    color: '#374151',
   },
-  mapContainer: {
-    height: 200,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#e0e0e0', 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapPlaceholderText: {
-    color: '#999',
-  },
-  featuresList: {
+  tagContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginTop: 8,
   },
-  featureChip: {
-    backgroundColor: '#eee',
-    borderRadius: 16,
-    paddingVertical: 6,
+  tag: {
+    backgroundColor: '#DBEAFE', 
     paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     marginRight: 8,
     marginBottom: 8,
   },
-  featureText: {
+  tagText: {
     fontSize: 14,
+    color: '#1E40AF', 
   },
-  priceSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#fff', 
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    marginTop: 16,
+    borderTopColor: '#E5E7EB',
+    elevation: 5, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  priceLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  bookButton: {
+  bookingButton: {
     backgroundColor: '#007AFF', 
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    flexDirection: 'row', 
-    alignItems: 'center'  
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bookButtonDisabled: {
-    opacity: 0.6, 
-  },
-  bookButtonText: {
+  bookingButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  containerCentered: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: '#F9FAFB',
+  },
+  messageText: { 
+    fontSize: 16, 
+    color: '#4B5563',
+    marginTop: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });

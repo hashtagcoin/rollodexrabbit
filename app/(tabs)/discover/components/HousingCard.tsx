@@ -7,7 +7,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
-import { Heart, MoreVertical, Bed, Bath, Home, Calendar } from 'lucide-react-native';
+import { Heart, Bed, Bath, Calendar } from 'lucide-react-native';
 import GroupMatchIcon from '../../housing/components/GroupMatchIcon';
 
 function getTimeAgo(createdAt?: string) {
@@ -26,7 +26,6 @@ interface HousingCardProps {
   onPress: () => void;
   onToggleFavorite: () => void;
   isFavorite: boolean;
-  onMorePress: () => void;
   showGroupMatch: boolean;
 }
 
@@ -35,7 +34,6 @@ export default function HousingCard({
   onPress,
   onToggleFavorite,
   isFavorite,
-  onMorePress,
   showGroupMatch,
 }: HousingCardProps) {
   return (
@@ -54,10 +52,7 @@ export default function HousingCard({
         {showGroupMatch && <GroupMatchIcon style={styles.groupMatchIcon} />}
         <View style={styles.topRightIcons}>
           <Pressable onPress={onToggleFavorite} accessible accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
-            <Heart size={20} color={isFavorite ? '#ff4081' : '#ccc'} fill={isFavorite ? '#ff4081' : 'none'} />
-          </Pressable>
-          <Pressable onPress={onMorePress} style={{ marginLeft: 12 }} accessible accessibilityLabel="More options">
-            <MoreVertical size={20} color="#888" />
+            <Heart size={20} color={isFavorite ? '#FF4081' : '#9CA3AF'} fill={isFavorite ? '#FF4081' : 'none'} />
           </Pressable>
         </View>
       </View>
@@ -66,22 +61,22 @@ export default function HousingCard({
         <Text style={styles.addressText}>{item.suburb + ', ' + item.state}</Text>
         <View style={styles.featuresRow}>
           <View style={styles.featureItem} accessible accessibilityLabel={`${item.bedrooms} bedrooms`}>
-            <Bed size={16} color="#007AFF" />
+            <Bed size={16} color="#374151" />
             <Text style={styles.featureText}>{item.bedrooms}</Text>
           </View>
           <View style={styles.featureItem} accessible accessibilityLabel={`${item.bathrooms} bathrooms`}>
-            <Bath size={16} color="#007AFF" />
+            <Bath size={16} color="#374151" />
             <Text style={styles.featureText}>{item.bathrooms}</Text>
           </View>
-          <View style={styles.featureItem} accessible accessibilityLabel={item.sda_category || 'Apartment'}>
-            <Home size={16} color="#007AFF" />
+          {/* <View style={styles.featureItem} accessible accessibilityLabel={item.sda_category || 'Apartment'}>
+            <Home size={16} color="#374151" />
             <Text style={styles.featureText}>{item.sda_category || 'Apartment'}</Text>
-          </View>
+          </View> */}
         </View>
-        <View style={styles.inspectionRow}>
-          <Calendar size={14} color="#888" style={{ marginRight: 4 }} />
+        {/* <View style={styles.inspectionRow}>
+          <Calendar size={14} color="#374151" style={{ marginRight: 4 }} />
           <Text style={styles.inspectionText}>{'Inspection info unavailable'}</Text>
-        </View>
+        </View> */}
       </View>
     </TouchableOpacity>
   );
@@ -91,7 +86,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    margin: 8,
+    margin: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -103,7 +98,7 @@ const styles = StyleSheet.create({
   imageWrapper: {
     position: 'relative',
     width: '100%',
-    height: 160,
+    height: 150,
     backgroundColor: '#eee',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -146,7 +141,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   cardContent: {
-    padding: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
   priceText: {
     fontSize: 18,
@@ -162,7 +158,7 @@ const styles = StyleSheet.create({
   featuresRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   featureItem: {
     flexDirection: 'row',
@@ -174,14 +170,5 @@ const styles = StyleSheet.create({
     color: '#222',
     marginLeft: 4,
     fontWeight: '500',
-  },
-  inspectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  inspectionText: {
-    fontSize: 12,
-    color: '#888',
   },
 });
