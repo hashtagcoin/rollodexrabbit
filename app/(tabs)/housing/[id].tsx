@@ -76,7 +76,7 @@ const lightGray = '#d3d3d3';
 
 function HousingDetail(props: any) {
   const { id, returnIndex, returnViewMode } = useLocalSearchParams();
-  const { source } = useLocalSearchParams<{ source: string }>();
+  const { source, goBackPath: routeGoBackPath } = useLocalSearchParams<{ source?: string, goBackPath?: string }>();
   const navigation = useNavigation();
   const { session } = useAuth(); // Get user session
   const [loading, setLoading] = useState(true);
@@ -122,8 +122,15 @@ function HousingDetail(props: any) {
 
   // Custom back handler to determine where to navigate back to
   const handleBackPress = () => {
+    // Priority 1: Explicit goBackPath from navigation parameters
+    if (routeGoBackPath) {
+      // TypeScript/Expo Router workaround for strict literal route types
+      router.push(routeGoBackPath as unknown as import('expo-router').LinkProps['href']);
+      return;
+    }
+
+    // Priority 2: Source-based navigation (discover)
     if (source === 'discover') {
-      // Navigate back to discover screen with both returnIndex and returnViewMode
       router.push({
         pathname: "/(tabs)/discover",
         params: { 
@@ -131,15 +138,27 @@ function HousingDetail(props: any) {
           returnViewMode
         }
       });
-    } else {
-      // Default: Navigate back to housing screen with both returnIndex and returnViewMode
-      router.push({
-        pathname: "/(tabs)/housing",
-        params: { 
-          returnIndex,
-          returnViewMode
+      return;
+    }
+
+    // Priority 3: Default source-based navigation (housing list) or simple back
+    if (router.canGoBack()) {
+        // If coming from housing list with params, try to respect them
+        if (source === 'housing' && (returnIndex !== undefined || returnViewMode !== undefined)) {
+            router.push({
+                pathname: "/(tabs)/housing",
+                params: { 
+                returnIndex,
+                returnViewMode
+                }
+            });
+            return;
         }
-      });
+        // Generic back if no specific conditions met or source is not 'housing' with params
+        router.back();
+    } else {
+        // Fallback to housing index if cannot go back (e.g., deep linked)
+        router.push("/(tabs)/housing");
     }
   };
 
@@ -457,13 +476,6 @@ function HousingDetail(props: any) {
   // Main return statement for HousingDetail component
   return (
     <View style={{ flex: 1 }}>
-      {/* Custom Back Button */}
-      <View style={{ paddingTop: 40, paddingLeft: 12, backgroundColor: '#fff', zIndex: 10 }}>
-        <Pressable onPress={handleBack} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 24 }}>
-          <Text style={{ fontSize: 18, color: '#007AFF', fontWeight: 'bold', marginRight: 6 }}>{'←'}</Text>
-          <Text style={{ fontSize: 16, color: '#007AFF' }}>Back</Text>
-        </Pressable>
-      </View>
       <View style={styles.container}>
         <AppHeader title={listing?.title ?? 'Housing Detail'} showBackButton onBackPress={handleBackPress} />
         {loading && (
