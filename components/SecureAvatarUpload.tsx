@@ -31,9 +31,9 @@ export default function SecureAvatarUpload({
   const [error, setError] = useState<string | null>(null);
 
   // Use ModernImagePicker for image selection
-  const handleImagePicked = async (uri: string | null) => {
-    if (uri) {
-      await uploadAvatar(uri);
+  const handleImagePicked = async (data: { uri: string; mimeType: string; }) => {
+    if (data.uri) {
+      await uploadAvatar(data.uri);
     }
   };
 

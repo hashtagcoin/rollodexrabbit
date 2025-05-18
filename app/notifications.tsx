@@ -202,11 +202,11 @@ export default function Notifications() {
           if (type === 'badge_definitions') imgCol = 'icon_url';
           const { data: rows, error } = await supabase.from(type).select(`${col}, ${imgCol}`).in(col, ids);
           if (!error && rows) {
-            for (const row of rows) {
+            for (const row of rows as Record<string, any>[]) {
               let url = null;
               if (Array.isArray(row[imgCol])) url = row[imgCol][0];
               else url = row[imgCol];
-              const notif = grouped[type].find(f => f.id === row[col]);
+              const notif = grouped[type].find(f => f.id === row[col] as string);
               if (notif) results[notif.notificationId] = url;
             }
           }

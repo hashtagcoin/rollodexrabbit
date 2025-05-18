@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, Href } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { CircleCheck as CheckCircle2, Circle as XCircle, Info, ShieldCheck, CircleAlert as AlertCircle, Info as InfoIcon, ChevronRight, FileCheck } from 'lucide-react-native';
 import AppHeader from '../../components/AppHeader';
@@ -70,10 +70,10 @@ export default function ComplianceCheckScreen() {
     if (requiredActions.length > 0) {
       // Navigate to the first required action
       const firstAction = requiredActions[0];
-      router.push(firstAction.actionPath as string);
+      router.push(firstAction.actionPath as Href);
     } else {
       // Proceed to booking confirmation
-      router.push('/discover/booking/confirmation');
+      router.push('/discover/booking/confirmation' as Href);
     }
   };
 
@@ -123,7 +123,7 @@ export default function ComplianceCheckScreen() {
               {item.status === 'action' && item.action && (
                 <TouchableOpacity 
                   style={styles.actionButton}
-                  onPress={() => router.push(item.actionPath as string)}
+                  onPress={() => router.push(item.actionPath as Href)}
                 >
                   <Text style={styles.actionButtonText}>{item.action}</Text>
                   <ChevronRight size={16} color="#007AFF" />

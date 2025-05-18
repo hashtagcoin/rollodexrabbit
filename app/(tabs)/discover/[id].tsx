@@ -45,22 +45,34 @@ type ServiceDetailsType = {
 };
 
 export default function ServiceDetails() {
-  const { id, returnIndex, returnViewMode } = useLocalSearchParams<{ id: string; returnIndex?: string; returnViewMode?: string }>();
+  const { id, returnIndex, returnViewMode, goBackPath } = useLocalSearchParams<{ id: string; returnIndex?: string; returnViewMode?: string; goBackPath?: string }>();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [serviceDetails, setServiceDetails] = useState<ServiceDetailsType | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Custom back handler to return to discover screen
+  // Custom back handler
   const handleBackPress = () => {
-    // Always navigate back to discover screen, preserving the view mode and position
-    router.push({
-      pathname: "/(tabs)/discover",
-      params: { 
-        returnIndex,
-        returnViewMode
-      }
-    });
+    if (goBackPath) {
+      // TypeScript/Expo Router workaround for strict literal route types
+      router.push(goBackPath as unknown as import('expo-router').LinkProps['href']);
+      return;
+    }
+    // Default: Navigate back to discover screen with view mode and position
+    if (returnIndex !== undefined || returnViewMode !== undefined) {
+      router.push({
+        pathname: "/(tabs)/discover",
+        params: { 
+          returnIndex,
+          returnViewMode
+        }
+      });
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      // Fallback if no specific return info and cannot go back (e.g. deep link)
+      router.push("/(tabs)/discover");
+    }
   };
 
   useEffect(() => {

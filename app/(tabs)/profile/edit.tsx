@@ -35,11 +35,12 @@ export default function EditProfile() {
   const [preferredFormats, setPreferredFormats] = useState<string[]>([]);
 
   // ModernImagePicker avatar handler
-  const handleAvatarPicked = async (uri: string | null) => {
-    if (!uri) {
+  const handleAvatarPicked = async (data: { uri: string; mimeType: string; }) => {
+    if (!data.uri) {
       setAvatarUrl(null);
       return;
     }
+    const uri = data.uri;
     try {
       setLoading(true);
       setError(null);

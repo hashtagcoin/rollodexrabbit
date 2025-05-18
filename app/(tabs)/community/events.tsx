@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import AppHeader from '../../../components/AppHeader';
-import { useRouter } from 'expo-router';
+import { useRouter, Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons'; 
 import SharePostModal from '../../../components/SharePostModal';
 import { User } from '@supabase/supabase-js';
@@ -303,7 +303,7 @@ export default function EventsScreen() {
             <TouchableOpacity
               style={styles.card}
               onPress={() => {
-                // Navigate to event details if needed - router.push(`/event/${item.id}`);
+                router.push({ pathname: `/(tabs)/community/event/${item.id}` as any, params: { id: item.id } });
               }}
             >
               <TouchableOpacity

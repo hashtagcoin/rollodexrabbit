@@ -34,6 +34,7 @@ export default function CommunityLayout() {
       <Stack.Screen name="post" />
       <Stack.Screen name="create" />
       <Stack.Screen name="find-friends" />
+      <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

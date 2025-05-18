@@ -82,14 +82,18 @@ const GroupPostsSection: React.FC<GroupPostsSectionProps> = ({ groupId }) => {
         const validMediaUrls = (p.media_urls || []).filter((url: string) => url && !url.startsWith('file:///'));
 
         return {
-          post_id: p.post_id,
+          group_post_id: p.post_id,
+          group_id: groupId,
+          author_profile_id: p.author_profile_id,
           content: p.content,
           media_urls: validMediaUrls,
+          media_url: validMediaUrls && validMediaUrls.length > 0 ? validMediaUrls[0] : null,
           media_type: p.media_type,
-          created_at: p.post_created_at,
-          author_id: p.author_profile_id,
+          post_created_at: p.post_created_at,
+          author_username: p.author_username ?? null,
           author_full_name: p.author_full_name ?? null,
           author_avatar_url: finalAvatarUrl ?? null,
+          author_bio: p.author_bio ?? null,
           likes_count: p.likes_count ?? 0,
           comments_count: p.comments_count ?? 0,
         };
@@ -153,7 +157,7 @@ const GroupPostsSection: React.FC<GroupPostsSectionProps> = ({ groupId }) => {
           <Text>Video placeholder for: {item.media_urls[0]}</Text>
         )} */}
         <View style={styles.postFooter}>
-          <Text style={styles.postTimestamp}>{new Date(item.created_at).toLocaleDateString()}</Text>
+          <Text style={styles.postTimestamp}>{new Date(item.post_created_at).toLocaleDateString()}</Text>
           {/* Placeholder for Likes and Comments */}
           {/* <TouchableOpacity style={styles.actionButton}><Ionicons name="heart-outline" size={24} color="#333" /><Text> {item.likes_count || 0}</Text></TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}><Ionicons name="chatbubble-outline" size={24} color="#333" /><Text> {item.comments_count || 0}</Text></TouchableOpacity> */}
@@ -193,7 +197,7 @@ const GroupPostsSection: React.FC<GroupPostsSectionProps> = ({ groupId }) => {
       <FlatList
         data={posts}
         renderItem={renderPostItem}
-        keyExtractor={(item) => item.post_id}
+        keyExtractor={(item) => item.group_post_id}
         contentContainerStyle={styles.listContentContainer}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}

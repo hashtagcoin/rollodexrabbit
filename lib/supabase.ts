@@ -5,12 +5,12 @@ import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
 const supabaseUrl =
-  Constants.manifest?.extra?.EXPO_PUBLIC_SUPABASE_URL ||
-  Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_URL ||
+  (Constants.manifest as any)?.extra?.EXPO_PUBLIC_SUPABASE_URL ||
+  (Constants.expoConfig as any)?.extra?.EXPO_PUBLIC_SUPABASE_URL ||
   '';
 const supabaseAnonKey =
-  Constants.manifest?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  (Constants.manifest as any)?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  (Constants.expoConfig as any)?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
   '';
 
 export const supabase = createClient(

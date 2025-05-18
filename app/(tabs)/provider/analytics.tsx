@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, TrendingUp, Calendar, DollarSign, Users, ChartBar as BarChart3, ChartPie as PieChart } from 'lucide-react-native';
+import AppHeader from '../../../components/AppHeader';
 
 function BarGraph({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(...data.map(item => item.value));

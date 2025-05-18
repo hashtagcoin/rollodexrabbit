@@ -237,6 +237,14 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
     marginBottom: 16,
   },
+  backButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   backButtonText: {
     fontSize: 16,
     color: '#007AFF',

@@ -415,7 +415,9 @@ export class NotificationService {
       for (const userBadge of badgeData) {
         if (userBadge.badge) {
           // Create notification
-          await this.createBadgeEarnedNotification(userId, userBadge.badge);
+          // Handle case where badge might be an array due to Supabase nested query
+          const badgeData = Array.isArray(userBadge.badge) ? userBadge.badge[0] : userBadge.badge;
+          await this.createBadgeEarnedNotification(userId, badgeData as Badge);
           
           // Mark badge as notified
           await supabase

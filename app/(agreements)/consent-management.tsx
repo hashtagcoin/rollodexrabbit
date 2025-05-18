@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Switch,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, Href } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import {
   Shield,
@@ -46,7 +46,7 @@ export default function ConsentManagementScreen() {
 
       // Navigate back or to specified route
       if (returnTo) {
-        router.push(returnTo as string);
+        router.push(returnTo as Href);
       } else {
         router.back();
       }

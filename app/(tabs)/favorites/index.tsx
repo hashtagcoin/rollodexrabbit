@@ -294,13 +294,13 @@ const getLinkHref = (item: FavoriteItem): LinkProps['href'] => {
   switch (item.item_type) {
     case 'service_provider':
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return { pathname: '/(tabs)/discover/[id]', params: { id: item.item_id } } as unknown as LinkProps['href'];
+      return { pathname: '/(tabs)/discover/[id]', params: { id: item.item_id, goBackPath: '/(tabs)/favorites' } } as unknown as LinkProps['href'];
     case 'housing_listing':
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { pathname: '/(tabs)/housing/[id]', params: { id: item.item_id, goBackPath: '/(tabs)/favorites' } } as unknown as LinkProps['href'];
     case 'group_event':
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return { pathname: '/(tabs)/community/event-detail/[id]', params: { id: item.item_id } } as unknown as LinkProps['href'];
+      return { pathname: '/(tabs)/community/event/[id]', params: { id: item.item_id, goBackPath: '/(tabs)/favorites' } } as unknown as LinkProps['href'];
     case 'housing_group':
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { pathname: '/(tabs)/housing/group/[id]', params: { id: item.item_id, goBackPath: '/(tabs)/favorites' } } as unknown as LinkProps['href'];

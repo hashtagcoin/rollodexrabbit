@@ -154,6 +154,7 @@ export default function ServiceAgreementScreen() {
               descriptionText="Sign"
               clearText="Clear"
               confirmText="Save"
+              {...{} as any /* Type assertion to fix TypeScript error */}
               webStyle={`.m-signature-pad { box-shadow: none; border: 1px solid #e1e1e1; }`}
             />
             <TouchableOpacity style={styles.clearIcon} onPress={() => { setSignatureData(null); signatureRef.current?.clearSignature(); setHasDrawn(false); }}>

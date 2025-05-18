@@ -12,7 +12,7 @@ import {
   SafeAreaView,
   Pressable,
 } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, Href } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
 import { useAuth } from '../../../../providers/AuthProvider';
 import { handleApiError } from '../../../../lib/errorUtils'; // Reverted path
@@ -494,14 +494,15 @@ export default function HousingGroupDetail() {
 
   // --- RENDER ACTUAL CONTENT ---
   // If loading is false, no major error preventing display, and group exists
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (goBackPath) {
-      // TypeScript/Expo Router workaround: use double cast for strict literal route types
-      router.navigate(goBackPath as unknown as import('expo-router').LinkProps['href']);
-    } else {
+      router.push(goBackPath as Href);
+    } else if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace('/(tabs)/housing' as Href); // Fallback to housing index
     }
-  };
+  }, [goBackPath, router]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -515,7 +516,7 @@ export default function HousingGroupDetail() {
       {/* Scrollable content area */}
       <ScrollView contentContainerStyle={styles.container}>
         {/* Back Button */}
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <ChevronLeft size={24} color="#333" />
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
@@ -681,8 +682,6 @@ export default function HousingGroupDetail() {
     </SafeAreaView>
   );
 }
-
-// *** FIX 1: Removed the extra closing brace that was here ***
 
 // --- Styles --- (Includes styles from previous correction)
 const styles = StyleSheet.create({

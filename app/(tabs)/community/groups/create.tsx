@@ -54,12 +54,12 @@ export default function CreateGroup() {
   const [eventDate, setEventDate] = useState<string | null>(null);
   const [eventLocation, setEventLocation] = useState('');
 
-  const handleCoverPicked = (uri: string | null) => {
-    setCoverImage(uri);
+  const handleCoverPicked = (data: { uri: string; mimeType: string; }) => {
+    setCoverImage(data.uri);
   };
 
-  const handleAvatarPicked = (uri: string | null) => {
-    setAvatarImage(uri);
+  const handleAvatarPicked = (data: { uri: string; mimeType: string; }) => {
+    setAvatarImage(data.uri);
   };
 
   const handleAddTag = () => {

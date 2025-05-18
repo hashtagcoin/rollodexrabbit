@@ -83,6 +83,7 @@ export default function ProviderDashboard() {
           .from('service_bookings')
           .select(`
             id,
+            user_id,
             scheduled_at,
             total_price,
             status,

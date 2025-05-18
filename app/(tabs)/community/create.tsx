@@ -142,7 +142,7 @@ export default function CreatePost() {
               uploadData = respJson;
             }
           } catch (err) {
-            uploadError = { error: 'Network error', message: err?.message || String(err) };
+            uploadError = { error: 'Network error', message: (err as Error)?.message || String(err) };
           }
         } else {
           // Native (mobile) platform
