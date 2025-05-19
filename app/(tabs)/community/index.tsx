@@ -29,6 +29,7 @@ import SharePostModal from '../../../components/SharePostModal'; // Added import
 import { User } from '@supabase/supabase-js'; // Added import
 import { Alert } from 'react-native'; // Added import
 import { AntDesign } from '@expo/vector-icons'; // Changed import for AntDesign
+import PostFeedImage from '../../../components/PostFeedImage'; // Import the new component
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Constants for header heights
@@ -389,9 +390,9 @@ export default function CommunityFeed() {
                     params: { id: post.post_id }
                   })}
                 >
-                  <Image
-                    source={{ uri: post.media_urls[0] }}
-                    style={styles.postImage}
+                  <PostFeedImage 
+                    imagePath={post.media_urls[0]}
+                    style={styles.postImage} 
                   />
                 </TouchableOpacity>
               )}

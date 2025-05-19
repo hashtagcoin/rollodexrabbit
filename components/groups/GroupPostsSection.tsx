@@ -12,6 +12,7 @@ import {
 import { supabase } from '../../lib/supabase'; 
 import { useAuth } from '../../providers/AuthProvider'; 
 import { Ionicons } from '@expo/vector-icons'; 
+import GroupPostImage from './GroupPostImage'; 
 
 const POSTS_PER_PAGE = 10;
 
@@ -20,7 +21,6 @@ export interface GroupPostDisplay {
   group_id: string;
   author_profile_id: string;
   content: string | null;
-  media_urls: string[] | null;
   media_url: string | null;
   media_type: 'image' | 'video' | null;
   post_created_at: string;
@@ -78,17 +78,13 @@ const GroupPostsSection: React.FC<GroupPostsSectionProps> = ({ groupId }) => {
           finalAvatarUrl = 'https://placekitten.com/g/200/200'; // Fallback avatar
         }
 
-        // Fallback for media URLs, similar to community feed (MEMORY[5968f7ec-...])
-        const validMediaUrls = (p.media_urls || []).filter((url: string) => url && !url.startsWith('file:///'));
-
         return {
           group_post_id: p.post_id,
           group_id: groupId,
           author_profile_id: p.author_profile_id,
           content: p.content,
-          media_urls: validMediaUrls,
-          media_url: validMediaUrls && validMediaUrls.length > 0 ? validMediaUrls[0] : null,
-          media_type: p.media_type,
+          media_url: p.media_url ?? null,
+          media_type: p.media_type ?? null,
           post_created_at: p.post_created_at,
           author_username: p.author_username ?? null,
           author_full_name: p.author_full_name ?? null,
@@ -132,7 +128,7 @@ const GroupPostsSection: React.FC<GroupPostsSectionProps> = ({ groupId }) => {
 
   const renderPostItem = ({ item }: { item: GroupPostDisplay }) => {
     const screenWidth = Dimensions.get('window').width;
-    const imageHeight = item.media_urls && item.media_urls[0] ? screenWidth * 0.75 : 0; 
+    const imageHeight = item.media_url && item.media_type === 'image' ? screenWidth * 0.75 : 0; 
 
     return (
       <View style={styles.postItemContainer}>
@@ -145,17 +141,19 @@ const GroupPostsSection: React.FC<GroupPostsSectionProps> = ({ groupId }) => {
           {/* Timestamp could go here */}
         </View>
         {item.content && <Text style={styles.postContent}>{item.content}</Text>}
-        {item.media_urls && item.media_urls[0] && item.media_type === 'image' && (
-          <Image 
-            source={{ uri: item.media_urls[0] }} 
-            style={[styles.postImage, { width: screenWidth - 32, height: imageHeight }]} 
+        {item.media_url && item.media_type === 'image' && (
+          <GroupPostImage 
+            imagePath={item.media_url} 
+            imageStyle={[styles.postImage, { width: screenWidth - 32, height: imageHeight }]}
             resizeMode="cover"
           />
         )}
-        {/* {item.media_urls && item.media_urls[0] && item.media_type === 'video' && (
-          // <VideoPlayer source={{ uri: item.media_urls[0] }} style={styles.postVideo} />
-          <Text>Video placeholder for: {item.media_urls[0]}</Text>
-        )} */}
+        {item.media_url && item.media_type === 'video' && (
+          <View style={[styles.postImage, { width: screenWidth - 32, height: imageHeight, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={{color: '#fff'}}>Video: {item.media_url}</Text>
+          </View>
+          // <VideoPlayer source={{ uri: item.media_url }} style={styles.postVideo} />
+        )}
         <View style={styles.postFooter}>
           <Text style={styles.postTimestamp}>{new Date(item.post_created_at).toLocaleDateString()}</Text>
           {/* Placeholder for Likes and Comments */}

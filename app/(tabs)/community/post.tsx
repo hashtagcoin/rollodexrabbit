@@ -24,6 +24,10 @@ export default function PostDetails() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [displayImageUrl, setDisplayImageUrl] = useState<string | null>(null);
+  const [isLoadingImage, setIsLoadingImage] = useState(true);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const placeholderImage = 'https://via.placeholder.com/300'; // Define placeholder image URL
 
   async function loadPost() {
     console.log('[loadPost] Called with id:', id);
@@ -51,12 +55,16 @@ export default function PostDetails() {
 
       // The enrichedPostData should now contain fields like author_full_name, author_avatar_url directly.
       // Map them to the structure the rest of the component expects for 'post' state.
+      // Also ensure 'media_url' (singular) from the view is mapped for image display.
       const postForState = {
         ...enrichedPostData,
         full_name: enrichedPostData.author_full_name, // Assuming view provides 'author_full_name'
         avatar_url: enrichedPostData.author_avatar_url, // Assuming view provides 'author_avatar_url'
         caption: enrichedPostData.content, // Assuming view provides 'content' for caption
-        media_urls: enrichedPostData.media_urls, // Assuming view provides 'media_urls'
+        // Use media_url (singular) from the view as the primary source for image path/url
+        imagePathOrUrl: enrichedPostData.media_url, 
+        // media_urls (plural array) can be kept if needed for other purposes, e.g., galleries
+        media_urls_array: enrichedPostData.media_urls, 
         created_at: enrichedPostData.post_created_at, // Assuming view provides 'post_created_at'
         // Ensure all fields expected by the component's render logic for 'post' are present and correctly mapped.
       };
@@ -136,6 +144,73 @@ export default function PostDetails() {
       setLoading(false); // Stop loading if ID is missing/invalid
     }
   }, [id]);
+
+  useEffect(() => {
+    const processImage = async () => {
+      // Ensure 'post' is loaded and has media_urls
+      if (!post?.media_urls || post.media_urls.length === 0) {
+        setIsLoadingImage(false);
+        setDisplayImageUrl(null); 
+        // Optionally: setImageError("No image for this post.");
+        return;
+      }
+
+      const imagePath = post.media_urls[0];
+      
+      // Reset states for new image processing (e.g. if 'post' prop changes)
+      setIsLoadingImage(true);
+      setImageError(null);
+      setDisplayImageUrl(null);
+
+      if (imagePath.startsWith('data:image')) {
+        setDisplayImageUrl(imagePath);
+        setIsLoadingImage(false);
+      } else if (imagePath.startsWith('file:///')) {
+        console.warn('PostScreen: Attempted to load local file URI:', imagePath);
+        setImageError('This image is a local file and cannot be displayed. It might need to be re-uploaded.');
+        setIsLoadingImage(false);
+      } else {
+        // Assume it's a Supabase path
+        try {
+          let bucketName = 'postsimages'; // Default to 'postsimages' for posts
+          let pathInBucket = imagePath;
+
+          const postsImagesPrefix = 'postsimages/';
+          if (imagePath.startsWith(postsImagesPrefix)) {
+            pathInBucket = imagePath.substring(postsImagesPrefix.length);
+          }
+
+          const publicUrlResult = await supabase.storage
+            .from(bucketName)
+            .getPublicUrl(pathInBucket);
+
+          if (publicUrlResult.data?.publicUrl) { // Check for success case first
+            setDisplayImageUrl(publicUrlResult.data.publicUrl);
+            setIsLoadingImage(false);
+          } else if ((publicUrlResult as any).error) { // Use type assertion
+            const anErrorObject = (publicUrlResult as any).error;
+            console.error('PostScreen: Supabase getPublicUrl error:', anErrorObject.message ? anErrorObject.message : anErrorObject);
+            setImageError('Failed to load image from storage.');
+            setIsLoadingImage(false);
+          } else { // Neither data.publicUrl nor error is present
+            setImageError('Image URL not found and no specific error reported.');
+            setIsLoadingImage(false);
+          }
+        } catch (e: any) {
+          console.error('PostScreen: Exception fetching image URL:', e);
+          setImageError(`An error occurred while loading the image: ${e.message || 'Unknown error'}`);
+          setIsLoadingImage(false);
+        }
+      }
+    };
+
+    if (post) { // Check if post data is available
+      processImage();
+    } else {
+      // If post is not yet loaded or null, don't attempt to load image
+      setIsLoadingImage(false);
+    }
+  }, [post]); // Dependency: re-run when the post object changes
 
   const handleComment = async () => {
     try {
@@ -220,11 +295,27 @@ export default function PostDetails() {
 
           <Text style={styles.caption}>{post.caption}</Text>
 
-          {post.media_urls && post.media_urls.length > 0 && (
-            <Image
-              source={{ uri: post.media_urls[0] }}
-              style={styles.postImage}
-            />
+          {post?.media_urls && post.media_urls.length > 0 && (
+            <View style={styles.imageContainer_community_post_detail}>
+              {isLoadingImage ? (
+                <ActivityIndicator size="large" color="#007AFF" />
+              ) : imageError ? (
+                <Text style={styles.imageErrorText_community_post_detail}>{imageError}</Text>
+              ) : displayImageUrl ? (
+                <Image
+                  source={{ uri: displayImageUrl }}
+                  style={styles.postImage_community_post_detail}
+                  onError={(e) => {
+                    console.error("Image component in PostScreen encountered an error:", e.nativeEvent.error);
+                    setImageError("Failed to display the image.");
+                    setIsLoadingImage(false); // Stop loading indicator on image render error
+                  }}
+                />
+              ) : (
+                // Fallback if no displayImageUrl and no specific error (e.g. imagePath was empty string)
+                <Text style={styles.imageErrorText_community_post_detail}>Image not available for this post.</Text>
+              )}
+            </View>
           )}
 
           <View style={styles.postActions}>
@@ -295,6 +386,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  imageContainer_community_post_detail: {
+    width: '100%',
+    minHeight: 250, // Provide some default space for loading/error states
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0', // A light placeholder background
+    marginBottom: 15, // Or other spacing as per your design
+  },
+  imageErrorText_community_post_detail: {
+    color: '#D32F2F', // A standard error red color
+    padding: 20,
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  postImage_community_post_detail: { // Adapt this style to your application's needs
+    width: '100%',
+    height: 400, // Example height, adjust as necessary
+    resizeMode: 'cover',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,12 +467,6 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginBottom: 12,
     lineHeight: 24,
-  },
-  postImage: {
-    width: '100%',
-    height: 300,
-    borderRadius: 12,
-    marginBottom: 12,
   },
   postActions: {
     flexDirection: 'row',

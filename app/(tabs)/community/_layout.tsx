@@ -30,7 +30,7 @@ export default function CommunityLayout() {
       {/* <Stack.Screen name="groups" /> */}
       <Stack.Screen name="groups/[id]" />
       <Stack.Screen name="groups/create" />
-      <Stack.Screen name="community/groups/create-post" options={{ title: 'Create Group Post' }}/> 
+      <Stack.Screen name="groups/create-post" options={{ title: 'Create Group Post' }}/> 
       <Stack.Screen name="post" />
       <Stack.Screen name="create" />
       <Stack.Screen name="find-friends" />

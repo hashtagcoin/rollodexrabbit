@@ -81,7 +81,7 @@ export default function CreateGroupPostScreen() {
         const fileExtension = uriParts[uriParts.length - 1] || 'jpg'; // Default to jpg if no extension
         
         // This will be the path within the Supabase bucket, including the filename
-        const storagePath = `group_post_${groupId}_${user.id}_${Date.now()}.${fileExtension}`;
+        const storagePath = `${user.id}/group_post_${groupId}_${user.id}_${Date.now()}.${fileExtension}`;
 
         // Convert ImagePickerAsset URI to a Blob
         const response = await fetch(image.uri);

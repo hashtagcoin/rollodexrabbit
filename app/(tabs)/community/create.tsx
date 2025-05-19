@@ -127,7 +127,6 @@ export default function CreatePost() {
           const headers: Record<string, string> = {
             'Authorization': `Bearer ${accessToken}`,
             'cache-control': '3600',
-            'content-type': uploadContentTypeFinal,
           };
           try {
             const response = await fetch(uploadUrl, {
@@ -140,6 +139,17 @@ export default function CreatePost() {
             } else {
               const respJson = await response.json();
               uploadData = respJson;
+              // Ensure supabaseMediaUrl is pathInBucket for web, consistent with native
+              if (uploadData?.Key && (uploadData.Key === pathInBucket || uploadData.Key === `postsimages/${pathInBucket}`)) {
+                supabaseMediaUrl = pathInBucket;
+              } else if (uploadData?.Key) {
+                console.warn(`[DIAG] Web upload Key '${uploadData.Key}' unexpected. Expected '(${pathInBucket})' or '(postsimages/${pathInBucket})'. Storing Key directly.`);
+                supabaseMediaUrl = uploadData.Key; // Fallback, may cause issues if not handled by display logic
+              } else {
+                // This case should ideally be an error if Key is missing after response.ok
+                supabaseMediaUrl = null; 
+                uploadError = { error: 'Upload Success, No Key', message: 'Upload seemed to succeed but did not return a Key.'};
+              }
             }
           } catch (err) {
             uploadError = { error: 'Network error', message: (err as Error)?.message || String(err) };
@@ -163,11 +173,12 @@ export default function CreatePost() {
         }
 
         // Log upload payload if uploading media
-        if (mediaUrl) {
-          console.log('[DIAG] Preparing to upload media to postsimages bucket. mediaUrl:', mediaUrl);
+        if (mediaUrl && !uploadError) { // Added !uploadError to ensure we log only for successful pre-flight
+          console.log('[DIAG] Preparing to insert post with media. supabaseMediaUrl (relative path):', supabaseMediaUrl);
+        } else if (mediaUrl && uploadError) {
+          console.log('[DIAG] Media was selected, but upload failed. supabaseMediaUrl:', supabaseMediaUrl);
         }
 
-        supabaseMediaUrl = uploadData?.path || uploadData?.Key || null;
       }
 
       const postInsertPayload = {

@@ -224,7 +224,7 @@ export default function GroupDetails() {
         `)
         .eq('group_id', groupId)
         // .in('status', ['approved']) // Only show approved posts for now -- Temporarily removed as 'status' column doesn't exist in view
-        .order('created_at', { ascending: false })
+        .order('post_created_at', { ascending: false })
         .range(from, to);
 
       if (postError) {
@@ -393,10 +393,10 @@ export default function GroupDetails() {
         </View>
       </ScrollView>
 
-      {canCreatePost && (
+      {activeTab === 'posts' && canCreatePost && (
         <TouchableOpacity 
           style={styles.fab}
-          onPress={() => router.push(`/community/groups/create-post?groupId=${groupId}`)}
+          onPress={() => router.push({ pathname: '/community/groups/create-post', params: { group_id: groupId } })}
         >
           <Ionicons name="add" size={30} color="white" />
         </TouchableOpacity>
