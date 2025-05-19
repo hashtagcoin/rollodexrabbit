@@ -57,11 +57,12 @@ export const useFriends = (category: FriendCategory = 'all') => {
       // and 'friend' refers to the other party in the relationship.
       // Assumes view provides: relationship_id, requester_id, addressee_id, status, category,
       // requester_name, requester_avatar, addressee_name, addressee_avatar
+      // Always derive friend_id, friend_name, friend_avatar from the 'other' party
       const processedData = friendshipsData?.map((item: any) => {
         const userIsRequester = item.requester_id === userId;
         return {
           // Core relationship fields
-          relationship_id: item.id, // Assign item.id to relationship_id
+          relationship_id: item.id, // Use view 'id' as unique relationship id
           status: item.status,
           category: item.category,
 
@@ -70,16 +71,15 @@ export const useFriends = (category: FriendCategory = 'all') => {
           user_name: userIsRequester ? item.requester_name : item.addressee_name,
           user_avatar: userIsRequester ? item.requester_avatar : item.addressee_avatar,
 
-          // Normalized friend fields (other user)
+          // --- CRITICAL: Always present friend fields ---
           friend_id: userIsRequester ? item.addressee_id : item.requester_id,
           friend_name: userIsRequester ? item.addressee_name : item.requester_name,
           friend_avatar: userIsRequester ? item.addressee_avatar : item.requester_avatar,
-          // friend_role: ??? // Determine if needed based on category or other field
 
           // Include original directional IDs for splitting pending requests later
           requester_id: item.requester_id,
           addressee_id: item.addressee_id
-        };
+        } as FriendWithProfile; // Ensure type safety
       }) || [];
 
       console.log('fetchFriends: Processed data:', processedData.length, 'records');

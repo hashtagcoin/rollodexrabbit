@@ -366,9 +366,13 @@ export default function ProfileScreen() {
                 >
                   <Text style={styles.viewAllText}>View All Posts</Text>
                 </TouchableOpacity>
-                {posts.map((post: any) => (
+                {posts.map((post: any, index: number) => {
+                  // Generate a stable key using post_id if available, otherwise use index as fallback
+                  const postKey = post.post_id || `post-${index}`;
+                  
+                  return (
                   <TouchableOpacity 
-                    key={post.post_id} 
+                    key={postKey}
                     style={styles.gridPostCard}
                     onPress={() => router.push({
                       pathname: '/profile/posts2' as any,
@@ -396,7 +400,8 @@ export default function ProfileScreen() {
                       </View>
                     </View>
                   </TouchableOpacity>
-                ))}
+                  );
+                })}
               </View>
             )}
           </View>
@@ -420,35 +425,43 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              groups.map((group: any) => (
-                <TouchableOpacity
-                  key={group.id}
-                  style={styles.listCard}
-                  onPress={() => router.push(`/community/groups/${group.group.id}`)}
+              <View>
+                <TouchableOpacity 
+                  style={styles.viewAllButton}
+                  onPress={() => router.push('/profile/groups')}
                 >
-                  <View style={styles.listIconContainer}>
-                    {group.group.type === 'interest' ? (
-                      <Heart size={24} color="#007AFF" />
-                    ) : (
-                      <House size={24} color="#007AFF" />
-                    )}
-                  </View>
-                  <View style={styles.listContent}>
-                    <Text style={styles.listTitle}>{group.group.name}</Text>
-                    <Text style={styles.listSubtitle}>
-                      {group.group.type.charAt(0).toUpperCase() + group.group.type.slice(1)} Group
-                      {group.role === 'admin' && (
-                        <Text style={styles.roleTag}> • Admin</Text>
-                      )}
-                    </Text>
-                  </View>
-                  <ChevronRight size={20} color="#666" />
+                  <Text style={styles.viewAllText}>View All Groups</Text>
                 </TouchableOpacity>
-              ))
+                {groups.map((group: any, index: number) => (
+                  <TouchableOpacity
+                    key={`group-${group.id || index}`}
+                    style={styles.listCard}
+                    onPress={() => router.push(`/community/groups/${group.group.id}`)}
+                  >
+                    <View style={styles.listIconContainer}>
+                      {group.group.type === 'interest' ? (
+                        <Heart size={24} color="#007AFF" />
+                      ) : (
+                        <House size={24} color="#007AFF" />
+                      )}
+                    </View>
+                    <View style={styles.listContent}>
+                      <Text style={styles.listTitle}>{group.group.name}</Text>
+                      <Text style={styles.listSubtitle}>
+                        {group.group.type.charAt(0).toUpperCase() + group.group.type.slice(1)} Group
+                        {group.role === 'admin' && (
+                          <Text style={styles.roleTag}> • Admin</Text>
+                        )}
+                      </Text>
+                    </View>
+                    <ChevronRight size={20} color="#666" />
+                  </TouchableOpacity>
+                ))}
+              </View>
             )}
           </View>
         );
-        
+
       case 'bookings':
         return (
           <View style={styles.tabContent}>
@@ -467,41 +480,46 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              bookings.map((booking: any) => (
-                <View key={booking.id} style={styles.listCard}>
-                  <View style={styles.listIconContainer}>
-                    <Calendar size={24} color="#007AFF" />
-                  </View>
-                  <View style={styles.listContent}>
-                    <Text style={styles.listTitle}>
-                      {booking.service?.title || 'Unknown Service'}
-                    </Text>
-                    <Text style={styles.listSubtitle}>
-                      {booking.service?.provider?.business_name || 'Unknown Provider'}
-                    </Text>
-                    <View style={styles.bookingDetails}>
-                      <Text style={styles.bookingDate}>
-                        {new Date(booking.scheduled_at).toLocaleDateString()} at {new Date(booking.scheduled_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </Text>
-                      <View style={[
-                        styles.statusBadge,
-                        booking.status === 'confirmed' && styles.statusConfirmed,
-                        booking.status === 'completed' && styles.statusCompleted,
-                        booking.status === 'cancelled' && styles.statusCancelled,
-                      ]}>
-                        <Text style={styles.statusText}>
-                          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                        </Text>
+              <View>
+                {bookings.map((booking: any, index: number) => {
+                  const bookingKey = booking?.id || `booking-${index}`;
+                  return (
+                    <View key={bookingKey} style={styles.listCard}>
+                      <View style={styles.listIconContainer}>
+                        <Calendar size={24} color="#007AFF" />
                       </View>
+                      <View style={styles.listContent}>
+                        <Text style={styles.listTitle}>
+                          {booking.service?.title || 'Unknown Service'}
+                        </Text>
+                        <Text style={styles.listSubtitle}>
+                          {booking.service?.provider?.business_name || 'Unknown Provider'}
+                        </Text>
+                        <View style={styles.bookingDetails}>
+                          <Text style={styles.bookingDate}>
+                            {new Date(booking.scheduled_at).toLocaleDateString()} at {new Date(booking.scheduled_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </Text>
+                          <View style={[
+                            styles.statusBadge,
+                            booking.status === 'confirmed' && styles.statusConfirmed,
+                            booking.status === 'completed' && styles.statusCompleted,
+                            booking.status === 'cancelled' && styles.statusCancelled,
+                          ]}>
+                            <Text style={styles.statusText}>
+                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <ChevronRight size={20} color="#666" />
                     </View>
-                  </View>
-                  <ChevronRight size={20} color="#666" />
-                </View>
-              ))
+                  );
+                })}
+              </View>
             )}
           </View>
         );
-        
+
       case 'friends':
         return (
           <View style={styles.tabContent}>
@@ -528,30 +546,45 @@ export default function ProfileScreen() {
                   <Text style={styles.viewAllText}>View All Friends</Text>
                 </TouchableOpacity>
 
-                {friends.slice(0, 5).map((item, index) => (
-                  <TouchableOpacity
-                    key={item.id ?? index} 
-                    style={styles.listCard}
-                    onPress={() => router.push(`/profile/friends/${item.id}`)}
-                  >
-                    <View style={styles.listIconContainer}>
-                      {item.friend_avatar ? (
-                        <Image source={{ uri: item.friend_avatar }} style={styles.friendAvatar} />
-                      ) : (
-                        <View style={[styles.friendAvatar, styles.avatarPlaceholder]}>
-                          <User2 size={20} color="#fff" />
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.listContent}>
-                      <Text style={styles.listTitle}>{item.friend_name || 'Unknown'}</Text>
-                      <Text style={styles.listSubtitle}>
-                        {item.category && item.category.charAt(0).toUpperCase() + item.category.slice(1) || 'Friend'}
-                      </Text>
-                    </View>
-                    <ChevronRight size={20} color="#666" />
-                  </TouchableOpacity>
-                ))}
+                {friends.slice(0, 5).map((item, index) => {
+                  const friendId = item?.friend_id;
+                  // Generate a stable key using relationship_id if available, otherwise fall back to friend_id
+                  // If neither exists, use index as last resort (not ideal but prevents errors)
+                  const safeKey = String(item?.relationship_id || item?.friend_id || `friend-${index}`);
+                  
+                  return (
+                    <TouchableOpacity
+                      key={safeKey}
+                      style={styles.listCard}
+                      onPress={() => {
+                        if (!friendId) {
+                          console.warn('[Profile] Invalid friend_id for navigation:', item);
+                          return;
+                        }
+                        router.push(`/profile/${friendId}`);
+                      }}
+                    >
+                      <View style={styles.listIconContainer}>
+                        {item.friend_avatar ? (
+                          <Image source={{ uri: item.friend_avatar }} style={styles.friendAvatar} />
+                        ) : (
+                          <View style={[styles.friendAvatar, styles.avatarPlaceholder]}>
+                            <User2 size={20} color="#fff" />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.listContent}>
+                        <Text style={styles.listTitle}>{item.friend_name || 'Unknown'}</Text>
+                        <Text style={styles.listSubtitle}>
+                          {item.category ? 
+                            item.category.charAt(0).toUpperCase() + item.category.slice(1) : 
+                            'Friend'}
+                        </Text>
+                      </View>
+                      <ChevronRight size={20} color="#666" />
+                    </TouchableOpacity>
+                  );
+                })}
               </>
             )}
           </View>

@@ -62,25 +62,22 @@ export default function CommunityGroupsScreen() {
 
       if (rpcError) throw rpcError;
 
-      // The RPC functions should ideally return data already in CommunityEntityItem structure
-      // or easily mappable to it, including 'isFavorited'.
-      // Example mapping if RPC returns raw data that needs shaping:
-      /*
-      const mappedData: CommunityEntityItem[] = data.map((rawItem: any) => ({
-        id: rawItem.id,
-        type: itemType as CommunityEntityItem['type'], // Asserting type after switch
-        title: rawItem.title || rawItem.name, // Adjust based on actual field names
-        description: rawItem.description,
-        imageUrl: rawItem.image_url || rawItem.cover_image_url || (rawItem.listing_media_urls ? rawItem.listing_media_urls[0] : null),
-        category: rawItem.category, // for groups
-        startTime: rawItem.start_time, // for events
-        location: rawItem.location_name, // for events
-        address: rawItem.listing_address, // for housing_groups (derived in RPC)
-        isFavorited: rawItem.is_favorited || false,
-      }));
-      setItems(mappedData);
-      */
-      setItems(data as CommunityEntityItem[]); // Assuming RPC returns data in correct shape
+      // Ensure correct mapping for Interest and Housing groups so imageUrl is set properly
+      if (tab === 'Interest') {
+        const mappedData: CommunityEntityItem[] = (data as any[]).map((rawItem: any) => ({
+          ...rawItem,
+          imageUrl: rawItem.imageurl, // Map backend imageurl to frontend imageUrl
+        }));
+        setItems(mappedData);
+      } else if (tab === 'Housing') {
+        const mappedData: CommunityEntityItem[] = (data as any[]).map((rawItem: any) => ({
+          ...rawItem,
+          imageUrl: rawItem.imageUrl, // Use backend imageUrl field directly
+        }));
+        setItems(mappedData);
+      } else {
+        setItems(data as CommunityEntityItem[]);
+      }
 
     } catch (err: any) {
       console.error(`Error fetching ${tab}:`, err);
@@ -180,7 +177,7 @@ export default function CommunityGroupsScreen() {
         path = `/community/event/${item.id}`; 
         break; 
       case 'housing_group': 
-        path = `/housing/group/${item.id}`; 
+        path = `/housing/group/${item.id}?goBackPath=/(tabs)/community/groups`; 
         break; 
       default: 
         console.warn('Unknown item type for navigation in CommunityGroupsScreen:', item.type); 

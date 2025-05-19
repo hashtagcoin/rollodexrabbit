@@ -11,12 +11,14 @@ import {
   FlatList,
   Animated,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { router, useNavigation, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { Search, Filter, MapPin, Bed, Bath, Car, Armchair as Wheelchair, 
   DoorOpen, Dog, Grid2x2 as Grid, List, Heart, FileSliders as Sliders } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
+import { useAuth } from '../../../providers/AuthProvider';
 
 const { width } = Dimensions.get('window');
 
@@ -45,6 +47,10 @@ export default function HousingScreen() {
   const nextCardScale = useRef(new Animated.Value(0.95)).current;
   const nextCardTranslateY = useRef(new Animated.Value(20)).current;
   
+  const { session } = useAuth();
+  const userId = session?.user?.id;
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+
   // For double tap detection
   const [lastTap, setLastTap] = useState<number>(0);
   const [lastTapItem, setLastTapItem] = useState<string | null>(null);
@@ -58,12 +64,42 @@ export default function HousingScreen() {
     
     if (returnIndex) {
       const index = parseInt(returnIndex as string, 10);
-      if (!isNaN(index) && index >= 0 && index < listings.length) {
-        // Could scroll to position if needed
-        // For FlatList views this might require a ref and scrollToIndex
+      if (!isNaN(index)) {
+        if (listings.length > 0 && index >= 0 && index < listings.length) {
+          if (viewMode === 'swipe') {
+            setCurrentIndex(index);
+          }
+        }
       }
     }
-  }, [returnIndex, returnViewMode, listings]);
+  }, [returnIndex, returnViewMode, listings, viewMode]);
+
+  // Fetch initial favorites
+  useEffect(() => {
+    const fetchFavorites = async () => {
+      if (!userId) {
+        setFavoritedIds(new Set());
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('item_id')
+          .eq('user_id', userId)
+          .eq('item_type', 'housing_listing');
+
+        if (error) throw error;
+        if (data) {
+          const ids = new Set(data.map(fav => fav.item_id));
+          setFavoritedIds(ids);
+        }
+      } catch (error) {
+        console.error('Error fetching housing favorites:', error);
+      }
+    };
+
+    fetchFavorites();
+  }, [userId]);
 
   async function loadListings() {
     try {
@@ -115,6 +151,48 @@ export default function HousingScreen() {
     setRefreshing(false);
   };
 
+  const toggleFavorite = async (listingId: string) => {
+    if (!userId) {
+      Alert.alert("Authentication Required", "Please log in to save favorites.");
+      return;
+    }
+
+    const isCurrentlyFavorited = favoritedIds.has(listingId);
+    let success = false;
+
+    try {
+      if (isCurrentlyFavorited) {
+        const { error } = await supabase
+          .from('favorites')
+          .delete()
+          .match({ user_id: userId, item_id: listingId, item_type: 'housing_listing' });
+        if (error) throw error;
+        success = true;
+      } else {
+        const { error } = await supabase
+          .from('favorites')
+          .insert({ user_id: userId, item_id: listingId, item_type: 'housing_listing' });
+        if (error) throw error;
+        success = true;
+      }
+
+      if (success) {
+        setFavoritedIds(prevIds => {
+          const newIds = new Set(prevIds);
+          if (isCurrentlyFavorited) {
+            newIds.delete(listingId);
+          } else {
+            newIds.add(listingId);
+          }
+          return newIds;
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      Alert.alert("Error", "Could not update your favorites. Please try again.");
+    }
+  };
+
   // For swipe animations
   const panResponder = useRef(
     PanResponder.create({
@@ -139,7 +217,6 @@ export default function HousingScreen() {
   ).current;
 
   const swipeLeft = () => {
-    // First animate next card to prepare for transition
     Animated.parallel([
       Animated.timing(nextCardScale, {
         toValue: 1,
@@ -153,7 +230,6 @@ export default function HousingScreen() {
       }),
     ]).start();
     
-    // Then animate current card off screen
     Animated.timing(position, {
       toValue: { x: -width, y: 0 },
       duration: 300,
@@ -166,14 +242,12 @@ export default function HousingScreen() {
         setCurrentIndex(0); // Loop back to the beginning
       }
       
-      // Reset animations for next card
       nextCardScale.setValue(0.95);
       nextCardTranslateY.setValue(20);
     });
   };
 
   const swipeRight = () => {
-    // First animate next card to prepare for transition
     Animated.parallel([
       Animated.timing(nextCardScale, {
         toValue: 1,
@@ -187,7 +261,6 @@ export default function HousingScreen() {
       }),
     ]).start();
     
-    // Then animate current card off screen
     Animated.timing(position, {
       toValue: { x: width, y: 0 },
       duration: 300,
@@ -200,7 +273,6 @@ export default function HousingScreen() {
         setCurrentIndex(0); // Loop back to the beginning
       }
       
-      // Reset animations for next card
       nextCardScale.setValue(0.95);
       nextCardTranslateY.setValue(20);
     });
@@ -211,7 +283,6 @@ export default function HousingScreen() {
     const now = Date.now();
     
     if (lastTapItem === item.id && now - lastTap < DOUBLE_TAP_DELAY) {
-      // Double tap detected, navigate to details
       router.push({
         pathname: "/(tabs)/housing/[id]",
         params: { 
@@ -221,11 +292,9 @@ export default function HousingScreen() {
         }
       });
       
-      // Reset after navigation
       setLastTap(0);
       setLastTapItem(null);
     } else {
-      // First tap
       setLastTap(now);
       setLastTapItem(item.id);
     }
@@ -246,7 +315,7 @@ export default function HousingScreen() {
 
     return (
       <FlatList
-        key="housing-grid" // Add key prop to force re-render when switching views
+        key="housing-grid"
         data={listings}
         numColumns={2}
         keyExtractor={(item) => item.id}
@@ -294,6 +363,20 @@ export default function HousingScreen() {
                 </Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.favoriteButtonGridList}
+              onPress={(e) => {
+                e.stopPropagation(); 
+                toggleFavorite(item.id);
+              }}
+            >
+              <Heart
+                size={22} 
+                color={favoritedIds.has(item.id) ? "#FF6B6B" : "#FFF"} 
+                fill={favoritedIds.has(item.id) ? "#FF6B6B" : "none"}
+                strokeWidth={favoritedIds.has(item.id) ? 0 : 2} // Thicker outline if not filled
+              />
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
       />
@@ -315,7 +398,7 @@ export default function HousingScreen() {
 
     return (
       <FlatList
-        key="housing-list" // Add key prop to force re-render when switching views
+        key="housing-list"
         data={listings}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
@@ -393,6 +476,20 @@ export default function HousingScreen() {
                 )}
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.favoriteButtonGridList}
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleFavorite(item.id);
+              }}
+            >
+              <Heart
+                size={24} 
+                color={favoritedIds.has(item.id) ? "#FF6B6B" : "#555"} 
+                fill={favoritedIds.has(item.id) ? "#FF6B6B" : "none"}
+                strokeWidth={favoritedIds.has(item.id) ? 0 : 1.5}
+              />
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
       />
@@ -489,6 +586,16 @@ export default function HousingScreen() {
                 <Text style={styles.swipePrice}>
                   ${item.weekly_rent}/week
                 </Text>
+                <TouchableOpacity 
+                  style={styles.favoriteButtonSwipe} 
+                  onPress={() => toggleFavorite(item.id)}
+                >
+                  <Heart 
+                    size={28} 
+                    color={favoritedIds.has(item.id) ? "#FF6B6B" : "#FFFFFF"} 
+                    fill={favoritedIds.has(item.id) ? "#FF6B6B" : "rgba(0,0,0,0.3)"} 
+                  />
+                </TouchableOpacity>
               </View>
             </View>
           </TouchableOpacity>
@@ -565,8 +672,6 @@ export default function HousingScreen() {
         title="Housing"
         showBackButton={viewMode === 'swipe'}
         onBackPress={viewMode === 'swipe' ? () => {
-          // When in swipe view, clicking back should navigate to discover services
-          // filtered for housing category, preserving the current view mode
           router.push({
             pathname: "/(tabs)/discover",
             params: { 
@@ -659,7 +764,7 @@ export default function HousingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F5F5',
   },
   header: {
     padding: 16,
@@ -966,33 +1071,27 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    marginTop: 10,
   },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  emptyStateText: {
+  swipeCounter: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    color: '#FFFFFF',
+    fontWeight: '600',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 15,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  favoriteButtonGridList: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 6, 
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.2)', 
+    borderRadius: 20,
   },
-  loadingText: {
-    textAlign: 'center',
-    padding: 20,
-    color: '#666',
-  },
-  categoriesSection: {
-    paddingVertical: 8,
-  },
-  categoriesContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
+  favoriteButtonSwipe: {
+    padding: 8,
   },
 });

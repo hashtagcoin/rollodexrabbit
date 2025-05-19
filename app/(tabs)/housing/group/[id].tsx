@@ -26,7 +26,7 @@ import {
   MapPin, // Kept unused import
   Calendar, // Kept unused import
 } from 'lucide-react-native';
-import AppHeader from '../../../../components/AppHeader'; // Kept unused import
+import AppHeader from '../../../../components/AppHeader';
 import { HousingGroup, GroupMember } from '../types/housing';
 import { type Database } from '../../../../types/database.types'; // Updated path after moving types
 
@@ -186,14 +186,14 @@ export default function HousingGroupDetail() {
     checkFavoriteStatus();
   }, [checkFavoriteStatus]);
 
-  // Moved handleBack here to ensure it's declared before any conditional returns
-  const handleBack = useCallback(() => {
+  const customHandleBack = useCallback(() => {
     if (goBackPath) {
       router.push(goBackPath as Href);
     } else if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)/housing' as Href); // Fallback to housing index
+      // Fallback if neither goBackPath nor router.canGoBack() is true.
+      router.replace('/(tabs)/housing' as Href); // Fallback to housing tab index
     }
   }, [goBackPath, router]);
 
@@ -512,172 +512,180 @@ export default function HousingGroupDetail() {
   // If loading is false, no major error preventing display, and group exists
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppHeader 
+        title={group?.name || 'Housing Group Details'} 
+        showBackButton={!!goBackPath || router.canGoBack()} // Show if goBackPath exists or router can go back
+        onBackPress={customHandleBack} 
+      />
       {/* Scrollable content area */}
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Back Button */}
-        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <ChevronLeft size={24} color="#333" />
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-
-        {/* Listing Header */}
-        {listing ? (
-          <TouchableOpacity
-            style={styles.listingCard}
-            activeOpacity={0.8}
-            onPress={() => {
-              // Navigate to listing detail page if needed
-               console.log('Navigate to Listing ID:', listing.id);
-              // Example navigation: router.push(`/housing/listings/${listing.id}`);
-            }}
-          >
-            <Image
-              source={listing.media_urls && listing.media_urls.length > 0
-                ? { uri: listing.media_urls[0] } // Use first image
-                // Fallback to placeholder if needed - Ensure you have this asset
-                : require('../../../../assets/images/placeholder.png')}
-              style={styles.listingImage}
-              resizeMode="cover" // Ensure image covers the area
-            />
-            <View style={styles.listingInfo}>
-              <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
-              <Text style={styles.listingAddress} numberOfLines={1}>{listing.address}, {listing.suburb}</Text>
-              <Text style={styles.listingPrice}>${listing.weekly_rent}/week</Text>
-            </View>
-          </TouchableOpacity>
-        ) : (
-            <View style={[styles.listingCard, styles.placeholderCard]}>
-                <Text>No associated listing found.</Text>
-            </View>
-        )}
-
-        {/* Group Details Card */}
-        <View style={styles.groupDetailsCard}>
-          {/* --- FAVORITE BUTTON --- */}
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
-            <TouchableOpacity
-              onPress={isFavorite ? handleUnfavorite : handleFavorite}
-              disabled={favoriteLoading}
-              style={{ flexDirection: 'row', alignItems: 'center', padding: 6 }}
-              accessibilityLabel={isFavorite ? 'Unfavorite this group' : 'Favorite this group'}
-            >
-              <Heart
-                size={24}
-                color={isFavorite ? '#FF3B30' : '#B0B0B0'}
-                fill={isFavorite ? '#FF3B30' : 'none'}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={{ color: isFavorite ? '#FF3B30' : '#555', fontWeight: '600' }}>
-                {favoriteLoading
-                  ? '...'
-                  : (isFavorite ? 'Favorited' : 'Favorite')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.groupName}>{group.name}</Text>
-           <View style={styles.separatorThin} />
-          <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Description:</Text>
-              {/* Changed listingSubtitle style to detailValue for consistency */}
-              <Text style={styles.detailValue}>{group.description || 'N/A'}</Text>
-          </View>
-           <View style={styles.separatorThin} />
-          <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Move-in Date:</Text>
-               {/* Changed listingSubtitle style to detailValue for consistency */}
-              <Text style={styles.detailValue}>{formatMoveInDate(group.move_in_date)}</Text>
-          </View>
-        </View>
-
-
-        {/* Members Card */}
-        <View style={styles.membersCard}>
-           <Text style={styles.sectionTitle}>
-               Members ({group.current_members}/{group.max_members})
-           </Text>
-          {group.members.length > 0 ? (
-            group.members.map((member, index) => (
-               <View key={member.user_id} style={styles.memberCard}>
-                 {/* Render both avatar and placeholder, control with opacity */}
-                 {member.user_profile.avatar_url && (
-                   <Image
-                     source={{ uri: member.user_profile.avatar_url }}
-                     style={[styles.memberAvatar, avatarErrorStates[index] && { opacity: 0 }]}
-                     onError={() => handleAvatarError(index)}
-                     resizeMode="cover"
-                   />
-                 )}
-                 {(!member.user_profile.avatar_url || avatarErrorStates[index]) && (
-                   <View style={styles.memberAvatarPlaceholder}>
-                     <Text style={styles.memberAvatarPlaceholderText}>
-                       {getInitial(member.user_profile.full_name)}
-                     </Text>
-                   </View>
-                 )}
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>{member.user_profile.full_name || 'Unknown User'}</Text>
-                  <View style={styles.memberTags}>
-                     {member.support_level && member.support_level !== 'none' && (
-                         <View style={[styles.tag, styles.supportTag]}>
-                           <Text style={styles.tagTextSupport}>{member.support_level}</Text> {/* Use specific text style */}
-                         </View>
-                     )}
-                     {member.is_admin && (
-                        <View style={[styles.tag, styles.adminTag]}>
-                           <Text style={styles.tagTextAdmin}>Admin</Text> {/* Use specific text style */}
-                        </View>
-                     )}
-                  </View>
-                  {member.bio && <Text style={styles.memberBio} numberOfLines={2}>{member.bio}</Text>}
+        {/* Display Loading, Error, or Group Details */}
+        {group ? (
+          <View>
+            {/* Listing Header */}
+            {listing ? (
+              <TouchableOpacity
+                style={styles.listingCard}
+                activeOpacity={0.8}
+                onPress={() => {
+                  // Navigate to listing detail page if needed
+                   console.log('Navigate to Listing ID:', listing.id);
+                  // Example navigation: router.push(`/housing/listings/${listing.id}`);
+                }}
+              >
+                <Image
+                  source={listing.media_urls && listing.media_urls.length > 0
+                    ? { uri: listing.media_urls[0] } // Use first image
+                    // Fallback to placeholder if needed - Ensure you have this asset
+                    : require('../../../../assets/images/placeholder.png')}
+                  style={styles.listingImage}
+                  resizeMode="cover" // Ensure image covers the area
+                />
+                <View style={styles.listingInfo}>
+                  <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
+                  <Text style={styles.listingAddress} numberOfLines={1}>{listing.address}, {listing.suburb}</Text>
+                  <Text style={styles.listingPrice}>${listing.weekly_rent}/week</Text>
                 </View>
+              </TouchableOpacity>
+            ) : (
+                <View style={[styles.listingCard, styles.placeholderCard]}>
+                    <Text>No associated listing found.</Text>
+                </View>
+            )}
+
+            {/* Group Details Card */}
+            <View style={styles.groupDetailsCard}>
+              {/* --- FAVORITE BUTTON --- */}
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <TouchableOpacity
+                  onPress={isFavorite ? handleUnfavorite : handleFavorite}
+                  disabled={favoriteLoading}
+                  style={{ flexDirection: 'row', alignItems: 'center', padding: 6 }}
+                  accessibilityLabel={isFavorite ? 'Unfavorite this group' : 'Favorite this group'}
+                >
+                  <Heart
+                    size={24}
+                    color={isFavorite ? '#FF3B30' : '#B0B0B0'}
+                    fill={isFavorite ? '#FF3B30' : 'none'}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={{ color: isFavorite ? '#FF3B30' : '#555', fontWeight: '600' }}>
+                    {favoriteLoading
+                      ? '...'
+                      : (isFavorite ? 'Favorited' : 'Favorite')}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            ))
-          ) : (
-             <View>
-               <Text style={styles.noMembersText}>No members have joined yet.</Text>
-             </View>
-          )}
-        </View>
-
-        {/* Looking For Section (Removed as per previous correction, re-add if needed) */}
-        {/*
-        <View style={styles.lookingForSection}>
-          <Text style={styles.lookingForTitle}>Looking for:</Text>
-          <Text style={styles.lookingForSubtitle}>{group?.description}</Text>
-        </View>
-        */}
-
-        {/* Action Button Logic */}
-        <View style={styles.actionButtonsContainer}>
-          {userMembership ? ( // User has some status in the group
-            <View // Use View instead of TouchableOpacity for non-interactive states
-              style={[
-                styles.actionButton,
-                userMembership.status === 'approved' ? styles.alreadyMemberButton : styles.pendingButton,
-              ]}
-            >
-              <Text style={styles.actionButtonText}>
-                {userMembership.status === 'pending' ? 'Request Pending' : 'You are a Member'}
-              </Text>
+              <Text style={styles.groupName}>{group.name}</Text>
+               <View style={styles.separatorThin} />
+              <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Description:</Text>
+                  {/* Changed listingSubtitle style to detailValue for consistency */}
+                  <Text style={styles.detailValue}>{group.description || 'N/A'}</Text>
+              </View>
+               <View style={styles.separatorThin} />
+              <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Move-in Date:</Text>
+                   {/* Changed listingSubtitle style to detailValue for consistency */}
+                  <Text style={styles.detailValue}>{formatMoveInDate(group.move_in_date)}</Text>
+              </View>
             </View>
-          ) : ( // User is not in the group and has no pending request
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.joinButton,
-                (joining || group.current_members >= group.max_members) && styles.disabledButton // Disable if joining or group is full
-              ]}
-              onPress={joinGroupHandler}
-              disabled={joining || group.current_members >= group.max_members} // Prevent action when joining or full
-            >
-               <Text style={styles.actionButtonText}>
-                  {joining ? 'Sending Request...' :
-                   group.current_members >= group.max_members ? 'Group Full' : 'Request to Join'}
-               </Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
+
+            {/* Members Card */}
+            <View style={styles.membersCard}>
+               <Text style={styles.sectionTitle}>
+                   Members ({group.current_members}/{group.max_members})
+               </Text>
+              {group.members.length > 0 ? (
+                group.members.map((member, index) => (
+                   <View key={member.user_id} style={styles.memberCard}>
+                     {/* Render both avatar and placeholder, control with opacity */}
+                     {member.user_profile.avatar_url && (
+                       <Image
+                         source={{ uri: member.user_profile.avatar_url }}
+                         style={[styles.memberAvatar, avatarErrorStates[index] && { opacity: 0 }]}
+                         onError={() => handleAvatarError(index)}
+                         resizeMode="cover"
+                       />
+                     )}
+                     {(!member.user_profile.avatar_url || avatarErrorStates[index]) && (
+                       <View style={styles.memberAvatarPlaceholder}>
+                         <Text style={styles.memberAvatarPlaceholderText}>
+                           {getInitial(member.user_profile.full_name)}
+                         </Text>
+                       </View>
+                     )}
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{member.user_profile.full_name || 'Unknown User'}</Text>
+                      <View style={styles.memberTags}>
+                         {member.support_level && member.support_level !== 'none' && (
+                             <View style={[styles.tag, styles.supportTag]}>
+                               <Text style={styles.tagTextSupport}>{member.support_level}</Text> {/* Use specific text style */}
+                             </View>
+                         )}
+                         {member.is_admin && (
+                            <View style={[styles.tag, styles.adminTag]}>
+                               <Text style={styles.tagTextAdmin}>Admin</Text> {/* Use specific text style */}
+                            </View>
+                         )}
+                      </View>
+                      {member.bio && <Text style={styles.memberBio} numberOfLines={2}>{member.bio}</Text>}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                 <View>
+                   <Text style={styles.noMembersText}>No members have joined yet.</Text>
+                 </View>
+              )}
+            </View>
+
+            {/* Looking For Section (Removed as per previous correction, re-add if needed) */}
+            {/*
+            <View style={styles.lookingForSection}>
+              <Text style={styles.lookingForTitle}>Looking for:</Text>
+              <Text style={styles.lookingForSubtitle}>{group?.description}</Text>
+            </View>
+            */}
+
+            {/* Action Button Logic */}
+            <View style={styles.actionButtonsContainer}>
+              {userMembership ? ( // User has some status in the group
+                <View // Use View instead of TouchableOpacity for non-interactive states
+                  style={[
+                    styles.actionButton,
+                    userMembership.status === 'approved' ? styles.alreadyMemberButton : styles.pendingButton,
+                  ]}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {userMembership.status === 'pending' ? 'Request Pending' : 'You are a Member'}
+                  </Text>
+                </View>
+              ) : ( // User is not in the group and has no pending request
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    styles.joinButton,
+                    (joining || group.current_members >= group.max_members) && styles.disabledButton // Disable if joining or group is full
+                  ]}
+                  onPress={joinGroupHandler}
+                  disabled={joining || group.current_members >= group.max_members} // Prevent action when joining or full
+                >
+                   <Text style={styles.actionButtonText}>
+                      {joining ? 'Sending Request...' :
+                       group.current_members >= group.max_members ? 'Group Full' : 'Request to Join'}
+                   </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+          </View>
+        ) : (
+          <View>
+            <Text>Loading...</Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -707,20 +715,14 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#F4F5F7',
   },
-  backButton: {
+  backButtonOnError: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    alignSelf: 'flex-start',
+    padding: 8,
   },
-   backButtonOnError: {
-     position: 'absolute',
-     top: 16,
-     left: 16,
-     flexDirection: 'row',
-     alignItems: 'center',
-     padding: 8,
-   },
   backButtonText: {
     marginLeft: 6,
     fontSize: 16,

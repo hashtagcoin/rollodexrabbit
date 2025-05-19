@@ -30,6 +30,7 @@ export type HousingGroup = {
   move_in_date?: string;
   is_active: boolean;
   members: GroupMember[];
+  imageUrl?: string; // Add imageUrl for group card image rendering
 };
 
 // Add a dummy default export to satisfy Expo Router's requirements

@@ -156,7 +156,7 @@ const UserProfileScreen = () => {
                     <FlatList
                         data={posts}
                         renderItem={renderPostItem}
-                        keyExtractor={(item) => item.id}
+                        keyExtractor={(item, index) => item.id ? item.id.toString() : `post-${index}`}
                         // style={styles.postsList} // Add style if needed
                         scrollEnabled={false} // Disable FlatList scrolling since ScrollView handles it
                     />

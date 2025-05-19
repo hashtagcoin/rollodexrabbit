@@ -125,6 +125,14 @@ export default function GroupCard({ group, onJoinGroup, index = 0, onGroupHover,
         onPress={() => onJoinGroup?.(group.id)}
         activeOpacity={0.9}
       >
+        {/* Group Image at top */}
+        {group.imageUrl ? (
+          <Image source={{ uri: group.imageUrl }} style={styles.cardImage} resizeMode="cover" />
+        ) : (
+          <View style={[styles.cardImage, styles.placeholderImage]}>
+            <Text style={styles.placeholderText}>{group.name ? group.name.charAt(0).toUpperCase() : '?'}</Text>
+          </View>
+        )}
         <View style={styles.header}>
           <Text style={styles.title}>{group.description}</Text>
         </View>
@@ -194,6 +202,27 @@ export default function GroupCard({ group, onJoinGroup, index = 0, onGroupHover,
 }
 
 const styles = StyleSheet.create({
+  cardImage: {
+    width: '100%',
+    height: 140,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    backgroundColor: '#eee',
+  },
+  placeholderImage: {
+    width: '100%',
+    height: 140,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    backgroundColor: '#bbb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 40,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   container: {
     marginBottom: 16,
     shadowColor: '#000',

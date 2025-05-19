@@ -5,6 +5,7 @@
 
 
 export interface FriendWithProfile {
+  relationship_id: string; // Alias for id, used as unique key in lists
   requester_id?: string;
   addressee_id?: string;
   id: string;
@@ -23,6 +24,7 @@ export interface FriendWithProfile {
 // Mock friends data matching the friendships_with_profiles view
 export const mockFriends: FriendWithProfile[] = [
   {
+    relationship_id: '1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p',
     id: '1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p',
     user_id: 'current-user-id', // This will be replaced with the actual user ID when used
     friend_id: 'friend-1',
@@ -36,6 +38,7 @@ export const mockFriends: FriendWithProfile[] = [
     user_avatar: null
   },
   {
+    relationship_id: '2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q',
     id: '2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q',
     user_id: 'current-user-id',
     friend_id: 'friend-2',
@@ -49,6 +52,7 @@ export const mockFriends: FriendWithProfile[] = [
     user_avatar: null
   },
   {
+    relationship_id: '3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r',
     id: '3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r',
     user_id: 'current-user-id',
     friend_id: 'friend-3',
@@ -62,6 +66,7 @@ export const mockFriends: FriendWithProfile[] = [
     user_avatar: null
   },
   {
+    relationship_id: '4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s',
     id: '4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s',
     user_id: 'current-user-id',
     friend_id: 'friend-4',
@@ -75,6 +80,7 @@ export const mockFriends: FriendWithProfile[] = [
     user_avatar: null
   },
   {
+    relationship_id: '5e6f7g8h-9i0j-1k2l-3m4n-5o6p7q8r9s0t',
     id: '5e6f7g8h-9i0j-1k2l-3m4n-5o6p7q8r9s0t',
     user_id: 'friend-5',
     friend_id: 'current-user-id',

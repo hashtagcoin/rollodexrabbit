@@ -18,6 +18,7 @@ import { useAuth } from '../../../providers/AuthProvider';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { uploadMedia } from '../../../lib/mediaService'; // Assuming this path and function
+import AppHeader from '../../../components/AppHeader'; // Corrected path
 // import EmojiPicker from 'rn-emoji-keyboard'; // We'll add this later
 
 export default function CreateGroupPostScreen() {
@@ -143,7 +144,12 @@ export default function CreateGroupPostScreen() {
       style={styles.container}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <Stack.Screen options={{ title: 'Create Group Post' }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader 
+        title="Create Group Post"
+        showBackButton={router.canGoBack()}
+        onBackPress={router.back}
+      />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TextInput
           style={styles.textInput}

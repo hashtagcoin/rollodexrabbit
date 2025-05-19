@@ -137,14 +137,14 @@ export default function FavoritesScreen() {
             case 'housing_listing':
               const { data: hlData, error: hlError } = await supabase
                 .from('housing_listings')
-                .select('id, description, media_urls, address, suburb, state, postcode')
+                .select('id, title, description, media_urls, address, suburb, state, postcode') // Added 'title'
                 .eq('id', fav.item_id)
                 .maybeSingle();
               if (hlError) console.error(`Error fetching HL ${fav.item_id}:`, hlError);
               if (hlData) {
                 const formattedAddress = `${hlData.address || ''}, ${hlData.suburb || ''}, ${hlData.state || ''} ${hlData.postcode || ''}`.replace(/^, |, $/g, '').replace(/, ,/g, ',');
                 details = {
-                  item_title: formattedAddress,
+                  item_title: hlData.title || formattedAddress, // Use title, fallback to address
                   item_description: hlData.description,
                   item_image_url: hlData.media_urls && hlData.media_urls.length > 0 ? hlData.media_urls[0] : null,
                   housing_address: formattedAddress,

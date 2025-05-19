@@ -216,6 +216,11 @@ export default function FriendsScreen({}: FriendsScreenProps) {
   } = useFriends(activeCategory);
 
   const filteredFriends = friends.filter(friend => {
+  // [DEBUG 1] Log filtered friends at render time
+  if (typeof window !== 'undefined') {
+    console.log('[DEBUG 1] filteredFriends:', friends);
+  }
+
     if (activeCategory === 'all') return true;
     if (activeCategory === 'friend' && friend.friend_role === 'friend') return true;
     if (activeCategory === 'provider' && friend.friend_role === 'provider') return true;
@@ -228,16 +233,24 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     setActiveCategory(category);
   };
 
-  // Navigate to friend profile
-  const goToFriendDetail = (friendId: string) => {
-    if (!friendId || friendId === '' || friendId === 'undefined') {
-      console.warn('[goToFriendDetail] Attempted navigation with invalid friendId:', friendId);
+  // Navigate to friend profile with enhanced error handling
+  const goToFriendDetail = (friendId: string | undefined | null) => {
+    console.log('[DEBUG 6] Navigating to friend detail with friendId:', friendId, typeof friendId);
+    
+    // Enhanced defensive check for friendId
+    if (!friendId || friendId === '' || friendId === 'undefined' || typeof friendId !== 'string') {
+      console.warn('[fetchFriendDetail] Called with undefined or empty friendId:', friendId);
       Alert.alert('Error', 'Unable to open friend profile. Invalid friend ID.');
       return;
     }
+    
+    // Ensure we're passing a clean, trimmed ID
+    const cleanId = friendId.trim();
+    console.log('[goToFriendDetail] Navigating to clean ID:', cleanId);
+    
     router.push({
       pathname: '/profile/[id]',
-      params: { id: friendId }
+      params: { id: cleanId }
     });
   };
 
@@ -380,78 +393,17 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       Alert.alert('Error', result.error);
     }
     // No need for success alert, list will refresh
+    return result;
   };
 
-  const renderFriendItem = ({ item }: { item: any }) => (
-  <View style={styles.friendItemRow}>
-    <TouchableOpacity
-      style={styles.friendItem}
-      onPress={() => goToFriendDetail(item.friend_id)}
-      activeOpacity={0.85}
-    >
-      <View style={styles.avatarContainer}>
-        {item.friend_avatar ? (
-          <Image source={{ uri: item.friend_avatar }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <User size={24} color="#ffffff" />
-          </View>
-        )}
-      </View>
-      <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>{item.friend_name || 'Unknown'}</Text>
-        {/* Wrap category text and icon in TouchableOpacity */}
-        <TouchableOpacity 
-          style={styles.categoryContainer} 
-          onPress={() => openCategoryModal(item)}
-        >
-          <Text style={styles.friendCategory}>{item.category || 'friend'}</Text>
-          <ChevronDown size={16} color="#000000" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.friendActions}>
-        <TouchableOpacity
-          style={{ padding: 8 }}
-          onPress={() => handleChat(item.friend_id, item.friend_name)}
-          accessibilityLabel={`Chat with ${item.friend_name}`}
-        >
-          <MessageCircle size={22} color="#000000" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.removeButton, { marginLeft: 8 }]}
-          onPress={() => {
-            Alert.alert(
-              'Remove Friend',
-              `Are you sure you want to remove ${item.friend_name || 'this friend'}?`,
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Remove',
-                  style: 'destructive',
-                  onPress: async () => {
-                    const result = await removeFriend(item.relationship_id); // Assuming removeFriend expects the actual relationship ID
-                    if (result?.error) { 
-                      Alert.alert('Error', result.error);
-                    }
-                    // No need for success alert, list will refresh
-                  },
-                },
-              ]
-            );
-          }}
-          accessibilityLabel={`Remove ${item.friend_name}`}
-        >
-          <Text style={styles.removeButtonText}>Remove</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  </View>
-);
-
-  // Render friend request item
-  const renderRequestItem = ({ item }: { item: any }) => (
+const renderRequestItem = ({ item }: { item: any }) => {
+  console.log('[DEBUG 5] Rendering friend request:', item);
+  return (
     <View style={styles.requestItem}>
-      <View style={styles.requestHeader}>
+      <TouchableOpacity
+        style={styles.requestItem}
+        activeOpacity={0.85}
+      >
         <View style={styles.avatarContainer}>
           {item.friend_avatar ? (
             <Image source={{ uri: item.friend_avatar }} style={styles.avatar} />
@@ -465,134 +417,209 @@ export default function FriendsScreen({}: FriendsScreenProps) {
           <Text style={styles.requestName}>{item.friend_name || 'Unknown'}</Text>
           <Text style={styles.requestText}>Sent you a friend request</Text>
         </View>
-      </View>
-      <View style={styles.requestActions}>
-        <TouchableOpacity
-          style={styles.acceptButton}
-          onPress={() => handleAcceptRequest(item.id)}
-        >
-          <Text style={styles.acceptButtonText}>Accept</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.rejectButton}
-          onPress={() => handleRejectRequest(item.id)}
-        >
-          <Text style={styles.rejectButtonText}>Reject</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  // Render category tabs
-  const renderCategoryTabs = () => (
-    <View style={styles.categoryTabs}>
-      <TouchableOpacity
-        style={[
-          styles.categoryTab,
-          activeCategory === 'all' && styles.activeTab
-        ]}
-        onPress={() => handleCategoryChange('all')}
-      >
-        <Text
-          style={[
-            styles.categoryTabText,
-            activeCategory === 'all' && styles.activeTabText
-          ]}
-        >
-          All
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          styles.categoryTab,
-          activeCategory === 'friend' && styles.activeTab
-        ]}
-        onPress={() => handleCategoryChange('friend')}
-      >
-        <Text
-          style={[
-            styles.categoryTabText,
-            activeCategory === 'friend' && styles.activeTabText
-          ]}
-        >
-          Friends
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          styles.categoryTab,
-          activeCategory === 'provider' && styles.activeTab
-        ]}
-        onPress={() => handleCategoryChange('provider')}
-      >
-        <Text
-          style={[
-            styles.categoryTabText,
-            activeCategory === 'provider' && styles.activeTabText
-          ]}
-        >
-          Providers
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          styles.categoryTab,
-          activeCategory === 'family' && styles.activeTab
-        ]}
-        onPress={() => handleCategoryChange('family')}
-      >
-        <Text
-          style={[
-            styles.categoryTabText,
-            activeCategory === 'family' && styles.activeTabText
-          ]}
-        >
-          Family
-        </Text>
+        <View style={styles.requestActions}>
+          <TouchableOpacity
+            style={styles.acceptButton}
+            onPress={() => handleAcceptRequest(item.id)}
+          >
+            <Text style={styles.acceptButtonText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.rejectButton}
+            onPress={() => handleRejectRequest(item.id)}
+          >
+            <Text style={styles.rejectButtonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     </View>
   );
+};
 
-  // Render empty state
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyStateIcon}>
-        <User size={48} color="#6B7280" />
-      </View>
-      <Text style={styles.emptyStateTitle}>No friends yet</Text>
-      <Text style={styles.emptyStateText}>
-        Start connecting with friends, family, and service providers
+// Render each friend item for FlatList
+const renderFriendItem = ({ item }: { item: any }) => {
+  console.log('[DEBUG 2] Rendering friend item:', item);
+  // Ensure we have a valid friend_id - defensive programming
+  const friendId = item?.friend_id || null;
+  
+  return (
+    <View style={styles.friendItemRow}>
+      <TouchableOpacity
+        style={styles.friendItem}
+        onPress={() => {
+          console.log('[DEBUG 4] Friend card pressed:', item);
+          goToFriendDetail(friendId);
+        }}
+        activeOpacity={0.85}
+      >
+        <View style={styles.avatarContainer}>
+          {item.friend_avatar ? (
+            <Image source={{ uri: item.friend_avatar }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <User size={24} color="#ffffff" />
+            </View>
+          )}
+        </View>
+        <View style={styles.friendInfo}>
+          <Text style={styles.friendName}>{item.friend_name || 'Unknown'}</Text>
+          <TouchableOpacity
+            style={styles.categoryContainer}
+            onPress={() => openCategoryModal(item)}
+          >
+            <Text style={styles.friendCategory}>{item.category || 'friend'}</Text>
+            <ChevronDown size={16} color="#000000" style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.friendActions}>
+          <TouchableOpacity
+            style={{ padding: 8 }}
+            onPress={() => handleChat(item.friend_id, item.friend_name)}
+            accessibilityLabel={`Chat with ${item.friend_name}`}
+          >
+            <MessageCircle size={22} color="#000000" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.removeButton, { marginLeft: 8 }]}
+            onPress={() => {
+              Alert.alert(
+                'Remove Friend',
+                `Are you sure you want to remove ${item.friend_name || 'this friend'}?`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                      const result = await handleRemoveFriend(item.relationship_id);
+                      if (result?.error) {
+                        Alert.alert('Error', result.error);
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+            accessibilityLabel={`Remove ${item.friend_name}`}
+          >
+            <Text style={styles.removeButtonText}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// Render category tabs
+const renderCategoryTabs = () => (
+  <View style={styles.categoryTabs}>
+    <TouchableOpacity
+      style={[
+        styles.categoryTab,
+        activeCategory === 'all' && styles.activeTab
+      ]}
+      onPress={() => handleCategoryChange('all')}
+    >
+      <Text
+        style={[
+          styles.categoryTabText,
+          activeCategory === 'all' && styles.activeTabText
+        ]}
+      >
+        All
       </Text>
-      <TouchableOpacity
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.categoryTab,
+        activeCategory === 'friend' && styles.activeTab
+      ]}
+      onPress={() => handleCategoryChange('friend')}
+    >
+      <Text
+        style={[
+          styles.categoryTabText,
+          activeCategory === 'friend' && styles.activeTabText
+        ]}
+      >
+        Friends
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.categoryTab,
+        activeCategory === 'provider' && styles.activeTab
+      ]}
+      onPress={() => handleCategoryChange('provider')}
+    >
+      <Text
+        style={[
+          styles.categoryTabText,
+          activeCategory === 'provider' && styles.activeTabText
+        ]}
+      >
+        Providers
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.categoryTab,
+        activeCategory === 'family' && styles.activeTab
+      ]}
+      onPress={() => handleCategoryChange('family')}
+    >
+      <Text
+        style={[
+          styles.categoryTabText,
+          activeCategory === 'family' && styles.activeTabText
+        ]}
+      >
+        Family
+      </Text>
+    </TouchableOpacity>
+  </View>
+);
+
+// Render empty state
+const renderEmptyState = () => (
+  <View style={styles.emptyState}>
+    <View style={styles.emptyStateIcon}>
+      <User size={48} color="#6B7280" />
+    </View>
+    <Text style={styles.emptyStateTitle}>No friends yet</Text>
+    <Text style={styles.emptyStateText}>
+      Start connecting with friends, family, and service providers
+    </Text>
+    <TouchableOpacity
+      style={styles.findFriendsButton}
+      onPress={handleShowFindFriends}
+    >
+      <UserPlus size={22} color="#000000" />
+      <Text style={styles.findFriendsButtonText}>Find People</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+// Main render
+return (
+  <PaperProvider>
+    <View style={styles.container}>
+    <AppHeader 
+      title="Friends" 
+      showBackButton={true} 
+      onBackPress={() => router.push('/(tabs)/profile' as any)} 
+    />
+
+    {/* Find Friends Button and Inline Panel */}
+    <View style={{padding:16, backgroundColor:'#fff'}}>
+      <TouchableOpacity 
         style={styles.findFriendsButton}
         onPress={handleShowFindFriends}
       >
         <UserPlus size={22} color="#000000" />
         <Text style={styles.findFriendsButtonText}>Find People</Text>
       </TouchableOpacity>
-    </View>
-  );
-
-  // Main render
-  return (
-    <PaperProvider>
-      <View style={styles.container}>
-      <AppHeader 
-        title="Friends" 
-        showBackButton={true} 
-        onBackPress={() => router.push('/(tabs)/profile' as any)} 
-      />
-
-      {/* Find Friends Button and Inline Panel */}
-      <View style={{padding:16, backgroundColor:'#fff'}}>
-        <TouchableOpacity 
-          style={styles.findFriendsButton}
-          onPress={handleShowFindFriends}
-        >
-          <UserPlus size={22} color="#000000" />
-          <Text style={styles.findFriendsButtonText}>Find People</Text>
-        </TouchableOpacity>
-        {showFindFriends && (
+      {showFindFriends && (
   <View style={{marginTop:16, backgroundColor:'#fff', borderRadius:8, padding:8, elevation:2}}>
     {findFriendsLoading ? (
       <ActivityIndicator size="small" color="#4F46E5" />
@@ -664,7 +691,15 @@ export default function FriendsScreen({}: FriendsScreenProps) {
       ) : (
         <FlatList
           data={filteredFriends}
-          keyExtractor={(item) => item.friend_id}
+          keyExtractor={(item, index) => {
+            // Robust key extraction with multiple fallbacks
+            const key = item?.relationship_id?.toString() || 
+                       item?.id?.toString() || 
+                       item?.friend_id?.toString() || 
+                       `friend-${index}`;
+            console.log('[DEBUG 3] FlatList keyExtractor:', key, item);
+            return key;
+          }}
           renderItem={renderFriendItem}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -673,11 +708,14 @@ export default function FriendsScreen({}: FriendsScreenProps) {
             incomingPendingRequests.length > 0 ? (
               <View style={styles.requestsSection}>
                 <Text style={styles.sectionTitle}>Friend Requests</Text>
-                {incomingPendingRequests.map((request) => (
-                  <View key={request.id}>
-                    {renderRequestItem({ item: request })}
-                  </View>
-                ))}
+                {incomingPendingRequests.map((request, idx) => {
+                  console.log('[DEBUG 5] Rendering friend request:', request, 'Key:', request.id || request.relationship_id || idx);
+                  return (
+                    <View key={request.id || request.relationship_id || `request-${idx}`}>
+                      {renderRequestItem({ item: request })}
+                    </View>
+                  );
+                })}
               </View>
             ) : null
           }
