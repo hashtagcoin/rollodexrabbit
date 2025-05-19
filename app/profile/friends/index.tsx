@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,75 @@ import {
   Modal
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useFriends, FriendCategory } from '../../../hooks/useFriends';
+// Import types from useFriends but exclude the ones we'll redefine
+import { useFriends } from '../../../hooks/useFriends';
+
+// Import the mock friend type
+import type { FriendWithProfile as MockFriendWithProfile } from '../../../lib/__mocks__/friends';
+
+// Define our own FriendCategory type that doesn't include 'all'
+type FriendCategory = 'friend' | 'provider' | 'family';
+
+// Define our local FriendWithProfile type
+type FriendWithProfile = {
+  id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  category: FriendCategory | 'all' | null;  // Include 'all' as a possible value
+  relationship_id: string;
+  user_id: string;
+  user_name: string | null;
+  user_avatar: string | null;
+  friend_id: string;
+  friend_name: string | null;
+  friend_avatar: string | null;
+  requester_id: string;
+  addressee_id: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+// Type guard to check if an object matches our FriendWithProfile type
+function isFriendWithProfile(friend: any): friend is FriendWithProfile {
+  return (
+    friend &&
+    typeof friend.id === 'string' &&
+    ['pending', 'accepted', 'rejected'].includes(friend.status) &&
+    (friend.category === null || ['friend', 'provider', 'family'].includes(friend.category)) &&
+    typeof friend.relationship_id === 'string' &&
+    typeof friend.user_id === 'string' &&
+    (friend.user_name === null || typeof friend.user_name === 'string') &&
+    (friend.user_avatar === null || typeof friend.user_avatar === 'string') &&
+    typeof friend.friend_id === 'string' &&
+    (friend.friend_name === null || typeof friend.friend_name === 'string') &&
+    (friend.friend_avatar === null || typeof friend.friend_avatar === 'string') &&
+    typeof friend.requester_id === 'string' &&
+    typeof friend.addressee_id === 'string'
+  );
+}
+
+// Function to transform any friend object to our FriendWithProfile type
+function toFriendWithProfile(friend: any): FriendWithProfile {
+  return {
+    id: friend.id || '',
+    status: ['pending', 'accepted', 'rejected'].includes(friend.status) 
+      ? friend.status as 'pending' | 'accepted' | 'rejected' 
+      : 'pending', // Default to 'pending' if status is invalid
+    category: friend.category && ['friend', 'provider', 'family'].includes(friend.category)
+      ? friend.category as FriendCategory
+      : null,
+    relationship_id: friend.relationship_id || '',
+    user_id: friend.user_id || '',
+    user_name: friend.user_name || null,
+    user_avatar: friend.user_avatar || null,
+    friend_id: friend.friend_id || '',
+    friend_name: friend.friend_name || null,
+    friend_avatar: friend.friend_avatar || null,
+    requester_id: friend.requester_id || '',
+    addressee_id: friend.addressee_id || '',
+    created_at: friend.created_at,
+    updated_at: friend.updated_at
+  };
+}
 import { User, ChevronRight, UserPlus, AlertCircle, MoreVertical, Check, MessageCircle, UserMinus, ChevronDown } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { supabase } from '../../../lib/supabase';
@@ -186,52 +254,118 @@ interface SelectedFriendData {
   relationship_id: string;
   friend_id: string;
   friend_name: string;
-  category: FriendCategory | null;
+  category: FriendCategory | 'all' | null;  // Include 'all' as a possible value
 }
 
 export default function FriendsScreen({}: FriendsScreenProps) {
-  const [activeCategory, setActiveCategory] = useState<FriendCategory>('all');
+  // Define a type for the filter category that includes 'all'
+  type FilterCategory = FriendCategory | 'all';
+  
+  const [activeCategory, setActiveCategory] = useState<FilterCategory>('all');
   const { user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
-
+  
+  // Local state to track friends list
+  const [localFriends, setLocalFriends] = useState<FriendWithProfile[]>([]);
+  
+  // Refs
+  const initialLoadRef = useRef(true);
+  
   // Initialize with category from params or default to 'all'
   useEffect(() => {
-    const paramCategory = params.category as FriendCategory;
-    if (paramCategory && ['all', 'friend', 'provider', 'family'].includes(paramCategory)) {
-      setActiveCategory(paramCategory);
+    if (params?.category) {
+      // Only set the active category if it's a valid FriendCategory
+      const category = params.category as string;
+      if (['friend', 'provider', 'family', 'all'].includes(category)) {
+        setActiveCategory(category as FilterCategory);
+      } else {
+        setActiveCategory('all');
+      }
+    } else {
+      setActiveCategory('all');
     }
   }, [params]);
+  
+  // Store the current filter in a ref to avoid dependency issues
+  const currentFilterRef = useRef<FilterCategory>(activeCategory);
+  
+  // Keep the ref in sync with state
+  useEffect(() => {
+    currentFilterRef.current = activeCategory;
+  }, [activeCategory]);
 
   const {
-    friends,
+    friends: fetchedFriends,
     incomingPendingRequests,
     loading,
     error,
     refreshing,
     onRefresh,
     respondToFriendRequest,
-    fetchFriends, // Make sure this is destructured
+    fetchFriends,
     removeFriend,
-  } = useFriends(activeCategory);
+  } = useFriends();
 
-  const filteredFriends = friends.filter(friend => {
-  // [DEBUG 1] Log filtered friends at render time
+  // Update local friends when fetchedFriends changes
+  useEffect(() => {
+    if (fetchedFriends.length > 0) {
+      // Transform each friend to our FriendWithProfile type
+      const transformedFriends = fetchedFriends.map(friend => toFriendWithProfile(friend));
+      setLocalFriends(transformedFriends);
+    }
+  }, [fetchedFriends]);
+  
+  // Fetch friends on initial load
+  useEffect(() => {
+    if (initialLoadRef.current) {
+      fetchFriends();
+      initialLoadRef.current = false;
+    }
+  }, [fetchFriends]);
+  
+  const filteredFriends = useMemo(() => {
+    const currentFilter = currentFilterRef.current;
+    
+    return localFriends.filter((friend: FriendWithProfile) => {
+      // Debug log
+      if (typeof window !== 'undefined') {
+        console.log('[DEBUG] Filtering friend:', friend.friend_name, 'Category:', friend.category, 'Active Category:', currentFilter);
+      }
+      
+      // Always show all friends when 'all' is selected
+      if (currentFilter === 'all') {
+        return true;
+      }
+      
+      // Get the friend's category, defaulting to 'friend' if null/undefined
+      const friendCategory = friend.category || 'friend';
+      
+      // Compare the categories (both normalized to string for comparison)
+      return friendCategory === currentFilter;
+    });
+  }, [localFriends, activeCategory]); // Re-run when localFriends or activeCategory changes
+  
+  // Debug log filtered results
   if (typeof window !== 'undefined') {
-    console.log('[DEBUG 1] filteredFriends:', friends);
+    console.log(`[DEBUG] Filtered ${filteredFriends.length} friends for category '${activeCategory}'`);
   }
 
-    if (activeCategory === 'all') return true;
-    if (activeCategory === 'friend' && friend.friend_role === 'friend') return true;
-    if (activeCategory === 'provider' && friend.friend_role === 'provider') return true;
-    if (activeCategory === 'family' && friend.friend_role === 'family') return true;
-    return false;
-  });
-
   // Handle category change
-  const handleCategoryChange = (category: FriendCategory) => {
+  const handleCategoryChange = useCallback((category: FilterCategory) => {
+    console.log('[DEBUG] Changing category to:', category);
     setActiveCategory(category);
-  };
+    
+    // Update the URL to reflect the current filter
+    const newParams = new URLSearchParams(window.location.search);
+    if (category === 'all') {
+      newParams.delete('category');
+    } else {
+      newParams.set('category', category);
+    }
+    const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }, []);
 
   // Navigate to friend profile with enhanced error handling
   const goToFriendDetail = (friendId: string | undefined | null) => {
@@ -314,7 +448,7 @@ export default function FriendsScreen({}: FriendsScreenProps) {
         .neq('id', user?.id || 'no-user-id');
       if (error) throw error;
       // Filter out already-friends
-      const friendIds = friends.map(f => f.friend_id);
+      const friendIds = localFriends.map((f: FriendWithProfile) => f.friend_id);
       const filtered = (users || []).filter((u: {id: string}) => !friendIds.includes(u.id));
       setFindFriendsResults(filtered);
     } catch (e: any) {
@@ -355,7 +489,10 @@ export default function FriendsScreen({}: FriendsScreenProps) {
   };
 
   // Handle category update
-  const handleUpdateCategory = async (newCategory: FriendCategory) => {
+  const handleUpdateCategory = async (newCategory: FriendCategory | 'all') => {
+    // If 'all' is somehow passed, default to 'friend'
+    const categoryToSet = newCategory === 'all' ? 'friend' : newCategory;
+    
     if (!selectedFriend || !user) {
       Alert.alert("Error", "Cannot update category. Friend or user data missing.");
       setIsCategoryModalVisible(false);
@@ -363,26 +500,102 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     }
 
     try {
-      const { error } = await supabase
+      console.log('Updating category for relationship:', selectedFriend.relationship_id, 'New category:', categoryToSet);
+      
+      // Store the current category for potential rollback
+      const previousCategory = selectedFriend.category || 'friend';
+      
+      // Update the selected friend's category immediately for better UX
+      setSelectedFriend(prev => prev ? { ...prev, category: categoryToSet as FriendCategory } : null);
+      
+      // Optimistically update the UI
+      setLocalFriends(prevFriends => 
+        prevFriends.map((friend: FriendWithProfile) => 
+          friend.relationship_id === selectedFriend.relationship_id
+            ? { 
+                ...friend, 
+                category: categoryToSet as FriendCategory,
+                // Ensure all required properties are included
+                id: friend.id,
+                status: friend.status,
+                relationship_id: friend.relationship_id,
+                user_id: friend.user_id,
+                user_name: friend.user_name,
+                user_avatar: friend.user_avatar,
+                friend_id: friend.friend_id,
+                friend_name: friend.friend_name,
+                friend_avatar: friend.friend_avatar,
+                requester_id: friend.requester_id,
+                addressee_id: friend.addressee_id,
+                updated_at: new Date().toISOString()
+              }
+            : friend
+        )
+      );
+
+      // Update the category in the database
+      const { data, error } = await supabase
         .from('user_relationships')
-        .update({ category: newCategory })
-        // Use the correct DB column 'user_relationships_id'
-        .eq('user_relationships_id', selectedFriend.relationship_id);
+        .update({ 
+          category: categoryToSet,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedFriend.relationship_id)
+        .select('*'); // Return the updated record
 
       if (error) {
         console.error('Error updating category:', error);
-        Alert.alert('Error', `Could not update friend category: ${error.message}`);
-      } else {
-        // Optional: Success alert
-        // Alert.alert('Success', `${selectedFriend.friend_name}'s category updated to ${newCategory}.`);
-        fetchFriends(); // Refresh the list to show the change
+        // Revert optimistic update if update fails
+        setLocalFriends(prevFriends => 
+          prevFriends.map((friend: FriendWithProfile) => 
+            friend.relationship_id === selectedFriend.relationship_id
+              ? { 
+                  ...friend, 
+                  category: previousCategory as FriendCategory,
+                  // Ensure all required properties are included
+                  id: friend.id,
+                  status: friend.status,
+                  relationship_id: friend.relationship_id,
+                  user_id: friend.user_id,
+                  user_name: friend.user_name,
+                  user_avatar: friend.user_avatar,
+                  friend_id: friend.friend_id,
+                  friend_name: friend.friend_name,
+                  friend_avatar: friend.friend_avatar,
+                  requester_id: friend.requester_id,
+                  addressee_id: friend.addressee_id,
+                  updated_at: new Date().toISOString()
+                }
+              : friend
+          )
+        );
+        throw error;
       }
+      
+      // Show success feedback
+      Alert.alert('Success', `Category updated to ${categoryToSet}`, [
+        { 
+          text: 'OK', 
+          onPress: () => {
+            // Close the modal and clear selection
+            setIsCategoryModalVisible(false);
+            setSelectedFriend(null);
+            
+            // If we're currently filtered by the old category, update the filter
+            if (currentFilterRef.current === previousCategory) {
+              setActiveCategory(categoryToSet as FilterCategory);
+            }
+          } 
+        }
+      ]);
+      
     } catch (e) {
       console.error('Exception updating category:', e);
-      Alert.alert('Error', 'An unexpected error occurred while updating the category.');
-    } finally {
-      setIsCategoryModalVisible(false); 
-      setSelectedFriend(null); 
+      Alert.alert('Error', `Failed to update category: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      
+      // Ensure modal is closed on error
+      setIsCategoryModalVisible(false);
+      setSelectedFriend(null);
     }
   };
 
