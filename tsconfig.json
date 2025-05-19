@@ -9,6 +9,10 @@
       "@/providers/*": ["./providers/*"],
       "@/types/*": ["./types/*"]
     },
+    "typeRoots": [
+      "./node_modules/@types",
+      "./@types"
+    ],
     "baseUrl": "."
   },
   "include": [

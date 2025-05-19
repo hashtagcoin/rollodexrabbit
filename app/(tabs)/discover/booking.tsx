@@ -1,39 +1,150 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Calendar, Clock, ChevronRight, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import AppHeader from '../../../components/AppHeader';
 
+interface ServiceDetails {
+  id: string;
+  name: string;
+  price: number;
+  ndisPrice: number;
+  gapPayment: number;
+  availableDates: string[];
+  availableTimes: string[];
+  provider_id: string; // Assuming services table has provider_id
+  provider_name: string;
+  // Add other relevant service fields, e.g., category
+  service_category: string; 
+}
+
+interface ActiveAgreement {
+  id: string;
+  agreement_content: string;
+  agreement_title: string;
+}
+
 export default function BookingScreen() {
-  const { serviceId } = useLocalSearchParams();
-  const [loading, setLoading] = useState(false);
+  const { serviceId } = useLocalSearchParams<{ serviceId: string }>();
+  const [loading, setLoading] = useState(true); // Start with loading true
+  const [serviceDetails, setServiceDetails] = useState<ServiceDetails | null>(null);
+  const [activeAgreement, setActiveAgreement] = useState<ActiveAgreement | null>(null);
+  const [isAgreementSigned, setIsAgreementSigned] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
-  const [agreed, setAgreed] = useState(false);
+  const [userAgreedToTerms, setUserAgreedToTerms] = useState(false); // Renamed for clarity
   const [error, setError] = useState<string | null>(null);
-  const [serviceAgreementViewed, setServiceAgreementViewed] = useState(false);
 
-  // This would be fetched from API
-  const service = {
-    name: 'HealthBridge Therapy',
-    price: 120,
-    ndisPrice: 120,
-    gapPayment: 0,
-    availableDates: ['2025-04-10', '2025-04-11', '2025-04-12'],
-    availableTimes: ['9:00 AM', '10:00 AM', '2:00 PM', '3:00 PM'],
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!serviceId || typeof serviceId !== 'string') {
+        throw new Error('Invalid service ID provided.');
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          throw new Error('User not authenticated.');
+        }
+
+        // 1. Fetch Service Details (including provider_id)
+        //    This query assumes 'services' has 'provider_id' and 'category' (formerly 'service_category_temp')
+        //    And 'service_providers' table is linked, aliasing 'business_name' as 'title'.
+        const { data: serviceData, error: serviceError } = await supabase
+          .from('services')
+          .select('id, title, price, provider_id, category, service_providers(title:business_name)') 
+          .eq('id', serviceId)
+          .single();
+
+        if (serviceError) throw new Error(`Failed to fetch service details: ${serviceError.message}`);
+        if (!serviceData) throw new Error('Service not found.');
+
+        const providerTitle = serviceData.service_providers
+          ? (Array.isArray(serviceData.service_providers) ? serviceData.service_providers[0]?.title : (serviceData.service_providers as any)?.title)
+          : 'Provider Name Missing';
+
+        const fetchedServiceDetails: ServiceDetails = {
+          id: serviceData.id,
+          name: serviceData.title || 'Service Name Missing',
+          price: serviceData.price || 0,
+          // Placeholder: NDIS price might be the same as general price or require specific NDIS item code lookup.
+          ndisPrice: serviceData.price || 0, 
+          // Placeholder: Actual gap payment calculation needs business logic (e.g., based on 'gap_payment_applicable' field).
+          gapPayment: 0, 
+          // Placeholder: Actual availability is in 'availability_details' (JSONB) and needs parsing.
+          availableDates: [], 
+          availableTimes: [], 
+          provider_id: serviceData.provider_id,
+          provider_name: providerTitle, // Sourced from service_providers.title (which is business_name aliased)
+          service_category: serviceData.category || 'core_support', // Sourced from services.category
+        };
+        setServiceDetails(fetchedServiceDetails);
+
+        // 2. Fetch Active Service Agreement for this service and provider
+        const { data: agreementData, error: agreementError } = await supabase
+          .from('service_agreements')
+          .select('id, agreement_content, agreement_title')
+          .eq('service_id', fetchedServiceDetails.id)
+          .eq('service_provider_id', fetchedServiceDetails.provider_id)
+          .eq('status', 'active')
+          .order('agreement_version', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (agreementError) {
+          console.warn('Failed to fetch service agreement:', agreementError.message); 
+          // Not throwing error, booking might proceed without agreement if none exists or fetch fails
+        }
+
+        if (agreementData) {
+          setActiveAgreement(agreementData);
+          // 3. Check if this agreement is already signed by the user
+          const { data: signedData, error: signedError } = await supabase
+            .from('participant_signed_agreements')
+            .select('id')
+            .eq('agreement_version_id', agreementData.id)
+            .eq('participant_user_id', user.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (signedError) {
+            console.warn('Failed to check signed agreement status:', signedError.message);
+          }
+          setIsAgreementSigned(!!signedData);
+        } else {
+          setActiveAgreement(null);
+          setIsAgreementSigned(false); // No active agreement means nothing to be signed
+        }
+
+      } catch (err: any) {
+        console.error('Error fetching booking data:', err);
+        setError(err.message || 'Failed to load booking information.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [serviceId]);
 
   const handleBooking = async () => {
+    if (!serviceDetails) {
+      setError('Service details not loaded.');
+      return;
+    }
     try {
       if (!selectedDate || !selectedTime) {
         setError('Please select both date and time');
         return;
       }
 
-      if (!agreed) {
-        setError('Please agree to the NDIS service agreement');
+      // Check for agreement consent if an agreement exists and is not yet signed
+      if (activeAgreement && !isAgreementSigned && !userAgreedToTerms) {
+        setError('Please agree to the Service Agreement to proceed.');
         return;
       }
 
@@ -42,6 +153,22 @@ export default function BookingScreen() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
+
+      // Sign agreement if needed
+      if (activeAgreement && !isAgreementSigned && userAgreedToTerms) {
+        const { error: signError } = await supabase
+          .from('participant_signed_agreements')
+          .insert({
+            agreement_version_id: activeAgreement.id,
+            participant_user_id: user.id,
+            signed_at: new Date().toISOString(),
+            // ip_address and user_agent could be added if collected
+          });
+        if (signError) {
+          throw new Error(`Failed to record agreement signature: ${signError.message}`);
+        }
+        setIsAgreementSigned(true); // Update state to reflect signing
+      }
 
       // Check wallet balance before booking
       const { data: walletData, error: walletError } = await supabase
@@ -55,12 +182,10 @@ export default function BookingScreen() {
         throw new Error(`Failed to get wallet: ${walletError.message}`);
       }
 
-      // Determine which category this service falls under (this would come from the service data)
-      const serviceCategory = 'core_support'; // Example - would be dynamically determined
+      const serviceCategory = serviceDetails.service_category; // Use fetched category
       
-      // Check if user has sufficient funds
       const categoryBalance = walletData.category_breakdown[serviceCategory] || 0;
-      if (categoryBalance < service.ndisPrice) {
+      if (categoryBalance < serviceDetails.ndisPrice) {
         throw new Error(`Insufficient funds in your ${serviceCategory.replace('_', ' ')} budget. Available: $${categoryBalance}`);
       }
 
@@ -68,11 +193,11 @@ export default function BookingScreen() {
         p_user_id: user.id,
         p_service_id: serviceId as string,
         p_scheduled_at: `${selectedDate}T${selectedTime}`,
-        p_total_price: service.price,
-        p_ndis_covered_amount: service.ndisPrice,
-        p_gap_payment: service.gapPayment,
+        p_total_price: serviceDetails.price,
+        p_ndis_covered_amount: serviceDetails.ndisPrice,
+        p_gap_payment: serviceDetails.gapPayment,
         p_notes: notes,
-        p_category: serviceCategory
+        p_category: serviceCategory // ensure this is the correct category field for the DB
       });
 
       // Fallback to direct database operations if RPC fails
@@ -84,9 +209,9 @@ export default function BookingScreen() {
             p_user_id: user.id,
             p_service_id: serviceId as string,
             p_scheduled_at: `${selectedDate}T${selectedTime}`,
-            p_total_price: service.price,
-            p_ndis_covered_amount: service.ndisPrice,
-            p_gap_payment: service.gapPayment,
+            p_total_price: serviceDetails.price,
+            p_ndis_covered_amount: serviceDetails.ndisPrice,
+            p_gap_payment: serviceDetails.gapPayment,
             p_notes: notes,
             p_category: serviceCategory
           }
@@ -112,9 +237,9 @@ export default function BookingScreen() {
             user_id: user.id,
             service_id: serviceId,
             scheduled_at: `${selectedDate}T${selectedTime}`,
-            total_price: service.price,
-            ndis_covered_amount: service.ndisPrice,
-            gap_payment: service.gapPayment,
+            total_price: serviceDetails.price,
+            ndis_covered_amount: serviceDetails.ndisPrice,
+            gap_payment: serviceDetails.gapPayment,
             notes,
             status: 'pending'
           })
@@ -127,7 +252,7 @@ export default function BookingScreen() {
         }
 
         // Update wallet balance
-        const newCategoryBalance = categoryBalance - service.ndisPrice;
+        const newCategoryBalance = categoryBalance - serviceDetails.ndisPrice;
         const updatedCategoryBreakdown = {
           ...walletData.category_breakdown,
           [serviceCategory]: newCategoryBalance
@@ -136,7 +261,7 @@ export default function BookingScreen() {
         const { error: updateWalletError } = await supabase
           .from('wallets')
           .update({
-            total_balance: walletData.total_balance - service.ndisPrice,
+            total_balance: walletData.total_balance - serviceDetails.ndisPrice,
             category_breakdown: updatedCategoryBreakdown
           })
           .eq('user_id', user.id);
@@ -152,7 +277,7 @@ export default function BookingScreen() {
           .insert({
             user_id: user.id,
             booking_id: bookingData.id,
-            amount: service.ndisPrice,
+            amount: serviceDetails.ndisPrice,
             status: 'pending',
             expiry_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
           });
@@ -179,150 +304,165 @@ export default function BookingScreen() {
     <View style={styles.container}>
       <AppHeader title="Book Appointment" showBackButton={true} onBackPress={() => router.back()} />
       <ScrollView style={styles.content}>
-        <Text style={styles.title}>Book Appointment</Text>
-        <Text style={styles.subtitle}>{service.name}</Text>
-
-        {error && (
-          <View style={styles.error}>
-            <AlertCircle size={20} color="#ff3b30" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
+        {loading && !serviceDetails && (
+          <View style={styles.centeredMessage}><Text>Loading service details...</Text></View>
         )}
+        {!loading && !serviceDetails && error && (
+          <View style={styles.centeredMessage}><Text style={styles.errorText}>{error}</Text></View>
+        )}
+        {serviceDetails && (
+          <>
+            <Text style={styles.title}>Book Appointment</Text>
+            <Text style={styles.subtitle}>{serviceDetails.name}</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Date</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.dateScroll}
-          >
-            {service.availableDates.map((date) => (
-              <TouchableOpacity
-                key={date}
-                style={[
-                  styles.dateOption,
-                  selectedDate === date && styles.dateSelected,
-                ]}
-                onPress={() => setSelectedDate(date)}
-              >
-                <Calendar 
-                  size={20} 
-                  color={selectedDate === date ? '#fff' : '#666'} 
-                />
-                <Text
-                  style={[
-                    styles.dateText,
-                    selectedDate === date && styles.dateTextSelected,
-                  ]}
+            {error && (
+              <View style={styles.error}>
+                <AlertCircle size={20} color="#ff3b30" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {/* Service Agreement Section */}
+            {activeAgreement && !isAgreementSigned && (
+              <View style={styles.agreementSection}>
+                <Text style={styles.sectionTitle}>{activeAgreement.agreement_title || 'Service Agreement'}</Text>
+                <ScrollView style={styles.agreementContentScroll}>
+                  <Text style={styles.agreementText}>{activeAgreement.agreement_content}</Text>
+                </ScrollView>
+                <TouchableOpacity 
+                  style={styles.agreementCheckboxContainer}
+                  onPress={() => setUserAgreedToTerms(!userAgreedToTerms)}
                 >
-                  {new Date(date).toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+                  <View style={[styles.checkbox, userAgreedToTerms && styles.checkboxChecked]} />
+                  <Text style={styles.agreementCheckboxLabel}>I have read and agree to the Service Agreement.</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {activeAgreement && isAgreementSigned && (
+              <View style={styles.signedMessageContainer}>
+                <Text style={styles.signedMessageText}>Service Agreement already signed.</Text>
+              </View>
+            )}
+            {!activeAgreement && !loading && (
+                 <View style={styles.signedMessageContainer}>
+                    <Text style={styles.signedMessageText}>No service agreement required for this service.</Text>
+                 </View>
+            )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Time</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.timeScroll}
-          >
-            {service.availableTimes.map((time) => (
-              <TouchableOpacity
-                key={time}
-                style={[
-                  styles.timeOption,
-                  selectedTime === time && styles.timeSelected,
-                ]}
-                onPress={() => setSelectedTime(time)}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Select Date</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.dateScroll}
               >
-                <Clock 
-                  size={20} 
-                  color={selectedTime === time ? '#fff' : '#666'} 
-                />
-                <Text
-                  style={[
-                    styles.timeText,
-                    selectedTime === time && styles.timeTextSelected,
-                  ]}
-                >
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Additional Notes</Text>
-          <TextInput
-            style={styles.notesInput}
-            placeholder="Any special requirements or notes for the provider..."
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Summary</Text>
-          <View style={styles.paymentCard}>
-            <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel}>Service Fee</Text>
-              <Text style={styles.paymentAmount}>${service.price}</Text>
+                {serviceDetails.availableDates.map((date) => (
+                  <TouchableOpacity
+                    key={date}
+                    style={[
+                      styles.dateOption,
+                      selectedDate === date && styles.dateSelected,
+                    ]}
+                    onPress={() => setSelectedDate(date)}
+                  >
+                    <Calendar 
+                      size={20} 
+                      color={selectedDate === date ? '#fff' : '#666'} 
+                    />
+                    <Text
+                      style={[
+                        styles.dateText,
+                        selectedDate === date && styles.dateTextSelected,
+                      ]}
+                    >
+                      {new Date(date).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
-            <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel}>NDIS Covered</Text>
-              <Text style={styles.paymentAmount}>-${service.ndisPrice}</Text>
-            </View>
-            <View style={styles.paymentDivider} />
-            <View style={styles.paymentRow}>
-              <Text style={styles.paymentTotal}>Gap Payment</Text>
-              <Text style={styles.paymentTotal}>${service.gapPayment}</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.viewAgreementButton}
-            onPress={() => {
-              setServiceAgreementViewed(true);
-              router.push({ pathname: '/service-agreement', params: { serviceId } });
-            }}
-          >
-            <Text style={styles.viewAgreementText}>View Service Agreement for this provider</Text>
-          </TouchableOpacity>
-        </View>
 
-        <TouchableOpacity
-          style={[styles.agreementToggle, !serviceAgreementViewed && styles.agreementToggleDisabled]}
-          onPress={() => serviceAgreementViewed && setAgreed(!agreed)}
-          disabled={!serviceAgreementViewed}
-        >
-          <View style={[styles.checkbox, agreed && styles.checkboxChecked]} />
-          <Text style={styles.agreementText}>
-            I agree to the NDIS service agreement and confirm this service aligns with my NDIS goals
-          </Text>
-        </TouchableOpacity>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Select Time</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.timeScroll}
+              >
+                {serviceDetails.availableTimes.map((time) => (
+                  <TouchableOpacity
+                    key={time}
+                    style={[
+                      styles.timeOption,
+                      selectedTime === time && styles.timeSelected,
+                    ]}
+                    onPress={() => setSelectedTime(time)}
+                  >
+                    <Clock 
+                      size={20} 
+                      color={selectedTime === time ? '#fff' : '#666'} 
+                    />
+                    <Text
+                      style={[
+                        styles.timeText,
+                        selectedTime === time && styles.timeTextSelected,
+                      ]}
+                    >
+                      {time}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Additional Notes</Text>
+              <TextInput
+                style={styles.notesInput}
+                placeholder="Any special requirements or notes for the provider..."
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Payment Summary</Text>
+              <View style={styles.paymentCard}>
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Service Fee</Text>
+                  <Text style={styles.paymentAmount}>${serviceDetails.price}</Text>
+                </View>
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>NDIS Covered</Text>
+                  <Text style={styles.paymentAmount}>-${serviceDetails.ndisPrice}</Text>
+                </View>
+                <View style={styles.paymentDivider} />
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentTotal}>Gap Payment</Text>
+                  <Text style={styles.paymentTotal}>${serviceDetails.gapPayment}</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.bookButton, (!userAgreedToTerms || loading) && styles.bookButtonDisabled]}
+              onPress={handleBooking}
+              disabled={!userAgreedToTerms || loading}
+            >
+              <Text style={styles.bookButtonText}>
+                {loading ? 'Confirming...' : 'Confirm Booking'}
+              </Text>
+              <ChevronRight size={20} color="#fff" />
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.confirmButton, (!agreed || loading) && styles.confirmButtonDisabled]}
-          onPress={handleBooking}
-          disabled={!agreed || loading}
-        >
-          <Text style={styles.confirmButtonText}>
-            {loading ? 'Confirming...' : 'Confirm Booking'}
-          </Text>
-          <ChevronRight size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -335,6 +475,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 24,
+  },
+  centeredMessage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   title: {
     fontSize: 32,
@@ -454,65 +600,75 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
   },
-  agreementToggle: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 24,
+  agreementSection: {
+    marginVertical: 15,
+    padding: 15,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
   },
-  agreementToggleDisabled: {
-    opacity: 0.5,
+  agreementContentScroll: {
+    maxHeight: 150, // Limit height and make scrollable
+    marginBottom: 10,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+  },
+  agreementText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  agreementCheckboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#e1e1e1',
-    marginTop: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    marginRight: 10,
   },
   checkboxChecked: {
     backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
   },
-  agreementText: {
-    flex: 1,
+  agreementCheckboxLabel: {
     fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+    color: '#333',
+    flexShrink: 1, // Allow text to wrap
   },
-  viewAgreementButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 4,
+  signedMessageContainer: {
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    backgroundColor: '#e6f7ff', // Light blue background
+    borderRadius: 8,
+    marginVertical: 15,
     alignItems: 'center',
-    marginBottom: 16,
   },
-  viewAgreementText: {
+  signedMessageText: {
+    fontSize: 14,
+    color: '#005f80', // Darker blue text
+    fontWeight: '500',
+  },
+  bookButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 30, // Space for bottom safe area
+  },
+  bookButtonDisabled: {
+    backgroundColor: '#a0cfff', // Lighter blue for disabled state
+  },
+  bookButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
-  },
-  footer: {
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#e1e1e1',
-  },
-  confirmButton: {
-    backgroundColor: '#007AFF',
-    height: 56,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  confirmButtonDisabled: {
-    opacity: 0.7,
-  },
-  confirmButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: 'bold',
   },
 });

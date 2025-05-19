@@ -1,20 +1,39 @@
 import { useState, useEffect } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
-import { Platform, ActivityIndicator, Alert as RNAlert } from 'react-native';
+import { 
+  Platform, 
+  ActivityIndicator, 
+  Alert as RNAlert, 
+  TouchableOpacity, 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  RefreshControl, 
+  Image 
+} from 'react-native';
 import { decode } from 'base64-arraybuffer';
 import { WebView } from 'react-native-webview';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  RefreshControl,
-} from 'react-native';
+import { 
+  FileText, 
+  FileCheck, 
+  Upload, 
+  Download, 
+  ChevronRight, 
+  File as FileIcon, 
+  Plus, 
+  Calendar, 
+  Clock, 
+  DollarSign, 
+  CircleAlert as AlertCircle, 
+  Wallet, 
+  ChartBar as BarChart3, 
+  Lightbulb, 
+  Target, 
+  CircleCheck as CheckCircle2 
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, FileCheck, Calendar, Clock, DollarSign, ChevronRight, CircleAlert as AlertCircle, FileText, Upload, Download, Wallet, ChartBar as BarChart3, Lightbulb, Target, CircleCheck as CheckCircle2 } from 'lucide-react-native';
 import AppHeader from '../components/AppHeader';
 
 export default function NdisPlanScreen() {
@@ -269,6 +288,16 @@ export default function NdisPlanScreen() {
                   <Text style={styles.dateLabel}>Start Date:</Text>
                   <Text style={styles.dateValue}>{planDates.startDate}</Text>
                 </View>
+                
+                {/* Service Agreements Button */}
+                <TouchableOpacity 
+                  style={[styles.planActionButton, { marginTop: 16 }]}
+                  onPress={() => router.push('/ndis-plan/service-agreements')}
+                >
+                  <FileText size={16} color="#007AFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.planActionButtonText}>Service Agreements</Text>
+                  <ChevronRight size={16} color="#666" style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
                 <View style={styles.planActions}>
                   {/* View Plan Button */}
                   <TouchableOpacity
@@ -399,7 +428,10 @@ export default function NdisPlanScreen() {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>My NDIS Goals</Text>
-                <TouchableOpacity style={styles.viewDetailsButton}>
+                <TouchableOpacity 
+                  style={styles.viewDetailsButton}
+                  onPress={() => (router as any).navigate('/goals')}
+                >
                   <Text style={styles.viewDetailsText}>Manage Goals</Text>
                   <ChevronRight size={16} color="#007AFF" />
                 </TouchableOpacity>
@@ -430,7 +462,10 @@ export default function NdisPlanScreen() {
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.addGoalButton}>
+              <TouchableOpacity 
+                style={styles.addGoalButton}
+                onPress={() => (router as any).navigate('/goals/new')}
+              >
                 <Text style={styles.addGoalText}>+ Add New Goal</Text>
               </TouchableOpacity>
             </View>
@@ -619,8 +654,18 @@ const styles = StyleSheet.create({
   planActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    padding: 8,
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+    marginBottom: 8,
+  },
+  planActionButtonText: {
+    fontSize: 16,
+    color: '#1a1a1a',
+    fontWeight: '500',
   },
   planActionText: {
     fontSize: 14,

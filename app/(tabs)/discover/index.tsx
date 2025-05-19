@@ -399,69 +399,13 @@ export default function DiscoverScreen() {
   };
 
   const navigateToDetails = (item: ListingItem) => {
-    // Log the item and the results of the type guard checks immediately
-    console.log("DEBUG NAV: Item received:", JSON.stringify(item, null, 2));
-    const isService = isServiceListing(item);
-    const isHousing = isHousingListing(item);
-    console.log(`DEBUG NAV: isServiceListing(item) returned: ${isService}`);
-    console.log(`DEBUG NAV: isHousingListing(item) returned: ${isHousing}`);
-
-    let idForNavigation: string | null = null;
-    let targetPathname: '/(tabs)/discover/[id]' | '/(tabs)/housing/[id]' = '/(tabs)/discover/[id]';
-
-    if (isHousingListing(item)) {
-      // For housing listings, use the item's ID
-      idForNavigation = item.id;
-      targetPathname = '/(tabs)/housing/[id]';
-    } else if (isServiceListing(item)) {
-      const providerExists = !!item.provider;
-      const providerIdIsString = providerExists && typeof item.provider.id === 'string';
-      // Ensure provider.id is not null before trimming, then check if non-empty
-      const providerIdIsNonEmpty = providerIdIsString && item.provider.id !== null && item.provider.id.trim() !== '';
-
-      // Log the conditions:
-      console.log(`DEBUG: Conditions for service item '${item.title}':`);
-      console.log(`DEBUG:   item.provider exists: ${providerExists}`);
-      if (providerExists) {
-        console.log(`DEBUG:   item.provider.id type: ${typeof item.provider.id}, value: '${item.provider.id}'`);
-        console.log(`DEBUG:   item.provider.id is string: ${providerIdIsString}`);
-        // Only log trim attempt if id is a string
-        if (typeof item.provider.id === 'string') {
-            console.log(`DEBUG:   item.provider.id trimmed !== '': ${item.provider.id.trim() !== ''}`);
-        }
-        console.log(`DEBUG:   Overall providerIdIsNonEmpty check: ${providerIdIsNonEmpty}`);
-      }
-
-      if (providerExists && providerIdIsString && providerIdIsNonEmpty) {
-        idForNavigation = item.provider.id;
-        // Log the assigned value and type immediately
-        console.log("DEBUG: Assigned item.provider.id to idForNavigation. Value:", idForNavigation, "Type:", typeof idForNavigation);
-      } else {
-        // Simplified error log to ensure it's not filtered
-        console.log("!!! NAVIGATION BLOCKED: Provider ID check failed. See conditions above. Item:", item);
-        // idForNavigation remains null, caught by the check below
-      }
-      // targetPathname is already '/(tabs)/discover/[id]' which is correct for provider details
+    if (isServiceListing(item)) {
+      router.push(`/(tabs)/discover/booking?serviceId=${item.id}&title=${encodeURIComponent(item.title)}`);
+    } else if (isHousingListing(item)) {
+      router.push(`/(tabs)/discover/housing/${item.id}?title=${encodeURIComponent(item.title)}`);
+    } else {
+      console.warn('Unknown item type for navigation:', item);
     }
-
-    console.log("DEBUG: Checking idForNavigation before the final if. Value:", idForNavigation, "Type:", typeof idForNavigation);
-
-    if (!idForNavigation) {
-      // This generic error catches cases where item type is not handled or id is still null after checks
-      console.error("navigateToDetails: Could not determine ID for navigation or item type is unknown.", item);
-      return; 
-    }
-
-    // Use type assertion to ensure the params match the expected type
-    router.push({
-      pathname: targetPathname as any, // Type assertion needed for dynamic routes
-      params: {
-        id: idForNavigation,
-        returnIndex: currentIndex.toString(),
-        returnViewMode: viewMode,
-        source: 'discover'
-      } as Record<string, string>
-    });
   };
 
   const renderGroupMatchBadge = (item: ListingItem) => {
