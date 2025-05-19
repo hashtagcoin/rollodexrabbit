@@ -134,7 +134,7 @@ export const useFriends = (category: FriendCategory = 'all') => {
     console.log('useFriends: Filtering by category:', category);
     
     if (category === 'all') {
-      setFilteredFriends(friends);
+      setFilteredFriends([...friends]);
     } else {
       setFilteredFriends(friends.filter(friend => friend.category === category));
     }
@@ -142,6 +142,44 @@ export const useFriends = (category: FriendCategory = 'all') => {
     console.log('useFriends: Filtered friends:', 
       category === 'all' ? friends.length : friends.filter(friend => friend.category === category).length);
   }, [friends, category]);
+  
+  // Function to manually update a friend's category
+  const updateFriendCategory = async (relationshipId: string, newCategory: string): Promise<{ error?: string; success?: boolean }> => {
+    try {
+      // Update local state immediately for better UX
+      setFriends(prevFriends => 
+        prevFriends.map(friend => 
+          friend.relationship_id === relationshipId 
+            ? { ...friend, category: newCategory as FriendCategory } 
+            : friend
+        )
+      );
+
+      // Update in the database
+      const { error } = await supabase
+        .from('user_relationships')
+        .update({ category: newCategory })
+        .eq('id', relationshipId);
+
+      if (error) {
+        console.error('Error updating friend category:', error);
+        // Revert local state on error
+        setFriends(prevFriends => 
+          prevFriends.map(friend => 
+            friend.relationship_id === relationshipId 
+              ? { ...friend, category: friend.category } // Revert to original category
+              : friend
+          )
+        );
+        return { error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Exception in updateFriendCategory:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  };
 
   // Initial fetch
   useEffect(() => {
@@ -235,10 +273,10 @@ export const useFriends = (category: FriendCategory = 'all') => {
   // Function to remove a friend
   const removeFriend = async (relationshipId: string) => {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('user_relationships')
         .delete()
-        .eq('user_relationships_id', relationshipId);
+        .eq('id', relationshipId);
 
       if (error) throw error;
 
@@ -253,23 +291,25 @@ export const useFriends = (category: FriendCategory = 'all') => {
   };
 
   // Function to handle refresh
-  const onRefresh = useCallback(() => {
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
     fetchFriends();
   }, [fetchFriends]);
 
   return {
-    friends: filteredFriends, // Return filtered friends based on category
+    friends: filteredFriends,
     incomingPendingRequests,
     outgoingPendingRequests,
     loading,
     error,
     refreshing,
-    onRefresh,
+    fetchFriends,
     sendFriendRequest,
     respondToFriendRequest,
-    changeFriendCategory,
     removeFriend,
-    fetchFriends // Explicitly return fetchFriends
+    onRefresh: handleRefresh,
+    updateFriendCategory,
   };
 };
+
+export default useFriends;

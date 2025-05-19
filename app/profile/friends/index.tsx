@@ -25,7 +25,7 @@ type FriendCategory = 'friend' | 'provider' | 'family';
 type FriendWithProfile = {
   id: string;
   status: 'pending' | 'accepted' | 'rejected';
-  category: FriendCategory | 'all' | null;  // Include 'all' as a possible value
+  category: FriendCategory;  // Always a valid category, defaults to 'friend'
   relationship_id: string;
   user_id: string;
   user_name: string | null;
@@ -45,7 +45,7 @@ function isFriendWithProfile(friend: any): friend is FriendWithProfile {
     friend &&
     typeof friend.id === 'string' &&
     ['pending', 'accepted', 'rejected'].includes(friend.status) &&
-    (friend.category === null || ['friend', 'provider', 'family'].includes(friend.category)) &&
+    ['friend', 'provider', 'family', 'all'].includes(friend.category) &&
     typeof friend.relationship_id === 'string' &&
     typeof friend.user_id === 'string' &&
     (friend.user_name === null || typeof friend.user_name === 'string') &&
@@ -60,14 +60,17 @@ function isFriendWithProfile(friend: any): friend is FriendWithProfile {
 
 // Function to transform any friend object to our FriendWithProfile type
 function toFriendWithProfile(friend: any): FriendWithProfile {
+  // Default to 'friend' if category is null or invalid
+  const category = (friend.category && ['friend', 'provider', 'family'].includes(friend.category))
+    ? friend.category as FriendCategory
+    : 'friend';
+
   return {
     id: friend.id || '',
     status: ['pending', 'accepted', 'rejected'].includes(friend.status) 
       ? friend.status as 'pending' | 'accepted' | 'rejected' 
       : 'pending', // Default to 'pending' if status is invalid
-    category: friend.category && ['friend', 'provider', 'family'].includes(friend.category)
-      ? friend.category as FriendCategory
-      : null,
+    category,
     relationship_id: friend.relationship_id || '',
     user_id: friend.user_id || '',
     user_name: friend.user_name || null,
@@ -272,18 +275,22 @@ export default function FriendsScreen({}: FriendsScreenProps) {
   // Refs
   const initialLoadRef = useRef(true);
   
-  // Initialize with category from params or default to 'all'
+  // Only initialize filter from params on first mount
+  const hasInitializedFilter = useRef(false);
   useEffect(() => {
-    if (params?.category) {
-      // Only set the active category if it's a valid FriendCategory
-      const category = params.category as string;
-      if (['friend', 'provider', 'family', 'all'].includes(category)) {
-        setActiveCategory(category as FilterCategory);
+    if (!hasInitializedFilter.current) {
+      if (params?.category) {
+        // Only set the active category if it's a valid FriendCategory
+        const category = params.category as string;
+        if (['friend', 'provider', 'family', 'all'].includes(category)) {
+          setActiveCategory(category as FilterCategory);
+        } else {
+          setActiveCategory('all');
+        }
       } else {
         setActiveCategory('all');
       }
-    } else {
-      setActiveCategory('all');
+      hasInitializedFilter.current = true;
     }
   }, [params]);
   
@@ -305,15 +312,13 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     respondToFriendRequest,
     fetchFriends,
     removeFriend,
+    updateFriendCategory,
   } = useFriends();
 
   // Update local friends when fetchedFriends changes
   useEffect(() => {
-    if (fetchedFriends.length > 0) {
-      // Transform each friend to our FriendWithProfile type
-      const transformedFriends = fetchedFriends.map(friend => toFriendWithProfile(friend));
-      setLocalFriends(transformedFriends);
-    }
+    const transformedFriends = fetchedFriends.map(friend => toFriendWithProfile(friend));
+    setLocalFriends(transformedFriends);
   }, [fetchedFriends]);
   
   // Fetch friends on initial load
@@ -324,27 +329,17 @@ export default function FriendsScreen({}: FriendsScreenProps) {
     }
   }, [fetchFriends]);
   
+  // Filter friends based on the active category
   const filteredFriends = useMemo(() => {
-    const currentFilter = currentFilterRef.current;
-    
-    return localFriends.filter((friend: FriendWithProfile) => {
-      // Debug log
-      if (typeof window !== 'undefined') {
-        console.log('[DEBUG] Filtering friend:', friend.friend_name, 'Category:', friend.category, 'Active Category:', currentFilter);
-      }
-      
-      // Always show all friends when 'all' is selected
-      if (currentFilter === 'all') {
-        return true;
-      }
-      
-      // Get the friend's category, defaulting to 'friend' if null/undefined
-      const friendCategory = friend.category || 'friend';
-      
-      // Compare the categories (both normalized to string for comparison)
-      return friendCategory === currentFilter;
+    if (activeCategory === 'all') {
+      return localFriends;
+    }
+    return localFriends.filter(friend => {
+      // Default to 'friend' if category is null
+      const category = friend.category || 'friend';
+      return category === activeCategory;
     });
-  }, [localFriends, activeCategory]); // Re-run when localFriends or activeCategory changes
+  }, [localFriends, activeCategory]);
   
   // Debug log filtered results
   if (typeof window !== 'undefined') {
@@ -490,112 +485,58 @@ export default function FriendsScreen({}: FriendsScreenProps) {
 
   // Handle category update
   const handleUpdateCategory = async (newCategory: FriendCategory | 'all') => {
-    // If 'all' is somehow passed, default to 'friend'
+    // If 'all' is passed, default to 'friend' since 'all' is not a valid category
     const categoryToSet = newCategory === 'all' ? 'friend' : newCategory;
     
-    if (!selectedFriend || !user) {
-      Alert.alert("Error", "Cannot update category. Friend or user data missing.");
+    if (!selectedFriend) {
+      Alert.alert('Error', 'No friend selected');
       setIsCategoryModalVisible(false);
       return;
     }
 
+    // Store the current category for potential rollback
+    const previousCategory = selectedFriend.category || 'friend';
+    
+    // Close the modal immediately for better UX
+    setIsCategoryModalVisible(false);
+    
+    // Update the selected friend's category immediately for better UX
+    setLocalFriends(prevFriends => 
+      prevFriends.map(friend => 
+        friend.relationship_id === selectedFriend.relationship_id
+          ? { ...friend, category: categoryToSet as FriendCategory }
+          : friend
+      )
+    );
+    
+    // Clear the selected friend
+    setSelectedFriend(null);
+    
     try {
-      console.log('Updating category for relationship:', selectedFriend.relationship_id, 'New category:', categoryToSet);
+      // Update the category in the database
+      const result = await updateFriendCategory(selectedFriend.relationship_id, categoryToSet);
       
-      // Store the current category for potential rollback
-      const previousCategory = selectedFriend.category || 'friend';
+      if (result?.error) {
+        throw new Error(result.error);
+      }
       
-      // Update the selected friend's category immediately for better UX
-      setSelectedFriend(prev => prev ? { ...prev, category: categoryToSet as FriendCategory } : null);
+      // If we're currently filtered by the old category, update the filter
+      if (currentFilterRef.current === previousCategory) {
+        setActiveCategory(categoryToSet as FilterCategory);
+      }
+    } catch (e) {
+      console.error('Error updating category:', e);
       
-      // Optimistically update the UI
+      // Revert the UI change if the update fails
       setLocalFriends(prevFriends => 
-        prevFriends.map((friend: FriendWithProfile) => 
+        prevFriends.map(friend => 
           friend.relationship_id === selectedFriend.relationship_id
-            ? { 
-                ...friend, 
-                category: categoryToSet as FriendCategory,
-                // Ensure all required properties are included
-                id: friend.id,
-                status: friend.status,
-                relationship_id: friend.relationship_id,
-                user_id: friend.user_id,
-                user_name: friend.user_name,
-                user_avatar: friend.user_avatar,
-                friend_id: friend.friend_id,
-                friend_name: friend.friend_name,
-                friend_avatar: friend.friend_avatar,
-                requester_id: friend.requester_id,
-                addressee_id: friend.addressee_id,
-                updated_at: new Date().toISOString()
-              }
+            ? { ...friend, category: previousCategory as FriendCategory }
             : friend
         )
       );
-
-      // Update the category in the database
-      const { data, error } = await supabase
-        .from('user_relationships')
-        .update({ 
-          category: categoryToSet,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedFriend.relationship_id)
-        .select('*'); // Return the updated record
-
-      if (error) {
-        console.error('Error updating category:', error);
-        // Revert optimistic update if update fails
-        setLocalFriends(prevFriends => 
-          prevFriends.map((friend: FriendWithProfile) => 
-            friend.relationship_id === selectedFriend.relationship_id
-              ? { 
-                  ...friend, 
-                  category: previousCategory as FriendCategory,
-                  // Ensure all required properties are included
-                  id: friend.id,
-                  status: friend.status,
-                  relationship_id: friend.relationship_id,
-                  user_id: friend.user_id,
-                  user_name: friend.user_name,
-                  user_avatar: friend.user_avatar,
-                  friend_id: friend.friend_id,
-                  friend_name: friend.friend_name,
-                  friend_avatar: friend.friend_avatar,
-                  requester_id: friend.requester_id,
-                  addressee_id: friend.addressee_id,
-                  updated_at: new Date().toISOString()
-                }
-              : friend
-          )
-        );
-        throw error;
-      }
       
-      // Show success feedback
-      Alert.alert('Success', `Category updated to ${categoryToSet}`, [
-        { 
-          text: 'OK', 
-          onPress: () => {
-            // Close the modal and clear selection
-            setIsCategoryModalVisible(false);
-            setSelectedFriend(null);
-            
-            // If we're currently filtered by the old category, update the filter
-            if (currentFilterRef.current === previousCategory) {
-              setActiveCategory(categoryToSet as FilterCategory);
-            }
-          } 
-        }
-      ]);
-      
-    } catch (e) {
-      console.error('Exception updating category:', e);
       Alert.alert('Error', `Failed to update category: ${e instanceof Error ? e.message : 'Unknown error'}`);
-      
-      // Ensure modal is closed on error
-      setIsCategoryModalVisible(false);
-      setSelectedFriend(null);
     }
   };
 
