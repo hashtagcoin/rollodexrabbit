@@ -84,7 +84,7 @@ function toFriendWithProfile(friend: any): FriendWithProfile {
     updated_at: friend.updated_at
   };
 }
-import { User, ChevronRight, UserPlus, AlertCircle, MoreVertical, Check, MessageCircle, UserMinus, ChevronDown } from 'lucide-react-native';
+import { User, ChevronRight, UserPlus, AlertCircle, MoreVertical, Check, MessageCircle, UserMinus, ChevronDown, ChevronUp } from 'lucide-react-native';
 import AppHeader from '../../../components/AppHeader';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../providers/AuthProvider';
@@ -157,8 +157,29 @@ const styles = StyleSheet.create({
   emptyStateIcon: { marginBottom: 16 },
   emptyStateTitle: { fontSize: 20, fontWeight: 'bold', color: '#222', marginBottom: 6 },
   emptyStateText: { fontSize: 15, color: '#666', marginBottom: 16, textAlign: 'center' },
-  findFriendsButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, marginTop: 12 },
-  findFriendsButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
+  findFriendsButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#4F46E5', 
+    paddingVertical: 8, 
+    paddingHorizontal: 16, 
+    borderRadius: 8, 
+    marginTop: 12,
+    justifyContent: 'space-between'
+  },
+  activeFindFriendsButton: {
+    backgroundColor: '#4338CA',
+  },
+  findFriendsButtonText: { 
+    color: '#fff', 
+    fontWeight: 'bold', 
+    fontSize: 16, 
+    marginLeft: 8, 
+    flex: 1 
+  },
+  chevronIcon: {
+    marginLeft: 4,
+  },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, fontSize: 16, color: '#4F46E5' },
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
@@ -432,24 +453,29 @@ export default function FriendsScreen({}: FriendsScreenProps) {
   const [pendingIds, setPendingIds] = useState<string[]>([]);
 
   const handleShowFindFriends = async () => {
-    setShowFindFriends(true);
-    setFindFriendsLoading(true);
-    setFindFriendsError(null);
-    try {
-      // Fetch all users except current user and existing friends
-      const { data: users, error } = await supabase
-        .from('user_profiles')
-        .select('id, full_name, username, avatar_url, role')
-        .neq('id', user?.id || 'no-user-id');
-      if (error) throw error;
-      // Filter out already-friends
-      const friendIds = localFriends.map((f: FriendWithProfile) => f.friend_id);
-      const filtered = (users || []).filter((u: {id: string}) => !friendIds.includes(u.id));
-      setFindFriendsResults(filtered);
-    } catch (e: any) {
-      setFindFriendsError(e.message || 'Failed to load users');
-    } finally {
-      setFindFriendsLoading(false);
+    const newShowState = !showFindFriends;
+    setShowFindFriends(newShowState);
+    
+    // Only fetch data if we're showing the list and it's not already loaded
+    if (newShowState && findFriendsResults.length === 0) {
+      setFindFriendsLoading(true);
+      setFindFriendsError(null);
+      try {
+        // Fetch all users except current user and existing friends
+        const { data: users, error } = await supabase
+          .from('user_profiles')
+          .select('id, full_name, username, avatar_url, role')
+          .neq('id', user?.id || 'no-user-id');
+        if (error) throw error;
+        // Filter out already-friends
+        const friendIds = localFriends.map((f: FriendWithProfile) => f.friend_id);
+        const filtered = (users || []).filter((u: {id: string}) => !friendIds.includes(u.id));
+        setFindFriendsResults(filtered);
+      } catch (e: any) {
+        setFindFriendsError(e.message || 'Failed to load users');
+      } finally {
+        setFindFriendsLoading(false);
+      }
     }
   };
 
@@ -767,11 +793,16 @@ return (
     {/* Find Friends Button and Inline Panel */}
     <View style={{padding:16, backgroundColor:'#fff'}}>
       <TouchableOpacity 
-        style={styles.findFriendsButton}
+        style={[styles.findFriendsButton, showFindFriends && styles.activeFindFriendsButton]}
         onPress={handleShowFindFriends}
       >
-        <UserPlus size={22} color="#000000" />
+        <UserPlus size={22} color="#FFFFFF" />
         <Text style={styles.findFriendsButtonText}>Find People</Text>
+        {showFindFriends ? (
+          <ChevronUp size={20} color="#FFFFFF" style={styles.chevronIcon} />
+        ) : (
+          <ChevronDown size={20} color="#FFFFFF" style={styles.chevronIcon} />
+        )}
       </TouchableOpacity>
       {showFindFriends && (
   <View style={{marginTop:16, backgroundColor:'#fff', borderRadius:8, padding:8, elevation:2}}>

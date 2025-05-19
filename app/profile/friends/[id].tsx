@@ -52,7 +52,7 @@ export default function FriendDetailScreen() {
   const [friendshipId, setFriendshipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { changeFriendCategory, removeFriend, friends, loading: friendsLoading } = useFriends();
+  const { updateFriendCategory, removeFriend, friends, loading: friendsLoading } = useFriends();
   const params = useLocalSearchParams();
   const friendId = String(params.id || ''); // Ensure friendId is a string
   const router = useRouter();
@@ -354,8 +354,8 @@ export default function FriendDetailScreen() {
           text: 'Change', 
           onPress: async () => {
             try {
-              const result = await changeFriendCategory(friendshipId, newCategory);
-              if (result.error) {
+              const result = await updateFriendCategory(friendshipId, newCategory) as { error?: string } | undefined;
+              if (result?.error) {
                 Alert.alert('Error', result.error);
               } else {
                 // Update local state
