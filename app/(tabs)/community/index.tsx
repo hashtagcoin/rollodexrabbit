@@ -22,34 +22,25 @@ import {
   Smile,
   Users,
   CalendarHeart,
-  UserPlus
+  UserPlus,
+  Bookmark as BookmarkIcon, // Added Bookmark icon import
 } from 'lucide-react-native';
-import AppHeader from '../../../components/AppHeader';
+import AppHeader, { type HeaderAction } from '../../../components/AppHeader'; // Import HeaderAction type
 import SharePostModal from '../../../components/SharePostModal'; // Added import
 import { User } from '@supabase/supabase-js'; // Added import
 import { Alert } from 'react-native'; // Added import
 import { AntDesign } from '@expo/vector-icons'; // Changed import for AntDesign
 import PostFeedImage from '../../../components/PostFeedImage'; // Import the new component
+import PostItem from '../../../components/PostItem'; // Import PostItem
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Post } from '../../../lib/types'; // Import Post from shared types
+
 // Constants for header heights
 const BASE_APP_HEADER_HEIGHT = 60; // base height of AppHeader content (excluding safe area)
 const NAV_HEADER_HEIGHT = 70; // Navigation header height
 // We'll compute APP_HEADER_HEIGHT dynamically in the component using insets.top + BASE_APP_HEADER_HEIGHT
 
-
-type Post = {
-  post_id: string;
-  content: string;
-  media_urls: string[];
-  post_created_at: string;
-  author_profile_id: string;
-  author_full_name: string;
-  author_avatar_url: string | null;
-  likes_count: number;
-  comments_count: number;
-  current_user_has_liked?: boolean; // Added current_user_has_liked property
-};
 
 export default function CommunityFeed() {
   const insets = useSafeAreaInsets();
@@ -67,6 +58,12 @@ export default function CommunityFeed() {
   const scrollYValue = useRef(0);
   const lastScrollDirection = useRef<'up' | 'down'>('up');
   const headerTranslateY = useRef(new Animated.Value(0)).current;
+
+  // Define header actions
+  const communityHeaderActions: HeaderAction[] = [
+    // Removed BookmarkIcon from here
+    // Add other right actions here if needed in the future
+  ];
 
   // Track scroll direction and animate header
   const handleScroll = Animated.event(
@@ -213,6 +210,43 @@ export default function CommunityFeed() {
     }
   };
 
+  const handleBookmark = async (postId: string, currentlyBookmarked?: boolean) => {
+    if (!currentUserSession) {
+      Alert.alert("Error", "You must be logged in to bookmark posts.");
+      return;
+    }
+
+    // Optimistic UI update
+    const originalPosts = [...posts];
+    setPosts(prevPosts => 
+      prevPosts.map(p => 
+        p.post_id === postId ? { ...p, current_user_has_bookmarked: !currentlyBookmarked } : p
+      )
+    );
+
+    try {
+      if (currentlyBookmarked) {
+        // Unbookmark: delete from bookmarks table
+        const { error } = await supabase
+          .from('bookmarks')
+          .delete()
+          .match({ user_id: currentUserSession.id, post_id: postId });
+        if (error) throw error;
+      } else {
+        // Bookmark: insert into bookmarks table
+        const { error } = await supabase
+          .from('bookmarks')
+          .insert({ user_id: currentUserSession.id, post_id: postId });
+        if (error) throw error;
+      }
+    } catch (error: any) {
+      console.error('Error handling bookmark:', error.message);
+      Alert.alert("Error", "Could not update bookmark. Please try again.");
+      // Revert optimistic update
+      setPosts(originalPosts);
+    }
+  };
+
   // Handlers for SharePostModal
   const handleOpenShareModal = (postId: string) => {
     if (!currentUserSession) {
@@ -309,6 +343,13 @@ export default function CommunityFeed() {
             <CalendarHeart size={24} color="#000" />
             <Text style={styles.buttonLabel}>Events</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/community/bookmarks')}
+          >
+            <BookmarkIcon size={24} color="#000" />
+            <Text style={styles.buttonLabel}>Bookmarks</Text>
+          </TouchableOpacity>
         </View>
         
         <View style={styles.createButtonContainer}>
@@ -326,7 +367,11 @@ export default function CommunityFeed() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Community" showBackButton={true} />
+      <AppHeader 
+        title="Community" 
+        showBackButton={false} // Set showBackButton to false for main tab screen
+        rightActions={communityHeaderActions} // Pass the actions to the header
+      />
       
       {/* Sticky Navigation Header */}
       {renderStickyHeader()}
@@ -356,80 +401,15 @@ export default function CommunityFeed() {
           </View>
         ) : (
           posts.map((post) => (
-            <View key={post.post_id} style={styles.postCard}>
-              <View style={styles.postHeader}>
-                <Image
-                  source={
-                    post.author_avatar_url && !post.author_avatar_url.startsWith('file:///')
-                      ? { uri: post.author_avatar_url }
-                      : require('../../../assets/rollodex-icon-lrg.png')
-                  }
-                  style={styles.avatar}
-                  resizeMode="cover"
-                />
-                <View style={styles.postHeaderInfo}>
-                  <Text style={styles.userName}>{post.author_full_name}</Text>
-                  <Text style={styles.postTime}>
-                    {new Date(post.post_created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.caption}>
-                <Text style={styles.userName}>{post.author_full_name} </Text>
-                {post.content}
-              </Text>
-
-              {post.media_urls &&
-                post.media_urls.length > 0 &&
-                post.media_urls[0] && // Ensure the URL string itself exists
-                !post.media_urls[0].startsWith('file:///') && ( // Only render if not a local file URI
-                <TouchableOpacity
-                  onPress={() => router.push({
-                    pathname: '/community/post',
-                    params: { id: post.post_id }
-                  })}
-                >
-                  <PostFeedImage 
-                    imagePath={post.media_urls[0]}
-                    style={styles.postImage} 
-                  />
-                </TouchableOpacity>
-              )}
-
-              <View style={styles.postActions}>
-                <TouchableOpacity
-                  style={styles.postActionButton}
-                  onPress={() => handleLike(post.post_id, post.current_user_has_liked)}
-                >
-                  <AntDesign 
-                    name={post.current_user_has_liked ? "heart" : "hearto"} 
-                    size={24} 
-                    color={post.current_user_has_liked ? "red" : "grey"} 
-                  />
-                  <Text style={styles.actionText}>{post.likes_count}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.postActionButton}
-                  onPress={() => router.push({
-                    pathname: '/community/post',
-                    params: { id: post.post_id }
-                  })}
-                >
-                  <MessageCircle size={24} color="#666" />
-                  <Text style={styles.actionText}>{post.comments_count}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.postActionButton} onPress={() => handleOpenShareModal(post.post_id)}> 
-                  <Share2 size={24} color="#666" />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.postActionButton}>
-                  <Smile size={24} color="#666" />
-                </TouchableOpacity>
-              </View>
-            </View>
+            <PostItem
+              key={post.post_id}
+              post={post}
+              onLike={handleLike}
+              onBookmark={handleBookmark}
+              onCommentPress={(postId) => router.push({ pathname: '/community/post', params: { id: postId } })}
+              onSharePress={handleOpenShareModal}
+              onOpenPostImage={(postId) => router.push({ pathname: '/community/post', params: { id: postId } })}
+            />
           ))
         )}
         </Animated.ScrollView>
@@ -514,7 +494,8 @@ const styles = StyleSheet.create({
   navButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
+    justifyContent: 'space-around', // Changed for even spacing
+    flex: 1, // Allow navButtons to take full width for space-around to work
   },
   iconButton: {
     alignItems: 'center',
@@ -539,15 +520,6 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 23,
     marginBottom: 2, // Reduced from 4px to 2px to move label closer
-  },
-  postActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
   },
   content: {
     flex: 1,
@@ -575,50 +547,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-  },
-  postCard: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
-    padding: 16,
-  },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  postHeaderInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  postTime: {
-    fontSize: 14,
-    color: '#666',
-  },
-  caption: {
-    fontSize: 16,
-    color: '#333',
-    marginVertical: 8,
-  },
-  postImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  postActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 12,
   },
 });
