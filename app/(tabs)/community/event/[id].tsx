@@ -41,7 +41,10 @@ interface GroupEvent {
 }
 
 export default function EventDetailScreen() {
+  console.log('EventDetailScreen mounted');
+
   const { id, goBackPath } = useLocalSearchParams<{ id: string; goBackPath?: string }>();
+  console.log('Received event ID in EventDetailScreen:', id);
   const router = useRouter();
 
   const [event, setEvent] = useState<GroupEvent | null>(null);

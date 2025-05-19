@@ -371,6 +371,7 @@ const getLinkHref = (item: FavoriteItem): LinkProps['href'] => {
     // Only show 'Favourited' if not pending
     const showFavourited = isHousingGroup && !isPending && !item.member_status;
     const linkHref = getLinkHref(item);
+    console.log(`Rendering favorite: type=${item.item_type}, id=${item.item_id}, title=${item.item_title}, href=${JSON.stringify(linkHref)}`);
     return (
       <View style={styles.cardOuterContainer}>
         {/* Compact, rounded, absolutely positioned status badge top-right */}

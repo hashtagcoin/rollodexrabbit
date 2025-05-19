@@ -28,6 +28,10 @@ type Group = {
   } | null;
   event_date?: string;
   event_location?: string;
+  housing_listing_id?: string | null;
+  housing_listings?: {
+    media_urls: string[] | null;
+  } | null;
 };
 
 export default function GroupsScreen() {
@@ -51,6 +55,8 @@ export default function GroupsScreen() {
           is_public,
           event_date,
           event_location,
+          housing_listing_id,
+          housing_listings ( media_urls ),
           member_count:group_members!group_id(count),
           owner:user_profiles!owner_id (
             full_name,
@@ -191,84 +197,89 @@ export default function GroupsScreen() {
           </View>
         ) : (
           <View style={styles.groupsGrid}>
-            {groups.map((group) => (
-              <TouchableOpacity
-                key={group.id}
-                style={styles.groupCard}
-                onPress={() => router.push(`/community/groups/${group.id}`)}
-              >
-                <View style={styles.typeLabel}>
-                  <Text style={[
-                    styles.typeLabelText, 
-                    { 
-                      backgroundColor: 
-                        group.type === 'interest' ? '#6C5CE7' : 
-                        group.type === 'housing' ? '#00B894' : 
-                        '#FF9F43' 
-                    }
-                  ]}>
-                    {group.type === 'interest' ? 'Interest' : 
-                     group.type === 'housing' ? 'Housing' : 'Event'}
-                  </Text>
-                </View>
-                
-                <View style={styles.groupTouchable}>
-                  <Image 
-                    source={{ uri: group.avatar_url || 'https://placehold.co/100x100/e1f0ff/333333?text=Grp' }} 
-                    style={styles.groupAvatar} 
-                  />
-                  <View style={styles.groupTextContent}>
-                    <View style={styles.groupHeader}>
-                      <Text style={styles.groupName}>{group.name}
-            {group.type === 'housing' && (
-              <Text style={styles.housingTag}>  [Housing]</Text>
-            )}
-            {group.type === 'event' && (
-              <Text style={styles.eventTag}>  [Event]</Text>
-            )}
-          </Text>
-                      {!group.is_public && <Lock size={16} color="#666" style={styles.privacyIcon} />}
-                    </View>
-                    <Text style={styles.groupDescription} numberOfLines={2}>
-                      {group.description}
-                    </Text>
-                    
-                    {group.type === 'event' && group.event_date && (
-                      <View style={styles.eventInfo}>
-                        <CalendarDays size={14} color="#666" />
-                        <Text style={styles.eventDate}>
-                          {new Date(group.event_date).toLocaleDateString()}
-                        </Text>
-                        {group.event_location && (
-                          <>
-                            <Text style={styles.eventLocation}>at {group.event_location}</Text>
-                          </>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.groupFooter}>
-                  <View style={styles.memberCount}>
-                    <Users size={16} color="#666" />
-                    <Text style={styles.memberCountText}>
-                      {group.member_count?.[0]?.count ?? 0} members
+            {groups.map((group) => {
+              const imageUrl = group.type === 'housing' && group.housing_listings?.media_urls?.[0]
+                               ? group.housing_listings.media_urls[0]
+                               : group.avatar_url;
+              return (
+                <TouchableOpacity
+                  key={group.id}
+                  style={styles.groupCard}
+                  onPress={() => router.push(`/community/groups/${group.id}`)}
+                >
+                  <View style={styles.typeLabel}>
+                    <Text style={[
+                      styles.typeLabelText, 
+                      { 
+                        backgroundColor: 
+                          group.type === 'interest' ? '#6C5CE7' : 
+                          group.type === 'housing' ? '#00B894' : 
+                          '#FF9F43' 
+                      }
+                    ]}>
+                      {group.type === 'interest' ? 'Interest' : 
+                       group.type === 'housing' ? 'Housing' : 'Event'}
                     </Text>
                   </View>
-
-                  <View style={styles.owner}>
-                    <Image
-                      source={{ uri: group.owner?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
-                      style={styles.ownerAvatar}
+                  
+                  <View style={styles.groupTouchable}>
+                    <Image 
+                      source={{ uri: imageUrl || 'https://placehold.co/100x100/e1f0ff/333333?text=Grp' }} 
+                      style={styles.groupAvatar} 
                     />
-                    <Text style={styles.ownerName}>
-                      by {group.owner?.full_name ?? 'Unknown Owner'}
-                    </Text>
+                    <View style={styles.groupTextContent}>
+                      <View style={styles.groupHeader}>
+                        <Text style={styles.groupName}>{group.name}
+              {group.type === 'housing' && (
+                <Text style={styles.housingTag}>  [Housing]</Text>
+              )}
+              {group.type === 'event' && (
+                <Text style={styles.eventTag}>  [Event]</Text>
+              )}
+            </Text>
+                        {!group.is_public && <Lock size={16} color="#666" style={styles.privacyIcon} />}
+                      </View>
+                      <Text style={styles.groupDescription} numberOfLines={2}>
+                        {group.description}
+                      </Text>
+                      
+                      {group.type === 'event' && group.event_date && (
+                        <View style={styles.eventInfo}>
+                          <CalendarDays size={14} color="#666" />
+                          <Text style={styles.eventDate}>
+                            {new Date(group.event_date).toLocaleDateString()}
+                          </Text>
+                          {group.event_location && (
+                            <>
+                              <Text style={styles.eventLocation}>at {group.event_location}</Text>
+                            </>
+                          )}
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+
+                  <View style={styles.groupFooter}>
+                    <View style={styles.memberCount}>
+                      <Users size={16} color="#666" />
+                      <Text style={styles.memberCountText}>
+                        {group.member_count?.[0]?.count ?? 0} members
+                      </Text>
+                    </View>
+
+                    <View style={styles.owner}>
+                      <Image
+                        source={{ uri: group.owner?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=2080&auto=format&fit=crop' }}
+                        style={styles.ownerAvatar}
+                      />
+                      <Text style={styles.ownerName}>
+                        by {group.owner?.full_name ?? 'Unknown Owner'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
