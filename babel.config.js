@@ -1,7 +1,7 @@
 module.exports = function(api) {
   // Simple check for test environment
   const isTest = process.env.NODE_ENV === 'test';
- 
+  
   // Set caching based on the environment. Non-test envs benefit from caching.
   api.cache(!isTest);
 
@@ -16,14 +16,28 @@ module.exports = function(api) {
         'module-resolver',
         {
           root: ['./'],
-          extensions: ['.ios.js', '.android.js', '.js', '.ts', '.tsx', '.json'],
+          extensions: ['.ios.js', '.android.js', '.js', '.ts', '.tsx', '.json', '.mjs', '.cjs'],
           alias: {
             '@': './app',
             '@/lib': './lib',
             '@/providers': './providers',
+            // Add aliases for Node.js core modules
+            'crypto': 'crypto-browserify',
+            'stream': 'stream-browserify',
+            'util': 'util',
+            'zlib': 'browserify-zlib',
+            'path': 'path-browserify',
+            'os': 'os-browserify/browser',
           },
         },
       ],
+
+      // Add transform for commonjs modules
+      ['@babel/plugin-transform-modules-commonjs', {
+        allowTopLevelThis: true,
+        loose: true,
+        lazy: true,
+      }],
 
       // Reanimated plugin MUST BE LAST
       'react-native-reanimated/plugin',
