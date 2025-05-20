@@ -3,10 +3,13 @@ declare module 'react-native-signature-canvas' {
   export interface SignatureCanvasProps {
     onOK: (signature: string) => void;
     onEmpty?: () => void;
+    onClear?: () => void;
     descriptionText?: string;
     clearText?: string;
     confirmText?: string;
     webStyle?: string;
+    autoClear?: boolean;
+    style?: object;
   }
   export interface SignatureViewRef {
     clearSignature(): void;

@@ -13,6 +13,7 @@ import {
   Image 
 } from 'react-native';
 import { decode } from 'base64-arraybuffer';
+<<<<<<< Updated upstream
 import { WebView } from 'react-native-webview';
 import { 
   FileText, 
@@ -32,6 +33,22 @@ import {
   Target, 
   CircleCheck as CheckCircle2 
 } from 'lucide-react-native';
+=======
+/**
+ * PDF viewing is handled cross-platform via the PdfViewer selector component.
+ * Never import react-native-pdf or react-pdf directly in shared code.
+ */
+import PdfViewer from '../components/PdfViewer';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  RefreshControl,
+} from 'react-native';
+>>>>>>> Stashed changes
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import AppHeader from '../components/AppHeader';
@@ -362,17 +379,7 @@ export default function NdisPlanScreen() {
                   {planPdfUrl && !pdfLoading && (
                     <View style={{ marginTop: 20, minHeight: 400, flex: 1 }}>
                       <Text style={{ marginBottom: 8, fontWeight: 'bold' }}>Your Uploaded NDIS Plan</Text>
-                      <WebView
-                        source={{ uri: planPdfUrl }}
-                        style={{ flex: 1, height: 400, borderRadius: 8, backgroundColor: '#f4f4f4' }}
-                        onLoadEnd={() => setPdfLoading(false)}
-                        onError={() => RNAlert.alert('Error', 'Failed to load PDF. Please try again.')}
-                        accessibilityLabel="NDIS Plan PDF Web Viewer"
-                        startInLoadingState={true}
-                        renderLoading={() => (
-                          <ActivityIndicator size="large" color="#007AFF" accessibilityLabel="Loading PDF in WebView" />
-                        )}
-                      />
+                      <PdfViewer uri={planPdfUrl} style={{ flex: 1, height: 400, borderRadius: 8, backgroundColor: '#f4f4f4' }} />
                     </View>
                   )}
                   <View style={styles.categoryItem}>

@@ -1,5 +1,5 @@
-// Learn more https://docs.expo.io/guides/customizing-metro
-const { getDefaultConfig } = require('expo/metro-config');
+// Minimal Metro configuration for Expo 53
+const { getDefaultConfig } = require('metro-config');
 const path = require('path');
 
 // Create the default Metro config
@@ -51,7 +51,7 @@ config.resolver = {
       };
     }
     
-    // Fall back to the standard Metro resolver
+    // Fall back to the standard resolver
     return context.resolveRequest(context, moduleName, platform);
   },
 };
@@ -59,7 +59,13 @@ config.resolver = {
 // Add transformer for handling assets
 config.transformer = {
   ...config.transformer,
-  // Add any custom transformers if needed
+  babelTransformerPath: require.resolve('react-native-svg-transformer'),
+  getTransformOptions: async () => ({
+    transform: {
+      experimentalImportSupport: false,
+      inlineRequires: true,
+    },
+  }),
 };
 
 // Watch the project directory
